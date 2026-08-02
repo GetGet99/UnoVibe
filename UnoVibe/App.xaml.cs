@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Uno.Resizetizer;
 using UnoVibe.Pages;
+using UnoVibe.Services;
 
 namespace UnoVibe;
 
@@ -27,11 +28,26 @@ public partial class App : Application
         MainWindow.UseStudio();
 #endif
 
-        MainWindow.Content = new MainPage();
+        var baseUrl = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL");
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            MainWindow.Content = new Pages.ConnectPage();
+        }
+        else
+        {
+            ChatStore.Instance.Configure(baseUrl);
+            MainWindow.Content = new MainPage();
+        }
 
         MainWindow.SetWindowIcon();
         // Ensure the current window is active
         MainWindow.Activate();
+    }
+
+    public static void NavigateToMain()
+    {
+        if (Current is not App app || app.MainWindow is null) return;
+        app.MainWindow.Content = new MainPage();
     }
 
     /// <summary>

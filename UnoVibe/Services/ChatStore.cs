@@ -53,23 +53,51 @@ public sealed class ChatStore
 
     public string CurrentSessionId => _sessionId;
 
-    private readonly OpencodeClient _client;
+    private OpencodeClient _client = null!;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
     private readonly Dictionary<string, MessageItem> _messagesById = new();
     private CancellationTokenSource? _cts;
     private DispatcherQueue? _dispatcher;
     private bool _started;
     private string _sessionId = "";
+    private string _baseUrl = "";
 
     private ChatStore()
     {
-        var baseUrl = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL") ?? "http://localhost:4096";
+    }
+
+    /// <summary>
+    /// Configures the server to connect to. Must be called before <see cref="ConnectAsync"/>.
+    /// </summary>
+    public void Configure(string baseUrl)
+    {
+        baseUrl = baseUrl.Trim().TrimEnd('/');
+        if (baseUrl.Length == 0 || baseUrl == _baseUrl) return;
+
+        _baseUrl = baseUrl;
         _client = new OpencodeClient(baseUrl);
+        _started = false;
+        _cts?.Cancel();
+        _cts = null;
+        _sessionId = "";
+        ActiveSessionId = "";
+        SessionTitle = "New Chat";
+        IsBusy = false;
+        Messages.Clear();
+        _messagesById.Clear();
+        Sessions.Clear();
+        DirectoryGroups.Clear();
+        ConnectionStatus = "Connecting...";
     }
 
     public async Task ConnectAsync()
     {
         if (_started) return;
+        if (_client is null)
+        {
+            ConnectionStatus = "Error: no server configured";
+            return;
+        }
         _started = true;
 
         var cts = new CancellationTokenSource();
