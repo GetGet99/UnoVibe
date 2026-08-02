@@ -29,7 +29,10 @@
     },
     "UnoVibe (Desktop)": {
       "commandName": "Project",
-      "compatibleTargetFramework": "desktop"
+      "compatibleTargetFramework": "desktop",
+      "environmentVariables": {
+        "OPENCODE_BASE_URL": "http://localhost:4196"
+      }
     },
     "UnoVibe (Desktop WSL2)": {
       "commandName": "WSL2",

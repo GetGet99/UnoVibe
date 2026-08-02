@@ -15,17 +15,25 @@ namespace UnoVibe.Models;
     public string ToolCommand = "";
     public string ToolFilePath = "";
     public string ToolPattern = "";
+    public string ToolSearchPath = "";
+    public string ToolInclude = "";
     public string ToolWorkdir = "";
     public string ShellOutput = "";
     public string Diff = "";
     public string LoadedFiles = "";
     public string MatchCount = "";
+    public string TodoJson = "";
+    public string QuestionJson = "";
+    public string AnswerJson = "";
+    public string QuestionRequestId = "";
     """)]
 public partial class PartItem
 {
     public string Id { get; set; } = "";
     public string MessageId { get; set; } = "";
+    public string CallId { get; set; } = "";
     public string Type { get; set; } = "";
     public string FileName { get; set; } = "";
     public string[] Files { get; set; } = Array.Empty<string>();
+    public ObservableCollection<QuestionFormItem> QuestionForm { get; } = new();
 }

@@ -26,27 +26,118 @@ public sealed class OpencodeClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<string?> CreateSessionAsync(string? title = null, string? directory = null, CancellationToken ct = default)
+    public async Task<string?> CreateSessionAsync(string? title = null, string? directory = null,
+        string? agent = null, string? providerId = null, string? modelId = null, string? variant = null,
+        CancellationToken ct = default)
     {
         var url = string.IsNullOrEmpty(directory) ? "/session" : $"/session?directory={Uri.EscapeDataString(directory)}";
-        using var response = await Http.PostAsJsonAsync(
-            url,
-            new { title = string.IsNullOrEmpty(title) ? "New Chat" : title },
-            Json,
-            ct);
+        var body = new Dictionary<string, object?>
+        {
+            ["title"] = string.IsNullOrEmpty(title) ? "New Chat" : title,
+        };
+        if (!string.IsNullOrEmpty(agent)) body["agent"] = agent;
+        if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
+        {
+            var model = new Dictionary<string, object?>
+            {
+                ["id"] = modelId,
+                ["providerID"] = providerId,
+            };
+            if (!string.IsNullOrEmpty(variant) && variant != "Default") model["variant"] = variant;
+            body["model"] = model;
+        }
+        using var response = await Http.PostAsJsonAsync(url, body, Json, ct);
         response.EnsureSuccessStatusCode();
         using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
         return doc.RootElement.TryGetProperty("id", out var id) ? id.GetString() : null;
     }
 
-    public async Task SendPromptAsync(string sessionId, string text, CancellationToken ct = default)
+    public async Task SendPromptAsync(string sessionId, string text,
+        string? agent = null, string? providerId = null, string? modelId = null, string? variant = null,
+        CancellationToken ct = default)
     {
-        using var response = await Http.PostAsJsonAsync(
-            $"/session/{sessionId}/prompt_async",
-            new { parts = new[] { new { type = "text", text } } },
-            Json,
-            ct);
+        var body = new Dictionary<string, object?>
+        {
+            ["parts"] = new[] { new { type = "text", text } },
+        };
+        if (!string.IsNullOrEmpty(agent)) body["agent"] = agent;
+        if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
+            body["model"] = new { providerID = providerId, modelID = modelId };
+        if (!string.IsNullOrEmpty(variant) && variant != "Default") body["variant"] = variant;
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/prompt_async", body, Json, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers,
+        CancellationToken ct = default)
+    {
+        var body = new { answers };
+        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reply", body, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<string>> GetModesAsync(CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/agent", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var list = new List<string>();
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+        foreach (var agent in doc.RootElement.EnumerateArray())
+        {
+            if (agent.GetStringProperty("mode") != "primary") continue;
+            var hidden = false;
+            if (agent.TryGetProperty("hidden", out var h))
+                hidden = h.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.String => h.GetString() == "true",
+                    _ => false,
+                };
+            if (hidden) continue;
+            var name = agent.GetStringProperty("name");
+            if (name.Length > 0 && !list.Contains(name)) list.Add(name);
+        }
+        return list;
+    }
+
+    public async Task<List<ModelOption>> GetModelsAsync(CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/provider", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var list = new List<ModelOption>();
+
+        if (!doc.RootElement.TryGetProperty("connected", out var connected)) return list;
+        var connectedIds = new HashSet<string>();
+        if (connected.ValueKind == JsonValueKind.Array)
+            foreach (var c in connected.EnumerateArray()) connectedIds.Add(c.GetString() ?? "");
+
+        if (!doc.RootElement.TryGetProperty("all", out var all) || all.ValueKind != JsonValueKind.Array) return list;
+        foreach (var provider in all.EnumerateArray())
+        {
+            var providerId = provider.GetStringProperty("id");
+            if (connectedIds.Count > 0 && !connectedIds.Contains(providerId)) continue;
+            if (!provider.TryGetProperty("models", out var models) || models.ValueKind != JsonValueKind.Object) continue;
+            foreach (var kv in models.EnumerateObject())
+            {
+                var model = kv.Value;
+                var variants = new List<string>();
+                if (model.TryGetProperty("variants", out var v) && v.ValueKind == JsonValueKind.Object)
+                    foreach (var vk in v.EnumerateObject()) variants.Add(vk.Name);
+                var name = model.GetStringProperty("name");
+                list.Add(new ModelOption
+                {
+                    ProviderId = providerId,
+                    Id = kv.Name,
+                    Name = name.Length > 0 ? name : kv.Name,
+                    Variants = variants.ToArray(),
+                });
+            }
+        }
+        return list;
     }
 
     public async Task<List<SessionInfo>> ListSessionsAsync(CancellationToken ct = default)
@@ -66,7 +157,14 @@ public sealed class OpencodeClient
                 Directory = item.GetStringProperty("directory"),
                 ProjectId = item.GetStringProperty("projectID"),
                 Path = item.GetStringProperty("path"),
+                Agent = item.GetStringProperty("agent"),
             };
+            if (item.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.Object)
+            {
+                info.ModelId = model.GetStringProperty("id");
+                info.ModelProviderId = model.GetStringProperty("providerID");
+                info.ModelVariant = model.GetStringProperty("variant");
+            }
             if (item.TryGetProperty("time", out var time))
                 info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
             if (info.Id.Length > 0) list.Add(info);
@@ -77,6 +175,15 @@ public sealed class OpencodeClient
     public async Task<JsonElement> GetMessagesAsync(string sessionId, CancellationToken ct = default)
     {
         using var response = await Http.GetAsync($"/session/{sessionId}/message", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        return doc.RootElement.Clone();
+    }
+
+    public async Task<JsonElement> GetPendingQuestionsAsync(CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/question", ct);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);

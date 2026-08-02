@@ -6,8 +6,12 @@ namespace UnoVibe.Pages;
 [QuickMarkup("""
     using UnoVibe.Controls;
     using UnoVibe.Pages;
+    using QuickMarkup.WinUI;
+    <setup>
+        var theme = ThemeBrushes.Global;
+    </setup>
     <root>
-        <Grid ColumnDefinitions=<>
+        <Grid Background=`theme.SolidBackground` ColumnDefinitions=<>
             <ColumnDefinition Width=280 />
             <ColumnDefinition />
         </>>

@@ -28,6 +28,25 @@ public sealed class ChatStore
     public Reference<string> ActiveSessionIdProp { get; } = Ref("");
     public string ActiveSessionId { get => ActiveSessionIdProp.Value; set => ActiveSessionIdProp.Value = value; }
 
+    public Reference<string> ModeProp { get; } = Ref("build");
+    public string Mode { get => ModeProp.Value; set => ModeProp.Value = value; }
+
+    public Reference<string> ModelIdProp { get; } = Ref("");
+    public string ModelId { get => ModelIdProp.Value; set => ModelIdProp.Value = value; }
+
+    public Reference<string> ProviderIdProp { get; } = Ref("");
+    public string ProviderId { get => ProviderIdProp.Value; set => ProviderIdProp.Value = value; }
+
+    public Reference<string> VariantProp { get; } = Ref("Default");
+    public string Variant { get => VariantProp.Value; set => VariantProp.Value = value; }
+
+    public Reference<bool> HasVariantsProp { get; } = Ref(false);
+    public bool HasVariants { get => HasVariantsProp.Value; set => HasVariantsProp.Value = value; }
+
+    public ObservableCollection<string> ModeOptions { get; } = new();
+    public ObservableCollection<ModelOption> ModelOptions { get; } = new();
+    public ObservableCollection<string> VariantOptions { get; } = new();
+
     public ObservableCollection<MessageItem> Messages { get; } = new();
     public ObservableCollection<SessionInfo> Sessions { get; } = new();
     public ObservableCollection<DirectoryGroup> DirectoryGroups { get; } = new();
@@ -73,6 +92,7 @@ public sealed class ChatStore
         }
 
         await RefreshSessionsAsync(ct);
+        await RefreshSettingsAsync(ct);
     }
 
     public async Task SendAsync(string text)
@@ -80,7 +100,7 @@ public sealed class ChatStore
         try
         {
             if (!await EnsureSessionAsync()) return;
-            await _client.SendPromptAsync(_sessionId, text);
+            await _client.SendPromptAsync(_sessionId, text, Mode, ProviderId, ModelId, Variant);
         }
         catch (Exception ex)
         {
@@ -99,7 +119,7 @@ public sealed class ChatStore
         _creatingSession = true;
         try
         {
-            _sessionId = await _client.CreateSessionAsync("New Chat", null) ?? "";
+            _sessionId = await _client.CreateSessionAsync("New Chat", null, Mode, ProviderId, ModelId, Variant) ?? "";
         }
         finally
         {
@@ -144,11 +164,94 @@ public sealed class ChatStore
         }
     }
 
+    public async Task RefreshSettingsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var modes = await _client.GetModesAsync(ct);
+            ModeOptions.Clear();
+            foreach (var mode in modes) ModeOptions.Add(mode);
+            if (Mode.Length == 0 || !ModeOptions.Contains(Mode)) Mode = "build";
+
+            var models = await _client.GetModelsAsync(ct);
+            ModelOptions.Clear();
+            foreach (var model in models) ModelOptions.Add(model);
+
+            var known = Sessions.FirstOrDefault(s => s.ModelId.Length > 0 && ModelOptions.Any(m => m.Id == s.ModelId));
+            if (known is not null)
+            {
+                ModelId = known.ModelId;
+                ProviderId = known.ModelProviderId.Length > 0 ? known.ModelProviderId : ProviderId;
+            }
+            UpdateVariantOptions();
+            ReapplyComboSelections();
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    private void ApplySessionSettings(SessionInfo session)
+    {
+        if (session.Agent.Length > 0) Mode = session.Agent;
+        if (session.ModelId.Length > 0)
+        {
+            ModelId = session.ModelId;
+            ProviderId = session.ModelProviderId;
+        }
+        UpdateVariantOptions();
+        Variant = session.ModelVariant is "" or "default" ? "Default" : session.ModelVariant;
+        ReapplyComboSelections();
+    }
+
+    // Reference.Value only fires when the value changes; the SelectedItem bindings ran once
+    // against empty options, so nudge the refs to make the bindings re-apply the selection.
+    private void ReapplyComboSelections()
+    {
+        var mode = Mode; Mode = ""; Mode = mode;
+        var modelId = ModelId; ModelId = ""; ModelId = modelId;
+        var variant = Variant; Variant = ""; Variant = variant;
+    }
+
+    private void UpdateVariantOptions()
+    {
+        VariantOptions.Clear();
+        VariantOptions.Add("Default");
+        var model = ModelOptions.FirstOrDefault(m => m.Id == ModelId && m.ProviderId == ProviderId);
+        if (model is not null)
+            foreach (var v in model.Variants) VariantOptions.Add(v);
+        HasVariants = model?.Variants.Length > 0;
+        if (Variant != "Default" && !VariantOptions.Contains(Variant)) Variant = "Default";
+    }
+
+    public void SetMode(string mode)
+    {
+        if (mode.Length > 0) Mode = mode;
+    }
+
+    public void SetModel(string modelId)
+    {
+        if (modelId.Length == 0 || modelId == ModelId) return;
+        var model = ModelOptions.FirstOrDefault(m => m.Id == modelId);
+        if (model is null) return;
+        ModelId = model.Id;
+        ProviderId = model.ProviderId;
+        Variant = "Default";
+        UpdateVariantOptions();
+        ReapplyComboSelections();
+    }
+
+    public void SetVariant(string variant)
+    {
+        Variant = variant.Length == 0 ? "Default" : variant;
+    }
+
     public async Task NewSessionAsync(string? directory = null)
     {
         try
         {
-            var id = await _client.CreateSessionAsync("New Chat", directory) ?? "";
+            var id = await _client.CreateSessionAsync("New Chat", directory, Mode, ProviderId, ModelId, Variant) ?? "";
             if (id.Length == 0) return;
             _sessionId = id;
             SessionTitle = "New Chat";
@@ -174,6 +277,9 @@ public sealed class ChatStore
         _messagesById.Clear();
         IsBusy = false;
 
+        var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
+        if (known is not null) ApplySessionSettings(known);
+
         try
         {
             var root = await _client.GetMessagesAsync(sessionId);
@@ -185,6 +291,7 @@ public sealed class ChatStore
                 _messagesById[message.Id] = message;
                 Messages.Add(message);
             }
+            await SyncPendingQuestionsAsync();
         }
         catch (Exception ex)
         {
@@ -240,7 +347,7 @@ public sealed class ChatStore
     private void Apply(OpencodeEvent evt)
     {
         if (evt.Type is "message.updated" or "message.part.updated" or "message.part.delta"
-            or "message.part.removed" or "session.status")
+            or "message.part.removed" or "session.status" or "question.asked" or "question.replied")
         {
             var sessionId = evt.Properties.GetStringProperty("sessionID");
             if (sessionId.Length > 0 && sessionId != _sessionId) return;
@@ -262,6 +369,9 @@ public sealed class ChatStore
                 break;
             case "session.status":
                 ApplySessionStatus(evt.Properties);
+                break;
+            case "question.asked":
+                ApplyQuestionAsked(evt.Properties);
                 break;
         }
     }
@@ -338,12 +448,117 @@ public sealed class ChatStore
         IsBusy = status.GetStringProperty("type") == "busy";
     }
 
+    private void ApplyQuestionAsked(JsonElement properties)
+    {
+        var requestId = properties.GetStringProperty("id");
+        if (requestId.Length == 0) return;
+        if (!properties.TryGetProperty("tool", out var tool)) return;
+
+        var messageId = tool.GetStringProperty("messageID");
+        var callId = tool.GetStringProperty("callID");
+        if (messageId.Length == 0 || callId.Length == 0) return;
+
+        if (!_messagesById.TryGetValue(messageId, out var message)) return;
+        var part = message.Parts.FirstOrDefault(p => p.CallId == callId);
+        if (part is null) return;
+
+        AttachQuestion(part, requestId, properties);
+    }
+
+    private static void AttachQuestion(PartItem part, string requestId, JsonElement properties)
+    {
+        part.QuestionRequestId = requestId;
+        if (properties.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
+        {
+            part.QuestionJson = JsonSerializer.Serialize(questions, JsonDefaults);
+            PopulateQuestionForm(part, questions);
+        }
+    }
+
+    /// <summary>
+    /// Re-attaches pending question requestIDs to their tool parts after a session
+    /// was reloaded from the server (the requestID is only present in the live
+    /// question.asked event and the server's in-memory pending map, not in the
+    /// persisted message parts).
+    /// </summary>
+    public async Task SyncPendingQuestionsAsync()
+    {
+        try
+        {
+            var root = await _client.GetPendingQuestionsAsync();
+            if (root.ValueKind != JsonValueKind.Array) return;
+
+            foreach (var question in root.EnumerateArray())
+            {
+                var sessionId = question.GetStringProperty("sessionID");
+                if (sessionId.Length > 0 && sessionId != _sessionId) continue;
+                if (!question.TryGetProperty("tool", out var tool)) continue;
+
+                var messageId = tool.GetStringProperty("messageID");
+                var callId = tool.GetStringProperty("callID");
+                if (messageId.Length == 0 || callId.Length == 0) continue;
+                if (!_messagesById.TryGetValue(messageId, out var message)) continue;
+
+                var part = message.Parts.FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
+                if (part is null || part.QuestionRequestId.Length > 0) continue;
+
+                AttachQuestion(part, question.GetStringProperty("id"), question);
+            }
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers)
+    {
+        try
+        {
+            await _client.ReplyQuestionAsync(requestId, answers);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    private static void PopulateQuestionForm(PartItem item, JsonElement questions)
+    {
+        item.QuestionForm.Clear();
+        foreach (var q in questions.EnumerateArray())
+        {
+            var form = new QuestionFormItem
+            {
+                Question = q.GetStringProperty("question"),
+                Header = q.GetStringProperty("header"),
+                AllowCustom = q.GetBoolProperty("custom", true),
+                Multiple = q.GetBoolProperty("multiple", false),
+            };
+
+            if (q.TryGetProperty("options", out var options) && options.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var opt in options.EnumerateArray())
+                {
+                    form.Options.Add(new QuestionOptionItem
+                    {
+                        Label = opt.GetStringProperty("label"),
+                        Description = opt.GetStringProperty("description"),
+                    });
+                }
+            }
+
+            item.QuestionForm.Add(form);
+        }
+    }
+
     private static PartItem PartFromJson(JsonElement part)
     {
         var item = new PartItem
         {
             Id = part.GetStringProperty("id"),
             MessageId = part.GetStringProperty("messageID"),
+            CallId = part.GetStringProperty("callID"),
             Type = part.GetStringProperty("type"),
         };
 
@@ -379,7 +594,16 @@ public sealed class ChatStore
                 if (input.TryGetProperty("command", out var command)) item.ToolCommand = command.GetString() ?? "";
                 if (input.TryGetProperty("filePath", out var filePath)) item.ToolFilePath = filePath.GetString() ?? "";
                 if (input.TryGetProperty("pattern", out var pattern)) item.ToolPattern = pattern.GetString() ?? "";
+                if (input.TryGetProperty("path", out var searchPath)) item.ToolSearchPath = searchPath.GetString() ?? "";
+                if (input.TryGetProperty("include", out var include)) item.ToolInclude = include.GetString() ?? "";
                 if (input.TryGetProperty("workdir", out var workdir)) item.ToolWorkdir = workdir.GetString() ?? "";
+                if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
+                    item.TodoJson = JsonSerializer.Serialize(todos, JsonDefaults);
+                if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
+                {
+                    item.QuestionJson = JsonSerializer.Serialize(questions, JsonDefaults);
+                    PopulateQuestionForm(item, questions);
+                }
             }
             if (state.TryGetProperty("output", out var output))
                 item.ToolOutput = output.GetString() ?? "";
@@ -390,8 +614,13 @@ public sealed class ChatStore
                 if (meta.TryGetProperty("output", out var mOutput)) item.ShellOutput = mOutput.GetString() ?? "";
                 if (meta.TryGetProperty("diff", out var mDiff)) item.Diff = mDiff.GetString() ?? "";
                 if (meta.TryGetProperty("count", out var mCount)) item.MatchCount = mCount.ToString();
+                if (meta.TryGetProperty("matches", out var mMatches)) item.MatchCount = mMatches.ToString();
                 if (meta.TryGetProperty("loaded", out var mLoaded) && mLoaded.ValueKind == JsonValueKind.Array)
                     item.LoadedFiles = string.Join("\n", mLoaded.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0));
+                if (meta.TryGetProperty("todos", out var mTodos) && mTodos.ValueKind == JsonValueKind.Array)
+                    item.TodoJson = JsonSerializer.Serialize(mTodos, JsonDefaults);
+                if (meta.TryGetProperty("answers", out var mAnswers) && mAnswers.ValueKind == JsonValueKind.Array)
+                    item.AnswerJson = JsonSerializer.Serialize(mAnswers, JsonDefaults);
             }
         }
         if (string.IsNullOrEmpty(item.ToolTitle)) item.ToolTitle = item.ToolName;
@@ -414,4 +643,13 @@ file static class JsonElementExtensions
 {
     public static string GetStringProperty(this JsonElement element, string name) =>
         element.TryGetProperty(name, out var prop) ? prop.GetString() ?? "" : "";
+
+    public static bool GetBoolProperty(this JsonElement element, string name, bool fallback)
+    {
+        if (!element.TryGetProperty(name, out var prop)) return fallback;
+        if (prop.ValueKind == JsonValueKind.True) return true;
+        if (prop.ValueKind == JsonValueKind.False) return false;
+        if (prop.ValueKind == JsonValueKind.String && prop.GetString() == "true") return true;
+        return fallback;
+    }
 }

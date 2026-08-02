@@ -8,6 +8,10 @@ public sealed class SessionInfo
     public string ProjectId { get; set; } = "";
     public string Path { get; set; } = "";
     public long Updated { get; set; }
+    public string Agent { get; set; } = "";
+    public string ModelId { get; set; } = "";
+    public string ModelProviderId { get; set; } = "";
+    public string ModelVariant { get; set; } = "";
 
     public string TimeLabel
     {

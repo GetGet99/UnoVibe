@@ -19,6 +19,7 @@ namespace UnoVibe.Pages;
             <RowDefinition Height=Auto />
             <RowDefinition />
             <RowDefinition Height=Auto />
+            <RowDefinition Height=Auto />
         </>>
             <Grid Grid.Row=0 ColumnSpacing=8 Padding=`new Thickness(16, 12, 16, 8)` ColumnDefinitions=<>
                 <ColumnDefinition />
@@ -47,6 +48,24 @@ namespace UnoVibe.Pages;
             </>>
                 inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` />
                 <Button Grid.Column=1 Content="Send" @Click+=`await SendAsync()` IsEnabled=`!ChatStore.Instance.IsBusy` />
+            </Grid>
+            <Grid Grid.Row=3 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
+                <ColumnDefinition Width=Auto />
+                <ColumnDefinition Width=Auto />
+                <ColumnDefinition Width=Auto />
+            </>>
+                <StackPanel Spacing=4>
+                    <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` />
+                    modeCombo = <ComboBox ItemsSource=`ChatStore.Instance.ModeOptions` SelectedItem=`ChatStore.Instance.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 />
+                </StackPanel>
+                <StackPanel Grid.Column=1 Spacing=4>
+                    <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` />
+                    modelCombo = <ComboBox ItemsSource=`ChatStore.Instance.ModelOptions` DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue=`ChatStore.Instance.ModelId` SelectionChanged+=`(sender, e) => OnModelChanged(sender, e)` MinWidth=200 MaxWidth=300 />
+                </StackPanel>
+                <StackPanel Grid.Column=2 Spacing=4>
+                    <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` />
+                    variantCombo = <ComboBox ItemsSource=`ChatStore.Instance.VariantOptions` SelectedItem=`ChatStore.Instance.Variant` IsEnabled=`ChatStore.Instance.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=90 />
+                </StackPanel>
             </Grid>
         </Grid>
     </root>
@@ -97,6 +116,24 @@ public partial class ChatPage : Page
 
     private void HookParts(MessageItem message) =>
         message.Parts.CollectionChanged += (_, _) => ScrollToBottom();
+
+    private void OnModeChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if ((sender as ComboBox)?.SelectedItem is string mode) ChatStore.Instance.SetMode(mode);
+    }
+
+    private void OnModelChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if ((sender as ComboBox)?.SelectedValue is string id) ChatStore.Instance.SetModel(id);
+    }
+
+    private void OnVariantChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if ((sender as ComboBox)?.SelectedItem is string variant) ChatStore.Instance.SetVariant(variant);
+    }
+
+    private static string Capitalize(string? value) =>
+        string.IsNullOrEmpty(value) ? "" : char.ToUpper(value[0]) + value.Substring(1);
 
     private void ScrollToBottom()
     {
