@@ -27,7 +27,7 @@ public partial class App : Application
         MainWindow.UseStudio();
 #endif
 
-        MainWindow.Content = new ChatPage();
+        MainWindow.Content = new MainPage();
 
         MainWindow.SetWindowIcon();
         // Ensure the current window is active
