@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using Microsoft.UI.Input;
 using UnoVibe.Models;
 using UnoVibe.Services;
 
@@ -14,7 +15,7 @@ namespace UnoVibe.Pages;
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <Grid RowDefinitions=<>
+        <Grid Background=`theme.SolidBackground` RowDefinitions=<>
             <RowDefinition Height=Auto />
             <RowDefinition />
             <RowDefinition Height=Auto />
@@ -23,12 +24,20 @@ namespace UnoVibe.Pages;
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                <StackPanel>
-                    <TextBlock Text=`ChatStore.Instance.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` />
+                <StackPanel VerticalAlignment=Center>
+                    <StackPanel Orientation=Horizontal Spacing=8>
+                        <TextBlock Text=`ChatStore.Instance.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                        <ProgressRing Width=16 Height=16 IsActive=`ChatStore.Instance.IsBusy`
+                                      Visibility=`ChatStore.Instance.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
+                    </StackPanel>
                     <TextBlock Text=`ChatStore.Instance.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` />
                 </StackPanel>
-                <ProgressRing Grid.Column=1 Width=20 Height=20 IsActive=`ChatStore.Instance.IsBusy`
-                              Visibility=`ChatStore.Instance.IsBusy ? Visibility.Visible : Visibility.Collapsed` />
+                <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Center>
+                    <Button Content="New" @Click+=`await ChatStore.Instance.NewSessionAsync()` VerticalAlignment=Center />
+                    sessionCombo = <ComboBox ItemsSource=`ChatStore.Instance.Sessions` DisplayMemberPath="Title"
+                                             SelectedValuePath="Id" SelectedValue=`ChatStore.Instance.SelectedSessionId`
+                                             SelectionChanged+=`OnSessionSelected` MinWidth=200 MaxWidth=280 VerticalAlignment=Center />
+                </StackPanel>
             </Grid>
             <Grid Grid.Row=1>
                 scrollHost = <ScrollViewer>
@@ -42,7 +51,7 @@ namespace UnoVibe.Pages;
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=false KeyDown+=`OnInputKeyDown` />
+                inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` />
                 <Button Grid.Column=1 Content="Send" @Click+=`await SendAsync()` IsEnabled=`!ChatStore.Instance.IsBusy` />
             </Grid>
         </Grid>
@@ -63,11 +72,17 @@ public partial class ChatPage : Page
         inputBox.Focus(FocusState.Programmatic);
     }
 
-    private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
+    private async void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != Windows.System.VirtualKey.Enter) return;
+        if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+            return;
         e.Handled = true;
         _ = SendAsync();
+        inputBox.Text = "";
+        inputBox.AcceptsReturn = false;
+        await Task.Delay(16);
+        inputBox.AcceptsReturn = true;
     }
 
     private async Task SendAsync()
@@ -77,6 +92,13 @@ public partial class ChatPage : Page
         Input = "";
         await ChatStore.Instance.SendAsync(text);
         ScrollToBottom();
+    }
+
+    private void OnSessionSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox combo || combo.SelectedItem is not SessionInfo session) return;
+        if (session.Id == ChatStore.Instance.CurrentSessionId) return;
+        _ = ChatStore.Instance.SwitchSessionAsync(session.Id);
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)

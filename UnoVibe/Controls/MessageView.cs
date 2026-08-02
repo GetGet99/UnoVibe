@@ -7,6 +7,7 @@ namespace UnoVibe.Controls;
 /// User messages are right-aligned accent bubbles; assistant messages are left-aligned.
 /// </summary>
 [QuickMarkup("""
+    using UnoVibe;
     using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
@@ -30,7 +31,7 @@ namespace UnoVibe.Controls;
                         {
                             if (`p.Type == "text"`)
                                 <TextBlock Text=`p.Text` TextWrapping=Wrap
-                                           Foreground=`Message.Role == "user" ? theme.AccentText : theme.PrimaryText` />
+                                           Foreground=`Message.Role == "user" ? AppTheme.TextOnAccent : theme.PrimaryText` />
                             else if (`p.Type == "reasoning"`)
                                 <TextBlock Text=`p.Text` TextWrapping=Wrap FontSize=12
                                            Foreground=`theme.SecondaryText` FontStyle=Italic />

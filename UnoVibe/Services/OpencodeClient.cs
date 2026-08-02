@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using UnoVibe.Models;
 
 namespace UnoVibe.Services;
 
@@ -46,4 +47,39 @@ public sealed class OpencodeClient
             ct);
         response.EnsureSuccessStatusCode();
     }
+
+    public async Task<List<SessionInfo>> ListSessionsAsync(CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/session", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var list = new List<SessionInfo>();
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+        foreach (var item in doc.RootElement.EnumerateArray())
+        {
+            var info = new SessionInfo
+            {
+                Id = item.GetStringProperty("id"),
+                Title = item.GetStringProperty("title"),
+            };
+            if (info.Id.Length > 0) list.Add(info);
+        }
+        return list;
+    }
+
+    public async Task<JsonElement> GetMessagesAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync($"/session/{sessionId}/message", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        return doc.RootElement.Clone();
+    }
+}
+
+file static class OpencodeClientExtensions
+{
+    public static string GetStringProperty(this JsonElement element, string name) =>
+        element.TryGetProperty(name, out var prop) ? prop.GetString() ?? "" : "";
 }

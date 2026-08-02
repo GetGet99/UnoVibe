@@ -25,7 +25,13 @@ public sealed class ChatStore
     public Reference<string> SessionTitleProp { get; } = Ref("New Chat");
     public string SessionTitle { get => SessionTitleProp.Value; set => SessionTitleProp.Value = value; }
 
+    public Reference<string> SelectedSessionIdProp { get; } = Ref("");
+    public string SelectedSessionId { get => SelectedSessionIdProp.Value; set => SelectedSessionIdProp.Value = value; }
+
     public ObservableCollection<MessageItem> Messages { get; } = new();
+    public ObservableCollection<SessionInfo> Sessions { get; } = new();
+
+    public string CurrentSessionId => _sessionId;
 
     private readonly OpencodeClient _client;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
@@ -69,6 +75,7 @@ public sealed class ChatStore
         {
             _sessionId = await _client.CreateSessionAsync("New Chat", ct) ?? "";
             if (_sessionId.Length == 0) ConnectionStatus = "Error: could not create session";
+            else await RefreshSessionsAsync(ct);
         }
         catch (Exception ex)
         {
@@ -87,6 +94,89 @@ public sealed class ChatStore
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    public async Task RefreshSessionsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var list = await _client.ListSessionsAsync(ct);
+            Sessions.Clear();
+            foreach (var session in list) Sessions.Add(session);
+            if (Sessions.Any(s => s.Id == _sessionId)) SelectedSessionId = _sessionId;
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    public async Task NewSessionAsync()
+    {
+        try
+        {
+            var id = await _client.CreateSessionAsync("New Chat") ?? "";
+            if (id.Length == 0) return;
+            _sessionId = id;
+            SessionTitle = "New Chat";
+            Messages.Clear();
+            _messagesById.Clear();
+            IsBusy = false;
+            await RefreshSessionsAsync();
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    public async Task SwitchSessionAsync(string sessionId)
+    {
+        if (sessionId.Length == 0 || sessionId == _sessionId) return;
+        _sessionId = sessionId;
+        SessionTitle = Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat";
+        Messages.Clear();
+        _messagesById.Clear();
+        IsBusy = false;
+        SelectedSessionId = sessionId;
+
+        try
+        {
+            var root = await _client.GetMessagesAsync(sessionId);
+            if (root.ValueKind != JsonValueKind.Array) return;
+            foreach (var msg in root.EnumerateArray())
+            {
+                var message = MessageFromJson(msg);
+                if (message is null) continue;
+                _messagesById[message.Id] = message;
+                Messages.Add(message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    private static MessageItem? MessageFromJson(JsonElement msg)
+    {
+        if (!msg.TryGetProperty("info", out var info) || info.GetStringProperty("id").Length == 0) return null;
+        var item = new MessageItem
+        {
+            Id = info.GetStringProperty("id"),
+            Role = info.GetStringProperty("role"),
+            Agent = info.GetStringProperty("agent"),
+        };
+        if (msg.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var part in parts.EnumerateArray())
+            {
+                if (part.GetStringProperty("type") is "step-start" or "step-finish") continue;
+                var p = PartFromJson(part);
+                if (p.Id.Length > 0) item.Parts.Add(p);
+            }
+        }
+        return item;
     }
 
     private async Task PumpAsync(CancellationToken ct)
@@ -115,6 +205,13 @@ public sealed class ChatStore
 
     private void Apply(OpencodeEvent evt)
     {
+        if (evt.Type is "message.updated" or "message.part.updated" or "message.part.delta"
+            or "message.part.removed" or "session.status")
+        {
+            var sessionId = evt.Properties.GetStringProperty("sessionID");
+            if (sessionId.Length > 0 && sessionId != _sessionId) return;
+        }
+
         switch (evt.Type)
         {
             case "message.updated":
