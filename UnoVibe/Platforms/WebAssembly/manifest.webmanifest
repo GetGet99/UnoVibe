@@ -1,0 +1,10 @@
+{
+  "background_color": "#ffffff",
+  "description": "UnoVibe",
+  "display": "standalone",
+  "name": "UnoVibe",
+  "short_name": "UnoVibe",
+  "start_url": "/index.html",
+  "theme_color": "#ffffff",
+  "scope": "/"
+}
