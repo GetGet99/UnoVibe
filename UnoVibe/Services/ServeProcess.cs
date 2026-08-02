@@ -1,20 +1,30 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace UnoVibe.Services;
 
 /// <summary>
 /// Launches `opencode serve` from a chosen working directory and reports the
 /// base URL it listens on once it is healthy. The child process is kept alive
-/// for the lifetime of this object.
+/// for the lifetime of this object. A strong random password is generated (or a
+/// caller-supplied one is used) and passed to the server via the
+/// <see cref="OpencodeClient.PasswordEnvVar"/> environment variable so only this
+/// app can talk to it.
 /// </summary>
 public sealed class ServeProcess : IDisposable
 {
+    private const string PasswordChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+[]{};:,.?";
     private Process? _process;
 
     /// <summary>Base URL of the launched server (set after startup succeeds).</summary>
     public string BaseUrl { get; private set; } = "";
+
+    /// <summary>Password the launched server is protected with (generated unless supplied).</summary>
+    public string Password { get; }
 
     public bool IsRunning => _process is { HasExited: false };
 
@@ -25,6 +35,20 @@ public sealed class ServeProcess : IDisposable
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
+    }
+
+    public ServeProcess(string? password = null)
+    {
+        Password = string.IsNullOrEmpty(password) ? GeneratePassword(32) : password;
+    }
+
+    /// <summary>Cryptographically-random password that is hard to guess.</summary>
+    public static string GeneratePassword(int length = 32)
+    {
+        var bytes = RandomNumberGenerator.GetBytes(length);
+        var chars = new char[length];
+        for (var i = 0; i < length; i++) chars[i] = PasswordChars[bytes[i] % PasswordChars.Length];
+        return new string(chars);
     }
 
     /// <summary>
@@ -44,6 +68,8 @@ public sealed class ServeProcess : IDisposable
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        startInfo.Environment[OpencodeClient.PasswordEnvVar] = Password;
+        startInfo.Environment[OpencodeClient.UsernameEnvVar] = "opencode";
 
         _process = new Process { StartInfo = startInfo };
         if (!_process.Start())
@@ -54,7 +80,15 @@ public sealed class ServeProcess : IDisposable
 
         BaseUrl = $"http://127.0.0.1:{port}";
 
-        using var health = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(2) };
+        using var health = new HttpClient
+        {
+            BaseAddress = new Uri(BaseUrl),
+            Timeout = TimeSpan.FromSeconds(2),
+        };
+        health.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes($"opencode:{Password}")));
+
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (DateTime.UtcNow < deadline)
         {

@@ -53,6 +53,9 @@ public sealed class ChatStore
 
     public string CurrentSessionId => _sessionId;
 
+    /// <summary>Owns any locally-launched <c>opencode serve</c> process so it stays alive after navigation.</summary>
+    public ServeProcess? ServeProcess { get; private set; }
+
     private OpencodeClient _client = null!;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
     private readonly Dictionary<string, MessageItem> _messagesById = new();
@@ -61,6 +64,8 @@ public sealed class ChatStore
     private bool _started;
     private string _sessionId = "";
     private string _baseUrl = "";
+    private string? _password;
+    private string? _username;
 
     private ChatStore()
     {
@@ -69,13 +74,15 @@ public sealed class ChatStore
     /// <summary>
     /// Configures the server to connect to. Must be called before <see cref="ConnectAsync"/>.
     /// </summary>
-    public void Configure(string baseUrl)
+    public void Configure(string baseUrl, string? password = null, string? username = null)
     {
         baseUrl = baseUrl.Trim().TrimEnd('/');
-        if (baseUrl.Length == 0 || baseUrl == _baseUrl) return;
+        if (baseUrl.Length == 0 || (baseUrl == _baseUrl && password == _password && username == _username)) return;
 
         _baseUrl = baseUrl;
-        _client = new OpencodeClient(baseUrl);
+        _password = password;
+        _username = username;
+        _client = new OpencodeClient(baseUrl, password, username);
         _started = false;
         _cts?.Cancel();
         _cts = null;
@@ -88,6 +95,16 @@ public sealed class ChatStore
         Sessions.Clear();
         DirectoryGroups.Clear();
         ConnectionStatus = "Connecting...";
+    }
+
+    /// <summary>
+    /// Takes ownership of a locally-launched serve process. Disposes any previous one.
+    /// </summary>
+    public void AttachServeProcess(ServeProcess serve)
+    {
+        var old = ServeProcess;
+        ServeProcess = serve;
+        old?.Dispose();
     }
 
     public async Task ConnectAsync()
@@ -111,7 +128,18 @@ public sealed class ChatStore
         try
         {
             var healthy = await _client.HealthAsync(ct);
-            ConnectionStatus = healthy ? "Connected" : "Error: health check failed";
+            if (healthy)
+            {
+                ConnectionStatus = "Connected";
+            }
+            else if (_client.LastHealthStatus == System.Net.HttpStatusCode.Unauthorized)
+            {
+                ConnectionStatus = "Error: unauthorized - check the server password";
+            }
+            else
+            {
+                ConnectionStatus = "Error: health check failed";
+            }
         }
         catch (Exception ex)
         {

@@ -15,6 +15,10 @@ namespace UnoVibe.Pages;
     string Status = "Choose a server to connect to.";
     string Folder = "";
     bool Connecting = false;
+    string ServerPassword = "";
+    bool UseGeneratedPassword = true;
+    string CustomPassword = "";
+    string ConfirmPassword = "";
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -40,6 +44,8 @@ namespace UnoVibe.Pages;
                                 <TextBox Text<=>`Url` PlaceholderText="http://localhost:4096" IsEnabled=`!Connecting` />
                                 <Button Grid.Column=1 Content="Connect" @Click+=`await ConnectToUrlAsync()` IsEnabled=`!Connecting` />
                             </Grid>
+                            <PasswordBox Password<=>`ServerPassword` PlaceholderText="Server password (optional)" IsEnabled=`!Connecting` />
+                            <TextBlock Text="Leave blank if the server has no password. Uses the OPENCODE_SERVER_PASSWORD environment variable when set." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                         </StackPanel>
                     </Border>
 
@@ -52,6 +58,11 @@ namespace UnoVibe.Pages;
                                 <Button Content="Choose folder..." @Click+=`await PickFolderAsync()` IsEnabled=`!Connecting` />
                                 <Button Content="Start & connect" @Click+=`await StartServeAsync()` IsEnabled=`!Connecting && Folder.Length > 0` />
                             </StackPanel>
+                            <ToggleSwitch Header="Server security" OnContent="Use a generated strong password" OffContent="Set my own password" IsOn<=>`UseGeneratedPassword` IsEnabled=`!Connecting` />
+                            if (`!UseGeneratedPassword`) {
+                                <PasswordBox Password<=>`CustomPassword` PlaceholderText="Set a password" IsEnabled=`!Connecting` />
+                                <PasswordBox Password<=>`ConfirmPassword` PlaceholderText="Confirm password" IsEnabled=`!Connecting` />
+                            }
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -68,6 +79,7 @@ public partial class ConnectPage : Page
         Init();
         var configured = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL");
         if (!string.IsNullOrWhiteSpace(configured)) Url = configured;
+        ServerPassword = Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar) ?? "";
     }
 
     private async Task ConnectToUrlAsync()
@@ -81,7 +93,8 @@ public partial class ConnectPage : Page
         Connecting = true;
         Status = $"Connecting to {url}...";
         var store = ChatStore.Instance;
-        store.Configure(url);
+        var password = ServerPassword.Trim();
+        store.Configure(url, password.Length > 0 ? password : null);
         await store.ConnectAsync();
         Connecting = false;
 
@@ -109,13 +122,30 @@ public partial class ConnectPage : Page
     {
         if (Folder.Length == 0) return;
 
+        string? password = null;
+        if (!UseGeneratedPassword)
+        {
+            if (CustomPassword.Length == 0)
+            {
+                Status = "Please set a password.";
+                return;
+            }
+            if (CustomPassword != ConfirmPassword)
+            {
+                Status = "Passwords do not match.";
+                return;
+            }
+            password = CustomPassword;
+        }
+
         Connecting = true;
         Status = "Starting opencode serve...";
 
-        using var serve = new ServeProcess();
+        var serve = new ServeProcess(password);
         var result = await serve.StartAsync(Folder);
         if (!result.StartsWith("http://"))
         {
+            serve.Dispose();
             Status = result;
             Connecting = false;
             return;
@@ -123,7 +153,8 @@ public partial class ConnectPage : Page
 
         Status = $"Server ready at {result}";
         var store = ChatStore.Instance;
-        store.Configure(result);
+        store.AttachServeProcess(serve);
+        store.Configure(result, serve.Password);
         await store.ConnectAsync();
         Connecting = false;
 
