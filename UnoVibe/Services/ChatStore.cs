@@ -25,11 +25,12 @@ public sealed class ChatStore
     public Reference<string> SessionTitleProp { get; } = Ref("New Chat");
     public string SessionTitle { get => SessionTitleProp.Value; set => SessionTitleProp.Value = value; }
 
-    public Reference<string> SelectedSessionIdProp { get; } = Ref("");
-    public string SelectedSessionId { get => SelectedSessionIdProp.Value; set => SelectedSessionIdProp.Value = value; }
+    public Reference<string> ActiveSessionIdProp { get; } = Ref("");
+    public string ActiveSessionId { get => ActiveSessionIdProp.Value; set => ActiveSessionIdProp.Value = value; }
 
     public ObservableCollection<MessageItem> Messages { get; } = new();
     public ObservableCollection<SessionInfo> Sessions { get; } = new();
+    public ObservableCollection<DirectoryGroup> DirectoryGroups { get; } = new();
 
     public string CurrentSessionId => _sessionId;
 
@@ -71,11 +72,15 @@ public sealed class ChatStore
             return;
         }
 
+        await RefreshSessionsAsync(ct);
+    }
+
+    public async Task SendAsync(string text)
+    {
         try
         {
-            _sessionId = await _client.CreateSessionAsync("New Chat", ct) ?? "";
-            if (_sessionId.Length == 0) ConnectionStatus = "Error: could not create session";
-            else await RefreshSessionsAsync(ct);
+            if (!await EnsureSessionAsync()) return;
+            await _client.SendPromptAsync(_sessionId, text);
         }
         catch (Exception ex)
         {
@@ -83,17 +88,33 @@ public sealed class ChatStore
         }
     }
 
-    public async Task SendAsync(string text)
+    private bool _creatingSession;
+
+    private async Task<bool> EnsureSessionAsync()
     {
-        if (_sessionId.Length == 0) return;
+        if (_sessionId.Length > 0) return true;
+        while (_creatingSession) await Task.Delay(10);
+        if (_sessionId.Length > 0) return true;
+
+        _creatingSession = true;
         try
         {
-            await _client.SendPromptAsync(_sessionId, text);
+            _sessionId = await _client.CreateSessionAsync("New Chat", null) ?? "";
         }
-        catch (Exception ex)
+        finally
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            _creatingSession = false;
         }
+
+        if (_sessionId.Length == 0)
+        {
+            ConnectionStatus = "Error: could not create session";
+            return false;
+        }
+        SessionTitle = "New Chat";
+        ActiveSessionId = _sessionId;
+        await RefreshSessionsAsync();
+        return true;
     }
 
     public async Task RefreshSessionsAsync(CancellationToken ct = default)
@@ -103,7 +124,19 @@ public sealed class ChatStore
             var list = await _client.ListSessionsAsync(ct);
             Sessions.Clear();
             foreach (var session in list) Sessions.Add(session);
-            if (Sessions.Any(s => s.Id == _sessionId)) SelectedSessionId = _sessionId;
+
+            var groups = list
+                .GroupBy(s => s.Directory)
+                .Select(g => new DirectoryGroup
+                {
+                    Directory = g.Key.Length == 0 ? "(unknown)" : g.Key,
+                    Sessions = new ObservableCollection<SessionInfo>(g.OrderByDescending(s => s.Updated)),
+                })
+                .OrderByDescending(g => g.Sessions.Count > 0 ? g.Sessions[0].Updated : 0)
+                .ToList();
+
+            DirectoryGroups.Clear();
+            foreach (var group in groups) DirectoryGroups.Add(group);
         }
         catch (Exception ex)
         {
@@ -111,14 +144,15 @@ public sealed class ChatStore
         }
     }
 
-    public async Task NewSessionAsync()
+    public async Task NewSessionAsync(string? directory = null)
     {
         try
         {
-            var id = await _client.CreateSessionAsync("New Chat") ?? "";
+            var id = await _client.CreateSessionAsync("New Chat", directory) ?? "";
             if (id.Length == 0) return;
             _sessionId = id;
             SessionTitle = "New Chat";
+            ActiveSessionId = id;
             Messages.Clear();
             _messagesById.Clear();
             IsBusy = false;
@@ -135,10 +169,10 @@ public sealed class ChatStore
         if (sessionId.Length == 0 || sessionId == _sessionId) return;
         _sessionId = sessionId;
         SessionTitle = Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat";
+        ActiveSessionId = sessionId;
         Messages.Clear();
         _messagesById.Clear();
         IsBusy = false;
-        SelectedSessionId = sessionId;
 
         try
         {

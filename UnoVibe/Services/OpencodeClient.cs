@@ -26,10 +26,11 @@ public sealed class OpencodeClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<string?> CreateSessionAsync(string? title = null, CancellationToken ct = default)
+    public async Task<string?> CreateSessionAsync(string? title = null, string? directory = null, CancellationToken ct = default)
     {
+        var url = string.IsNullOrEmpty(directory) ? "/session" : $"/session?directory={Uri.EscapeDataString(directory)}";
         using var response = await Http.PostAsJsonAsync(
-            "/session",
+            url,
             new { title = string.IsNullOrEmpty(title) ? "New Chat" : title },
             Json,
             ct);
@@ -62,7 +63,12 @@ public sealed class OpencodeClient
             {
                 Id = item.GetStringProperty("id"),
                 Title = item.GetStringProperty("title"),
+                Directory = item.GetStringProperty("directory"),
+                ProjectId = item.GetStringProperty("projectID"),
+                Path = item.GetStringProperty("path"),
             };
+            if (item.TryGetProperty("time", out var time))
+                info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
             if (info.Id.Length > 0) list.Add(info);
         }
         return list;
