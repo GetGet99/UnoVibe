@@ -18,6 +18,7 @@ namespace UnoVibe.Models;
     public string ToolSearchPath = "";
     public string ToolInclude = "";
     public string ToolWorkdir = "";
+    public string ToolUrl = "";
     public string ShellOutput = "";
     public string Diff = "";
     public string LoadedFiles = "";

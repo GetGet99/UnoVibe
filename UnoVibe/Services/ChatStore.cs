@@ -679,6 +679,7 @@ public sealed class ChatStore : IDisposable
                 if (input.TryGetProperty("path", out var searchPath)) item.ToolSearchPath = searchPath.GetString() ?? "";
                 if (input.TryGetProperty("include", out var include)) item.ToolInclude = include.GetString() ?? "";
                 if (input.TryGetProperty("workdir", out var workdir)) item.ToolWorkdir = workdir.GetString() ?? "";
+                if (input.TryGetProperty("url", out var url)) item.ToolUrl = url.GetString() ?? "";
                 if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
                     item.TodoJson = JsonSerializer.Serialize(todos, JsonDefaults);
                 if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)

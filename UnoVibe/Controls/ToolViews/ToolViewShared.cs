@@ -122,6 +122,9 @@ public static class ToolViewShared
             ? prop.GetString() ?? ""
             : "";
 
+    public static string WebFetch(PartItem p) =>
+        "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? p.ToolName ?? "webfetch");
+
     public static string Read(PartItem p) =>
         "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "read");
 
