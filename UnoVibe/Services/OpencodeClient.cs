@@ -157,6 +157,9 @@ public sealed class OpencodeClient
                     Id = kv.Name,
                     Name = name.Length > 0 ? name : kv.Name,
                     Variants = variants.ToArray(),
+                    LimitContext = model.TryGetProperty("limit", out var limit)
+                        ? limit.GetInt64Property("context")
+                        : 0,
                 });
             }
         }
@@ -190,6 +193,19 @@ public sealed class OpencodeClient
             }
             if (item.TryGetProperty("time", out var time))
                 info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
+            if (item.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number)
+                info.Cost = cost.GetDouble();
+            if (item.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
+            {
+                info.TokensInput = tokens.GetInt64Property("input");
+                info.TokensOutput = tokens.GetInt64Property("output");
+                info.TokensReasoning = tokens.GetInt64Property("reasoning");
+                if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
+                {
+                    info.TokensCacheRead = cache.GetInt64Property("read");
+                    info.TokensCacheWrite = cache.GetInt64Property("write");
+                }
+            }
             if (info.Id.Length > 0) list.Add(info);
         }
         return list;
@@ -218,4 +234,11 @@ file static class OpencodeClientExtensions
 {
     public static string GetStringProperty(this JsonElement element, string name) =>
         element.TryGetProperty(name, out var prop) ? prop.GetString() ?? "" : "";
+
+    public static long GetInt64Property(this JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var prop)) return 0;
+        if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt64();
+        return 0;
+    }
 }

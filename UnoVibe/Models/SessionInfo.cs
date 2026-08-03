@@ -12,6 +12,14 @@ public sealed class SessionInfo
     public string ModelId { get; set; } = "";
     public string ModelProviderId { get; set; } = "";
     public string ModelVariant { get; set; } = "";
+    public double Cost { get; set; }
+    public long TokensInput { get; set; }
+    public long TokensOutput { get; set; }
+    public long TokensReasoning { get; set; }
+    public long TokensCacheRead { get; set; }
+    public long TokensCacheWrite { get; set; }
+
+    public long TokensTotal => TokensInput + TokensOutput + TokensReasoning + TokensCacheRead + TokensCacheWrite;
 
     public string TimeLabel
     {

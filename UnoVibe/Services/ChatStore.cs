@@ -23,6 +23,18 @@ public sealed class ChatStore : IDisposable
     public Reference<string> SessionTitleProp { get; } = Ref("New Chat");
     public string SessionTitle { get => SessionTitleProp.Value; set => SessionTitleProp.Value = value; }
 
+    public Reference<string> UsageCostLabelProp { get; } = Ref("$0.00");
+    public string UsageCostLabel { get => UsageCostLabelProp.Value; set => UsageCostLabelProp.Value = value; }
+
+    public Reference<string> UsageTokensLabelProp { get; } = Ref("0");
+    public string UsageTokensLabel { get => UsageTokensLabelProp.Value; set => UsageTokensLabelProp.Value = value; }
+
+    public Reference<string> ContextLabelProp { get; } = Ref("0%");
+    public string ContextLabel { get => ContextLabelProp.Value; set => ContextLabelProp.Value = value; }
+
+    public Reference<double> ContextUsageProp { get; } = Ref(0d);
+    public double ContextUsage { get => ContextUsageProp.Value; set => ContextUsageProp.Value = value; }
+
     public Reference<string> ActiveSessionIdProp { get; } = Ref("");
     public string ActiveSessionId { get => ActiveSessionIdProp.Value; set => ActiveSessionIdProp.Value = value; }
 
@@ -87,6 +99,7 @@ public sealed class ChatStore : IDisposable
         _sessionId = "";
         ActiveSessionId = "";
         SessionTitle = "New Chat";
+        ResetUsageStats();
         IsBusy = false;
         Messages.Clear();
         _messagesById.Clear();
@@ -320,6 +333,7 @@ public sealed class ChatStore : IDisposable
             ActiveSessionId = id;
             Messages.Clear();
             _messagesById.Clear();
+            ResetUsageStats();
             IsBusy = false;
             await RefreshSessionsAsync();
         }
@@ -353,6 +367,7 @@ public sealed class ChatStore : IDisposable
                 _messagesById[message.Id] = message;
                 Messages.Add(message);
             }
+            UpdateSessionStats();
             await SyncPendingQuestionsAsync();
         }
         catch (Exception ex)
@@ -370,6 +385,7 @@ public sealed class ChatStore : IDisposable
             Role = info.GetStringProperty("role"),
             Agent = info.GetStringProperty("agent"),
         };
+        ApplyMessageStats(item, info);
         if (msg.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
         {
             foreach (var part in parts.EnumerateArray())
@@ -448,7 +464,9 @@ public sealed class ChatStore : IDisposable
         {
             var role = info.GetStringProperty("role");
             if (role.Length > 0) message.Role = role;
+            ApplyMessageStats(message, info);
             if (info.TryGetProperty("finish", out _)) IsBusy = false;
+            UpdateSessionStats();
             return;
         }
 
@@ -458,9 +476,11 @@ public sealed class ChatStore : IDisposable
             Role = info.GetStringProperty("role"),
             Agent = info.GetStringProperty("agent"),
         };
+        ApplyMessageStats(message, info);
         if (info.TryGetProperty("finish", out _)) IsBusy = false;
         _messagesById[id] = message;
         Messages.Add(message);
+        UpdateSessionStats();
     }
 
     private void ApplyPartUpdated(JsonElement properties)
@@ -688,6 +708,77 @@ public sealed class ChatStore : IDisposable
         if (string.IsNullOrEmpty(item.ToolTitle)) item.ToolTitle = item.ToolName;
     }
 
+    private static void ApplyMessageStats(MessageItem item, JsonElement info)
+    {
+        item.ModelId = info.GetStringProperty("modelID");
+        item.ProviderId = info.GetStringProperty("providerID");
+        if (info.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number)
+            item.Cost = cost.GetDouble();
+        if (info.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
+        {
+            item.TokensInput = tokens.GetInt64Property("input");
+            item.TokensOutput = tokens.GetInt64Property("output");
+            item.TokensReasoning = tokens.GetInt64Property("reasoning");
+            if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
+            {
+                item.TokensCacheRead = cache.GetInt64Property("read");
+                item.TokensCacheWrite = cache.GetInt64Property("write");
+            }
+        }
+    }
+
+    private void ResetUsageStats()
+    {
+        UsageCostLabel = "$0.00";
+        UsageTokensLabel = "0";
+        ContextLabel = "0%";
+        ContextUsage = 0;
+    }
+
+    private void UpdateSessionStats()
+    {
+        var last = Messages.LastOrDefault(m => m.Role == "assistant" && m.TokensOutput > 0);
+        if (last is null)
+        {
+            ResetUsageStats();
+            return;
+        }
+
+        UsageCostLabel = FormatCost(last.Cost);
+
+        var tokens = last.TokensInput + last.TokensOutput + last.TokensReasoning
+            + last.TokensCacheRead + last.TokensCacheWrite;
+        UsageTokensLabel = tokens.ToString("N0");
+
+        var limit = ResolveContextLimit(last);
+        if (limit > 0)
+        {
+            var percent = (int)Math.Round(tokens / (double)limit * 100);
+            ContextLabel = $"{percent}%";
+            ContextUsage = percent;
+        }
+        else
+        {
+            ContextLabel = "--";
+            ContextUsage = 0;
+        }
+    }
+
+    private long ResolveContextLimit(MessageItem message)
+    {
+        var model = ModelOptions.FirstOrDefault(m => m.Id == message.ModelId
+            && (message.ProviderId.Length == 0 || m.ProviderId == message.ProviderId));
+        model ??= ModelOptions.FirstOrDefault(m => m.Id == ModelId && m.ProviderId == ProviderId);
+        return model?.LimitContext ?? 0;
+    }
+
+    private static string FormatCost(double cost)
+    {
+        if (cost <= 0) return "$0.00";
+        if (cost < 0.01) return $"${cost:0.####}";
+        return $"${cost:F2}";
+    }
+
     private static void UpdatePart(PartItem item, JsonElement part)
     {
         if (item.Type is "text" or "reasoning" && part.TryGetProperty("text", out var text))
@@ -705,6 +796,13 @@ file static class JsonElementExtensions
 {
     public static string GetStringProperty(this JsonElement element, string name) =>
         element.TryGetProperty(name, out var prop) ? prop.GetString() ?? "" : "";
+
+    public static long GetInt64Property(this JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var prop)) return 0;
+        if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt64();
+        return 0;
+    }
 
     public static bool GetBoolProperty(this JsonElement element, string name, bool fallback)
     {
