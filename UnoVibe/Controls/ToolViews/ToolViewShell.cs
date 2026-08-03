@@ -16,11 +16,13 @@ namespace UnoVibe.Controls.ToolViews;
         </Border>
         if (`Part.ShellOutput.Length > 0`)
         {
-            <Button Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Expanded = !Expanded`>
+            <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`Expanded ? Part.ShellOutput : ToolViewShared.ShellCollapsed(Part)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
-            </Button>
+            </Border>
             if (`ToolViewShared.ShellOverflow(Part)`)
-                <TextBlock Text=`Expanded ? "Click to collapse" : "Click to expand"` FontSize=11 FontFamily="Consolas" Foreground=`theme.TertiaryText` />
+                <Button Background=`theme.SolidBackground` BorderThickness=0 CornerRadius=4 Padding=`new Thickness(8, 2, 8, 2)` HorizontalAlignment=Left Click+=`(s, e) => Expanded = !Expanded`>
+                    <TextBlock Text=`Expanded ? "Show less ▴" : "Show more ▾"` FontSize=11 FontFamily="Consolas" Foreground=`theme.TertiaryText` />
+                </Button>
         }
         if (`Part.ToolError.Length > 0`)
             <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>

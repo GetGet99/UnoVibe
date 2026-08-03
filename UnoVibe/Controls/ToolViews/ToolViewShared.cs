@@ -21,15 +21,14 @@ public static class ToolViewShared
         return title.Length > 0 ? "Thinking: " + title : "Thinking";
     }
 
-    public static string ThoughtLabel(PartItem p, bool expanded)
+    public static string ThoughtLabel(PartItem p)
     {
         var (title, _) = ReasoningSummary(p);
-        var prefix = expanded ? "- " : "+ ";
         var text = "Thought";
         if (title.Length > 0) text += ": " + title;
         var duration = FormatDuration(p.Time.DurationMs);
         if (duration.Length > 0) text += " · " + duration;
-        return prefix + text;
+        return text;
     }
 
     public static string FormatDuration(long ms)

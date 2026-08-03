@@ -7,15 +7,18 @@ namespace UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
     PartItem Part;
     bool Expanded = false;
+    bool Hovering = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <Button Background=`theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Expanded = !Expanded`>
+        <Button Background=`Hovering ? theme.SystemNeutralBackground : theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Expanded = !Expanded` PointerEntered+=`(s, e) => Hovering = true` PointerExited+=`(s, e) => Hovering = false`>
             <StackPanel Orientation=Horizontal Spacing=8>
                 if (`!Part.Time.IsDone`)
                     <ProgressRing Width=14 Height=14 IsActive=true Foreground=`theme.SystemCaution` VerticalAlignment=Center />
-                <TextBlock Text=`Part.Time.IsDone ? ToolViewShared.ThoughtLabel(Part, Expanded) : ToolViewShared.ReasoningLabel(Part)` FontSize=12 FontWeight=`FontWeights.SemiBold` FontFamily="Consolas" TextWrapping=Wrap Foreground=`Part.Time.IsDone ? theme.SecondaryText : theme.SystemCaution` IsTextSelectionEnabled=true VerticalAlignment=Center />
+                else
+                    <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 FontFamily="Consolas" Foreground=`Hovering ? theme.PrimaryText : theme.SecondaryText` VerticalAlignment=Center />
+                <TextBlock Text=`Part.Time.IsDone ? ToolViewShared.ThoughtLabel(Part) : ToolViewShared.ReasoningLabel(Part)` FontSize=12 FontWeight=`FontWeights.SemiBold` FontFamily="Consolas" TextWrapping=Wrap Foreground=`Part.Time.IsDone ? theme.SecondaryText : theme.SystemCaution` IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>
         </Button>
         if (`Expanded && Part.Time.IsDone`)
