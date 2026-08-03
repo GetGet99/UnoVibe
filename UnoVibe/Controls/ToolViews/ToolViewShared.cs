@@ -1,10 +1,58 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using UnoVibe.Models;
 
 namespace UnoVibe.Controls.ToolViews;
 
 public static class ToolViewShared
 {
+    public static (string Title, string Body) ReasoningSummary(PartItem p)
+    {
+        var content = p.Text.Replace("[REDACTED]", "").Trim();
+        if (content.Length == 0) return ("", "");
+        var match = Regex.Match(content, @"^\*\*([^*\n]+)\*\*(?:\r?\n\r?\n|$)");
+        if (!match.Success) return ("", content);
+        return (match.Groups[1].Value.Trim(), content.Substring(match.Length).Trim());
+    }
+
+    public static string ReasoningLabel(PartItem p)
+    {
+        var (title, _) = ReasoningSummary(p);
+        return title.Length > 0 ? "Thinking: " + title : "Thinking";
+    }
+
+    public static string ThoughtLabel(PartItem p, bool expanded)
+    {
+        var (title, _) = ReasoningSummary(p);
+        var prefix = expanded ? "- " : "+ ";
+        var text = "Thought";
+        if (title.Length > 0) text += ": " + title;
+        var duration = FormatDuration(p.Time.DurationMs);
+        if (duration.Length > 0) text += " · " + duration;
+        return prefix + text;
+    }
+
+    public static string FormatDuration(long ms)
+    {
+        if (ms <= 0) return "";
+        if (ms < 1000) return $"{ms}ms";
+        if (ms < 60000) return $"{(ms / 1000.0):0.#}s";
+        if (ms < 3600000)
+        {
+            var minutes = ms / 60000;
+            var seconds = (ms % 60000) / 1000;
+            return seconds > 0 ? $"{minutes}m {seconds}s" : $"{minutes}m";
+        }
+        if (ms < 86400000)
+        {
+            var hours = ms / 3600000;
+            var minutes = (ms % 3600000) / 60000;
+            return minutes > 0 ? $"{hours}h {minutes}m" : $"{hours}h";
+        }
+        var days = ms / 86400000;
+        var h = (ms % 86400000) / 3600000;
+        return $"{days}d {h}h";
+    }
     public static string Shell(PartItem p) =>
         p.ToolCommand.Length > 0
             ? "$ " + p.ToolCommand + (p.ToolWorkdir.Length > 0 ? "  (in " + p.ToolWorkdir + ")" : "")
@@ -154,6 +202,7 @@ public static class ToolViewShared
     }
 
     public const int ShellMaxLines = 10;
+    public const int ShellMaxChars = ShellMaxLines * 120;
 
     public static bool ShellOverflow(PartItem p) => CollapseShellOutput(p).Overflow;
 
@@ -163,15 +212,25 @@ public static class ToolViewShared
     {
         var output = p.ShellOutput.Length > 0 ? p.ShellOutput : p.ToolOutput;
         if (output.Length == 0) return (output, false);
-        return CollapseLines(output, ShellMaxLines);
+        return CollapseLines(output, ShellMaxLines, ShellMaxChars);
     }
 
-    public static (string Output, bool Overflow) CollapseLines(string output, int maxLines)
+    /// <summary>
+    /// Mirrors the TUI's collapseToolOutput: keeps at most <paramref name="maxLines"/>
+    /// lines and at most <paramref name="maxChars"/> characters in the preview, so a
+    /// single huge line (e.g. minified JSON) still gets collapsed before it hits the
+    /// layout engine (which shapes the whole string regardless of TextBlock.MaxLines).
+    /// </summary>
+    public static (string Output, bool Overflow) CollapseLines(string output, int maxLines, int maxChars)
     {
         var lines = output.Split('\n');
-        if (lines.Length <= maxLines) return (output, false);
+        if (lines.Length <= maxLines && output.Length <= maxChars)
+            return (output, false);
 
         var preview = string.Join("\n", lines.Take(maxLines));
+        if (preview.Length > maxChars)
+            return (preview.Substring(0, Math.Max(0, maxChars - 1)) + "…", true);
+
         return (preview + "\n…", true);
     }
 }

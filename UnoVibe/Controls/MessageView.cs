@@ -34,13 +34,7 @@ namespace UnoVibe.Controls;
                                            Foreground=`Message.Role == "user" ? AppTheme.TextOnAccent : theme.PrimaryText` />
                             </Border>
                         else if (`p.Type == "reasoning"`)
-                            <Border CornerRadius=8 Padding=`new Thickness(12, 8, 12, 8)` MaxWidth=720
-                                    HorizontalAlignment=Left
-                                    Background=`theme.SubtleFill`
-                                    BorderBrush=`theme.CardStroke` BorderThickness=1>
-                                <TextBlock Text=`p.Text` TextWrapping=Wrap FontSize=12 IsTextSelectionEnabled=true
-                                           Foreground=`theme.SecondaryText` FontStyle=Italic />
-                            </Border>
+                            <ToolViewReasoning Part=`p` />
                         else if (`p.Type == "step-start" || p.Type == "step-finish"`)
                             <TextBlock Text="" Visibility=Collapsed />
                         else if (`p.Type == "patch"`)

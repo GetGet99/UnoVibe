@@ -16,7 +16,7 @@ namespace UnoVibe.Controls.ToolViews;
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=6>
-        <TextBlock Text=`ToolViewShared.QuestionTitle(Part)` FontSize=12 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+        <ToolViewTitle Part=`Part` Text=`ToolViewShared.QuestionTitle(Part)` />
         if (`Part.AnswerJson.Length > 0`)
         {
             foreach (var q in `ToolViewShared.ParseQuestions(Part)`)

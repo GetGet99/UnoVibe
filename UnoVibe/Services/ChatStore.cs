@@ -647,6 +647,9 @@ public sealed class ChatStore : IDisposable
         if (item.Type is "text" or "reasoning" && part.TryGetProperty("text", out var text))
             item.Text = text.GetString() ?? "";
 
+        if (item.Type == "reasoning" && part.TryGetProperty("time", out var time))
+            item.Time = ParsePartTime(time);
+
         if (item.Type == "tool")
         {
             item.ToolName = part.GetStringProperty("tool");
@@ -780,10 +783,22 @@ public sealed class ChatStore : IDisposable
         return $"${cost:F2}";
     }
 
+    private static ReasoningTime ParsePartTime(JsonElement time)
+    {
+        return new ReasoningTime
+        {
+            Start = time.GetInt64Property("start"),
+            End = time.GetInt64Property("end"),
+        };
+    }
+
     private static void UpdatePart(PartItem item, JsonElement part)
     {
         if (item.Type is "text" or "reasoning" && part.TryGetProperty("text", out var text))
             item.Text = text.GetString() ?? "";
+
+        if (item.Type == "reasoning" && part.TryGetProperty("time", out var time))
+            item.Time = ParsePartTime(time);
 
         if (item.Type == "tool")
             ApplyToolState(item, part);

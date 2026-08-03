@@ -1,5 +1,13 @@
 namespace UnoVibe.Models;
 
+public struct ReasoningTime
+{
+    public long Start;
+    public long End;
+    public bool IsDone => End > 0;
+    public long DurationMs => End > 0 && End >= Start ? End - Start : 0;
+}
+
 /// <summary>
 /// A reactive model for a message part. <c>Text</c> is a QuickMarkup reference so
 /// streaming deltas can append without replacing the item in the collection.
@@ -27,6 +35,7 @@ namespace UnoVibe.Models;
     public string QuestionJson = "";
     public string AnswerJson = "";
     public string QuestionRequestId = "";
+    public ReasoningTime Time;
     """)]
 public partial class PartItem
 {

@@ -12,7 +12,7 @@ namespace UnoVibe.Controls.ToolViews;
     </setup>
     <StackPanel Spacing=4>
         <Border Background=`Part.ToolStatus == "error" ? theme.SystemCriticalBackground : theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)`>
-            <TextBlock Text=`ToolViewShared.Shell(Part)` FontSize=12 FontWeight=`FontWeights.SemiBold` FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
+            <ToolViewTitle Part=`Part` Text=`ToolViewShared.Shell(Part)` SemiBold=true IsShell=true />
         </Border>
         if (`Part.ShellOutput.Length > 0`)
         {

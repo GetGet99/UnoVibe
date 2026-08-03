@@ -11,7 +11,7 @@ namespace UnoVibe.Controls.ToolViews;
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <TextBlock Text=`ToolViewShared.TodoTitle(Part)` FontSize=12 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+        <ToolViewTitle Part=`Part` Text=`ToolViewShared.TodoTitle(Part)` />
         foreach (var todo in `ToolViewShared.ParseTodos(Part)`)
             <TextBlock Text=`ToolViewShared.TodoLine(todo)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true
                        Foreground=`todo.Status == "in_progress" ? theme.SystemCaution : theme.TertiaryText` />

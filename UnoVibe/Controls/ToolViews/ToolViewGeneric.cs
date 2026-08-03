@@ -10,7 +10,7 @@ namespace UnoVibe.Controls.ToolViews;
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <TextBlock Text=`ToolViewShared.Generic(Part)` FontSize=12 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+        <ToolViewTitle Part=`Part` Text=`ToolViewShared.Generic(Part)` />
         if (`Part.ToolOutput.Length > 0`)
             <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`ToolViewShared.Truncate(Part.ToolOutput, 4000)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
