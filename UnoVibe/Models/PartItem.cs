@@ -44,6 +44,7 @@ public partial class PartItem
     public string MessageId { get; set; } = "";
     public string CallId { get; set; } = "";
     public string Type { get; set; } = "";
+    public bool Synthetic { get; set; }
     public string FileName { get; set; } = "";
     public string[] Files { get; set; } = Array.Empty<string>();
     public ObservableCollection<QuestionFormItem> QuestionForm { get; } = new();

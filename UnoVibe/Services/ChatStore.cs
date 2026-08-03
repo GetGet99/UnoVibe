@@ -411,9 +411,11 @@ public sealed class ChatStore : IDisposable
             {
                 if (part.GetStringProperty("type") is "step-start" or "step-finish") continue;
                 var p = PartFromJson(part);
+                if (p.Type == "text" && p.Synthetic) continue;
                 if (p.Id.Length > 0) item.Parts.Add(p);
             }
         }
+        if (item.Role == "user" && item.Parts.Count == 0) return null;
         return item;
     }
 
@@ -512,7 +514,13 @@ public sealed class ChatStore : IDisposable
         if (existing is null)
         {
             if (part.GetStringProperty("type") is "step-start" or "step-finish") return;
-            message.Parts.Add(PartFromJson(part));
+            var p = PartFromJson(part);
+            if (p.Synthetic && p.Type == "text" && message.Parts.Count == 0)
+            {
+                Messages.Remove(message);
+                return;
+            }
+            message.Parts.Add(p);
             return;
         }
 
@@ -665,6 +673,8 @@ public sealed class ChatStore : IDisposable
 
         if (item.Type is "text" or "reasoning" && part.TryGetProperty("text", out var text))
             item.Text = text.GetString() ?? "";
+
+        item.Synthetic = part.GetBoolProperty("synthetic", false);
 
         if (item.Type == "reasoning" && part.TryGetProperty("time", out var time))
             item.Time = ParsePartTime(time);
@@ -819,6 +829,9 @@ public sealed class ChatStore : IDisposable
 
         if (item.Type == "reasoning" && part.TryGetProperty("time", out var time))
             item.Time = ParsePartTime(time);
+
+        if (item.Type == "reasoning" || item.Type == "text")
+            item.Synthetic = part.GetBoolProperty("synthetic", item.Synthetic);
 
         if (item.Type == "tool")
             ApplyToolState(item, part);

@@ -25,13 +25,18 @@ namespace UnoVibe.Controls;
                 <StackPanel Spacing=6>
                     foreach (var p in `Message.Parts`)
                     {
-                        if (`p.Type == "text"`)
+                        if (`p.Type == "text" && !p.Synthetic`)
                             <Border CornerRadius=8 Padding=`new Thickness(12, 8, 12, 8)` MaxWidth=720
                                     HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`
                                     Background=`Message.Role == "user" ? theme.Accent : theme.CardBackground`
                                     BorderBrush=`theme.CardStroke` BorderThickness=`Message.Role == "user" ? new Thickness(0) : new Thickness(1)`>
                                 <TextBlock Text=`p.Text` TextWrapping=Wrap IsTextSelectionEnabled=true
                                            Foreground=`Message.Role == "user" ? AppTheme.TextOnAccent : theme.PrimaryText` />
+                            </Border>
+                        else if (`p.Type == "compaction"`)
+                            <Border BorderThickness=`new Thickness(0, 1, 0, 0)` BorderBrush=`theme.DividerStroke` Padding=`new Thickness(0, 6, 0, 6)` Margin=`new Thickness(0, 8, 0, 8)`>
+                                <TextBlock Text="Compaction" FontSize=11 Foreground=`theme.SecondaryText`
+                                           HorizontalAlignment=Center IsTextSelectionEnabled=true />
                             </Border>
                         else if (`p.Type == "reasoning"`)
                             <ToolViewReasoning Part=`p` />
