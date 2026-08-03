@@ -190,6 +190,47 @@ public static class ToolViewShared
     public static string Write(PartItem p) =>
         "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "write");
 
+    /// <summary>
+    /// Edit title with an added/changed line count derived from the unified diff
+    /// (the TUI itself does not surface these numbers, but the diff has enough
+    /// information to compute them).
+    /// </summary>
+    public static string EditTitle(PartItem p)
+    {
+        var (added, removed) = DiffStats(p.Diff);
+        if (added + removed == 0) return Edit(p);
+        return $"{Edit(p)}  ({added}+ {removed}-)";
+    }
+
+    public static (int Added, int Removed) DiffStats(string diff)
+    {
+        int added = 0, removed = 0;
+        foreach (var line in diff.Split('\n'))
+        {
+            if (line.Length < 1 || line[0] != '+' && line[0] != '-') continue;
+            if (line.StartsWith("+++") || line.StartsWith("---")) continue;
+            if (line[0] == '+') added++;
+            else removed++;
+        }
+        return (added, removed);
+    }
+
+    public static string WriteTitle(PartItem p)
+    {
+        var title = Write(p);
+        var lineCount = CountLines(p.ToolOutput.Length > 0 ? p.ToolOutput : p.ToolInput);
+        return lineCount > 0 ? $"{title}  ({lineCount} lines)" : title;
+    }
+
+    public static int CountLines(string value)
+    {
+        if (value.Length == 0) return 0;
+        var count = 1;
+        foreach (var c in value)
+            if (c == '\n') count++;
+        return value[value.Length - 1] == '\n' ? count - 1 : count;
+    }
+
     public static string Generic(PartItem p)
     {
         var name = p.ToolTitle ?? p.ToolName ?? "tool";

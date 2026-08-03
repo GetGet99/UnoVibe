@@ -29,13 +29,17 @@ namespace UnoVibe.Controls;
                     foreach (var p in `Message.Parts`)
                     {
                         if (`p.Type == "text" && !p.Synthetic`)
-                            <Border CornerRadius=8 Padding=`new Thickness(12, 8, 12, 8)` MaxWidth=720
-                                    HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`
-                                    Background=`Message.Role == "user" ? theme.Accent : theme.CardBackground`
-                                    BorderBrush=`theme.CardStroke` BorderThickness=`Message.Role == "user" ? new Thickness(0) : new Thickness(1)`>
-                                <TextBlock Text=`p.Text` TextWrapping=Wrap IsTextSelectionEnabled=true
-                                           Foreground=`Message.Role == "user" ? AppTheme.TextOnAccent : theme.PrimaryText` />
-                            </Border>
+                            {
+                                // Skip whitespace-only text parts entirely (no element rendered).
+                                if (`p.Text.Trim().Length > 0`)
+                                    <Border CornerRadius=8 Padding=`new Thickness(12, 8, 12, 8)` MaxWidth=720
+                                            HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`
+                                            Background=`Message.Role == "user" ? theme.Accent : theme.CardBackground`
+                                            BorderBrush=`theme.CardStroke` BorderThickness=`Message.Role == "user" ? new Thickness(0) : new Thickness(1)`>
+                                        <TextBlock Text=`p.Text.Trim()` TextWrapping=Wrap IsTextSelectionEnabled=true
+                                                   Foreground=`Message.Role == "user" ? AppTheme.TextOnAccent : theme.PrimaryText` />
+                                    </Border>
+                            }
                         else if (`p.Type == "aborted"`)
                             <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(10, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
                                 <StackPanel Orientation=Horizontal Spacing=6>
