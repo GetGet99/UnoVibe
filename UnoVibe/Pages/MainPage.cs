@@ -1,12 +1,16 @@
+using UnoVibe.Services;
+
 namespace UnoVibe.Pages;
 
 /// <summary>
 /// Root page: session sidebar on the left, chat page on the right.
 /// </summary>
 [QuickMarkup("""
+    using UnoVibe.Services;
     using UnoVibe.Controls;
     using UnoVibe.Pages;
     using QuickMarkup.WinUI;
+    provide ChatStore Store = null;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -22,4 +26,5 @@ namespace UnoVibe.Pages;
     """)]
 public partial class MainPage : Page
 {
+    public void ProvideStore(ChatStore store) => Store = store;
 }

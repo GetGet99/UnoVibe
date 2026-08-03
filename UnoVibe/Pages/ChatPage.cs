@@ -10,6 +10,7 @@ namespace UnoVibe.Pages;
     using UnoVibe.Services;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
+    inject ChatStore Store;
     string Input = "";
     <setup>
         var theme = ThemeBrushes.Global;
@@ -27,17 +28,17 @@ namespace UnoVibe.Pages;
             </>>
                 <StackPanel VerticalAlignment=Center>
                     <StackPanel Orientation=Horizontal Spacing=8>
-                        <TextBlock Text=`ChatStore.Instance.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
-                        <ProgressRing Width=16 Height=16 IsActive=`ChatStore.Instance.IsBusy`
-                                      Visibility=`ChatStore.Instance.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
+                        <TextBlock Text=`Store.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                        <ProgressRing Width=16 Height=16 IsActive=`Store.IsBusy`
+                                      Visibility=`Store.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
                     </StackPanel>
-                    <TextBlock Text=`ChatStore.Instance.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` />
+                    <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` />
                 </StackPanel>
             </Grid>
             <Grid Grid.Row=1>
                 scrollHost = <ScrollViewer>
                     <StackPanel Padding=16>
-                        foreach (var m in `ChatStore.Instance.Messages`)
+                        foreach (var m in `Store.Messages`)
                             <MessageView Message=`m` />
                     </StackPanel>
                 </ScrollViewer>
@@ -47,7 +48,7 @@ namespace UnoVibe.Pages;
                 <ColumnDefinition Width=Auto />
             </>>
                 inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` />
-                <Button Grid.Column=1 Content="Send" @Click+=`await SendAsync()` IsEnabled=`!ChatStore.Instance.IsBusy` />
+                <Button Grid.Column=1 Content="Send" @Click+=`await SendAsync()` IsEnabled=`!Store.IsBusy` />
             </Grid>
             <Grid Grid.Row=3 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
                 <ColumnDefinition Width=Auto />
@@ -56,15 +57,15 @@ namespace UnoVibe.Pages;
             </>>
                 <StackPanel Spacing=4>
                     <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` />
-                    modeCombo = <ComboBox ItemsSource=`ChatStore.Instance.ModeOptions` SelectedItem=`ChatStore.Instance.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 />
+                    modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 />
                 </StackPanel>
                 <StackPanel Grid.Column=1 Spacing=4>
                     <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` />
-                    modelCombo = <ComboBox ItemsSource=`ChatStore.Instance.ModelOptions` DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue=`ChatStore.Instance.ModelId` SelectionChanged+=`(sender, e) => OnModelChanged(sender, e)` MinWidth=200 MaxWidth=300 />
+                    modelCombo = <ComboBox ItemsSource=`Store.ModelOptions` DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue=`Store.ModelId` SelectionChanged+=`(sender, e) => OnModelChanged(sender, e)` MinWidth=200 MaxWidth=300 />
                 </StackPanel>
                 <StackPanel Grid.Column=2 Spacing=4>
                     <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` />
-                    variantCombo = <ComboBox ItemsSource=`ChatStore.Instance.VariantOptions` SelectedItem=`ChatStore.Instance.Variant` IsEnabled=`ChatStore.Instance.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=90 />
+                    variantCombo = <ComboBox ItemsSource=`Store.VariantOptions` SelectedItem=`Store.Variant` IsEnabled=`Store.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=90 />
                 </StackPanel>
             </Grid>
         </Grid>
@@ -77,7 +78,7 @@ public partial class ChatPage : Page
     {
         Init();
 
-        var store = ChatStore.Instance;
+        var store = Store;
         store.Messages.CollectionChanged += OnMessagesChanged;
         foreach (var message in store.Messages) HookParts(message);
 
@@ -103,7 +104,7 @@ public partial class ChatPage : Page
         var text = Input.Trim();
         if (text.Length == 0) return;
         Input = "";
-        await ChatStore.Instance.SendAsync(text);
+        await Store.SendAsync(text);
         ScrollToBottom();
     }
 
@@ -119,17 +120,17 @@ public partial class ChatPage : Page
 
     private void OnModeChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if ((sender as ComboBox)?.SelectedItem is string mode) ChatStore.Instance.SetMode(mode);
+        if ((sender as ComboBox)?.SelectedItem is string mode) Store.SetMode(mode);
     }
 
     private void OnModelChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if ((sender as ComboBox)?.SelectedValue is string id) ChatStore.Instance.SetModel(id);
+        if ((sender as ComboBox)?.SelectedValue is string id) Store.SetModel(id);
     }
 
     private void OnVariantChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if ((sender as ComboBox)?.SelectedItem is string variant) ChatStore.Instance.SetVariant(variant);
+        if ((sender as ComboBox)?.SelectedItem is string variant) Store.SetVariant(variant);
     }
 
     private static string Capitalize(string? value) =>

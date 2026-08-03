@@ -17,37 +17,56 @@ public partial class App : Application
         this.InitializeComponent();
     }
 
+    /// <summary>All open windows. Each window scopes to its own <see cref="ChatStore"/>.</summary>
+    public static List<WindowController> Windows { get; } = new();
+
     protected Window? MainWindow { get; private set; }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         ReactiveInitializer.InitReactiveScheduler();
 
-        MainWindow = new Window();
-#if DEBUG
-        MainWindow.UseStudio();
-#endif
+        MainWindow = CreateWindow().Window;
+    }
+
+    /// <summary>
+    /// Creates a new window wired to its own chat store, choosing the connect
+    /// page or the main chat page based on the OPENCODE_BASE_URL environment variable.
+    /// </summary>
+    public static WindowController CreateWindow()
+    {
+        var controller = new WindowController();
+        Windows.Add(controller);
 
         var baseUrl = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL");
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            MainWindow.Content = new Pages.ConnectPage();
+            controller.ShowConnect();
         }
         else
         {
-            ChatStore.Instance.Configure(baseUrl);
-            MainWindow.Content = new MainPage();
+            controller.Store.Configure(baseUrl);
+            controller.ShowMain();
         }
 
-        MainWindow.SetWindowIcon();
-        // Ensure the current window is active
-        MainWindow.Activate();
+#if DEBUG
+        controller.Window.UseStudio();
+#endif
+        controller.Window.SetWindowIcon();
+
+        controller.Window.Closed += (_, _) =>
+        {
+            Windows.Remove(controller);
+            TryDispose(controller.Store);
+        };
+
+        controller.Window.Activate();
+        return controller;
     }
 
-    public static void NavigateToMain()
+    private static void TryDispose(ChatStore store)
     {
-        if (Current is not App app || app.MainWindow is null) return;
-        app.MainWindow.Content = new MainPage();
+        try { store.Dispose(); } catch { /* best effort on shutdown */ }
     }
 
     /// <summary>

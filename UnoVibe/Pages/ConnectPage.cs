@@ -1,3 +1,4 @@
+using UnoVibe;
 using UnoVibe.Services;
 
 namespace UnoVibe.Pages;
@@ -73,6 +74,9 @@ namespace UnoVibe.Pages;
     """)]
 public partial class ConnectPage : Page
 {
+    /// <summary>Owning window; set by the consumer before Init so it's ready for use.</summary>
+    public WindowController Controller { get; set; } = null!;
+
     [QuickMarkupConstructor]
     private void Ctor()
     {
@@ -92,14 +96,14 @@ public partial class ConnectPage : Page
 
         Connecting = true;
         Status = $"Connecting to {url}...";
-        var store = ChatStore.Instance;
+        var store = Controller.Store;
         var password = ServerPassword.Trim();
         store.Configure(url, password.Length > 0 ? password : null);
         await store.ConnectAsync();
         Connecting = false;
 
         if (store.ConnectionStatus == "Connected")
-            App.NavigateToMain();
+            Controller.ShowMain();
         else
             Status = store.ConnectionStatus;
     }
@@ -152,14 +156,14 @@ public partial class ConnectPage : Page
         }
 
         Status = $"Server ready at {result}";
-        var store = ChatStore.Instance;
+        var store = Controller.Store;
         store.AttachServeProcess(serve);
         store.Configure(result, serve.Password);
         await store.ConnectAsync();
         Connecting = false;
 
         if (store.ConnectionStatus == "Connected")
-            App.NavigateToMain();
+            Controller.ShowMain();
         else
             Status = store.ConnectionStatus;
     }

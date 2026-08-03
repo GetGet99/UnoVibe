@@ -9,6 +9,7 @@ namespace UnoVibe.Controls;
     using UnoVibe.Services;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
+    inject ChatStore Store;
     <setup>
         var theme = ThemeBrushes.Global;
         var transparent = new SolidColorBrush(Colors.Transparent);
@@ -18,12 +19,13 @@ namespace UnoVibe.Controls;
             <RowDefinition Height=Auto />
             <RowDefinition />
         </>>
-            <StackPanel Padding=`new Thickness(12, 12, 12, 8)`>
+            <StackPanel Padding=`new Thickness(12, 12, 12, 8)` Spacing=8>
                 <Button Content="+ New session" Click+=`(sender, e) => OnNewSession(sender, e)` HorizontalAlignment=Stretch />
+                <Button Content="New window" Click+=`(sender, e) => OnNewWindow(sender, e)` HorizontalAlignment=Stretch />
             </StackPanel>
             <ScrollViewer Grid.Row=1>
                 <StackPanel Padding=`new Thickness(12, 0, 12, 12)`>
-                    foreach (var group in `ChatStore.Instance.DirectoryGroups`)
+                    foreach (var group in `Store.DirectoryGroups`)
                     {
                         <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
                             <Grid ColumnDefinitions=<>
@@ -35,7 +37,7 @@ namespace UnoVibe.Controls;
                             </Grid>
                             foreach (var s in `group.Sessions`)
                             {
-                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`ChatStore.Instance.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
+                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
                                     <Grid ColumnDefinitions=<>
                                         <ColumnDefinition />
                                         <ColumnDefinition Width=Auto />
@@ -57,13 +59,15 @@ public partial class SessionSidebar : IQuickMarkupComponent
     private void OnSwitchSession(object sender, RoutedEventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not string id) return;
-        if (id == ChatStore.Instance.CurrentSessionId) return;
-        _ = ChatStore.Instance.SwitchSessionAsync(id);
+        if (id == Store.CurrentSessionId) return;
+        _ = Store.SwitchSessionAsync(id);
     }
 
     private void OnNewSession(object sender, RoutedEventArgs e)
     {
         var directory = (sender as Button)?.CommandParameter as string;
-        _ = ChatStore.Instance.NewSessionAsync(directory);
+        _ = Store.NewSessionAsync(directory);
     }
+
+    private void OnNewWindow(object sender, RoutedEventArgs e) => UnoVibe.App.CreateWindow();
 }

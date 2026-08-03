@@ -9,10 +9,8 @@ namespace UnoVibe.Services;
 /// Reactive store for the current chat session. Holds messages and applies SSE events
 /// to them. All mutations happen on the UI thread via the dispatcher pump.
 /// </summary>
-public sealed class ChatStore
+public sealed class ChatStore : IDisposable
 {
-    public static ChatStore Instance { get; } = new();
-
     private static readonly JsonSerializerOptions JsonDefaults = new() { WriteIndented = false };
 
     // Refs are created here, so the singleton must first be accessed on the UI thread.
@@ -67,7 +65,7 @@ public sealed class ChatStore
     private string? _password;
     private string? _username;
 
-    private ChatStore()
+    public ChatStore()
     {
     }
 
@@ -105,6 +103,14 @@ public sealed class ChatStore
         var old = ServeProcess;
         ServeProcess = serve;
         old?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts = null;
+        ServeProcess?.Dispose();
+        ServeProcess = null;
     }
 
     public async Task ConnectAsync()
