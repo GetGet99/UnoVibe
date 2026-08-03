@@ -54,6 +54,8 @@ namespace UnoVibe.Controls;
                                 <ToolViewGrep Part=`p` />
                             else if (`p.ToolName == "webfetch"`)
                                 <ToolViewWebFetch Part=`p` />
+                            else if (`p.ToolName == "skill"`)
+                                <ToolViewSkill Part=`p` />
                             else if (`p.ToolName == "read"`)
                                 <ToolViewRead Part=`p` />
                             else if (`p.ToolName == "edit"`)

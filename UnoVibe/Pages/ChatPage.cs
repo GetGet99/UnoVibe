@@ -47,6 +47,10 @@ namespace UnoVibe.Pages;
             <Grid Grid.Row=1>
                 scrollHost = <ScrollViewer>
                     <StackPanel Padding=16>
+                        if (`Store.HiddenMessages > 0`)
+                            <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10, 8)` Margin=`new Thickness(0, 0, 0, 8)`>
+                                <TextBlock Text=`$"History truncated: {Store.HiddenMessages} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                            </Border>
                         foreach (var m in `Store.Messages`)
                             <MessageView Message=`m` />
                     </StackPanel>

@@ -13,6 +13,12 @@ public sealed class ChatStore : IDisposable
 {
     private static readonly JsonSerializerOptions JsonDefaults = new() { WriteIndented = false };
 
+    /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
+    public const int MaxVisibleMessages = 200;
+
+    public Reference<int> HiddenMessagesProp { get; } = Ref(0);
+    public int HiddenMessages { get => HiddenMessagesProp.Value; set => HiddenMessagesProp.Value = value; }
+
     // Refs are created here, so the singleton must first be accessed on the UI thread.
     public Reference<bool> IsBusyProp { get; } = Ref(false);
     public bool IsBusy { get => IsBusyProp.Value; set => IsBusyProp.Value = value; }
@@ -58,6 +64,16 @@ public sealed class ChatStore : IDisposable
     public ObservableCollection<string> VariantOptions { get; } = new();
 
     public ObservableCollection<MessageItem> Messages { get; } = new();
+
+    private void AppendMessage(MessageItem message)
+    {
+        Messages.Add(message);
+        while (Messages.Count > MaxVisibleMessages)
+        {
+            Messages.RemoveAt(0);
+            HiddenMessages++;
+        }
+    }
     public ObservableCollection<SessionInfo> Sessions { get; } = new();
     public ObservableCollection<DirectoryGroup> DirectoryGroups { get; } = new();
 
@@ -102,6 +118,7 @@ public sealed class ChatStore : IDisposable
         ResetUsageStats();
         IsBusy = false;
         Messages.Clear();
+        HiddenMessages = 0;
         _messagesById.Clear();
         Sessions.Clear();
         DirectoryGroups.Clear();
@@ -332,6 +349,7 @@ public sealed class ChatStore : IDisposable
             SessionTitle = "New Chat";
             ActiveSessionId = id;
             Messages.Clear();
+        HiddenMessages = 0;
             _messagesById.Clear();
             ResetUsageStats();
             IsBusy = false;
@@ -350,6 +368,7 @@ public sealed class ChatStore : IDisposable
         SessionTitle = Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat";
         ActiveSessionId = sessionId;
         Messages.Clear();
+        HiddenMessages = 0;
         _messagesById.Clear();
         IsBusy = false;
 
@@ -365,7 +384,7 @@ public sealed class ChatStore : IDisposable
                 var message = MessageFromJson(msg);
                 if (message is null) continue;
                 _messagesById[message.Id] = message;
-                Messages.Add(message);
+                AppendMessage(message);
             }
             UpdateSessionStats();
             await SyncPendingQuestionsAsync();
@@ -479,7 +498,7 @@ public sealed class ChatStore : IDisposable
         ApplyMessageStats(message, info);
         if (info.TryGetProperty("finish", out _)) IsBusy = false;
         _messagesById[id] = message;
-        Messages.Add(message);
+        AppendMessage(message);
         UpdateSessionStats();
     }
 
@@ -683,6 +702,7 @@ public sealed class ChatStore : IDisposable
                 if (input.TryGetProperty("include", out var include)) item.ToolInclude = include.GetString() ?? "";
                 if (input.TryGetProperty("workdir", out var workdir)) item.ToolWorkdir = workdir.GetString() ?? "";
                 if (input.TryGetProperty("url", out var url)) item.ToolUrl = url.GetString() ?? "";
+                if (input.TryGetProperty("name", out var skillName)) item.ToolSkillName = skillName.GetString() ?? "";
                 if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
                     item.TodoJson = JsonSerializer.Serialize(todos, JsonDefaults);
                 if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)

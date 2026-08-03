@@ -27,6 +27,7 @@ public struct ReasoningTime
     public string ToolInclude = "";
     public string ToolWorkdir = "";
     public string ToolUrl = "";
+    public string ToolSkillName = "";
     public string ShellOutput = "";
     public string Diff = "";
     public string LoadedFiles = "";
