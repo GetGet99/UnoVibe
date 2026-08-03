@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using UnoVibe.Models;
 
 namespace UnoVibe.Controls;
@@ -12,6 +13,7 @@ namespace UnoVibe.Controls;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
     MessageItem? Message;
+    bool ShowHeader = true;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -19,9 +21,10 @@ namespace UnoVibe.Controls;
         if (`Message is not null`)
         {
             <StackPanel Spacing=4>
-                <TextBlock Text=`Message.Role == "user" ? "You" : "OpenCode"` FontSize=11
-                           Foreground=`theme.SecondaryText` IsTextSelectionEnabled=true
-                           HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left` />
+                if (`ShowHeader`)
+                    <TextBlock Text=`Message.Role == "user" ? "You" : "OpenCode"` FontSize=11
+                               Foreground=`theme.SecondaryText` IsTextSelectionEnabled=true
+                               HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left` />
                 <StackPanel Spacing=6>
                     foreach (var p in `Message.Parts`)
                     {
@@ -81,4 +84,21 @@ namespace UnoVibe.Controls;
         }
     </Grid>
     """)]
-public partial class MessageView : IQuickMarkupComponent;
+public partial class MessageView : IQuickMarkupComponent
+{
+    [QuickMarkupConstructor]
+    private void Ctor()
+    {
+        ShowHeader = true;
+        var msg = Message;
+        if (msg is not null)
+        {
+            RecomputeHeader(msg);
+            msg.Parts.CollectionChanged += (_, _) => RecomputeHeader(msg);
+        }
+        Init();
+    }
+
+    private void RecomputeHeader(MessageItem msg) =>
+        ShowHeader = !msg.Parts.Any(p => p.Type == "compaction");
+}
