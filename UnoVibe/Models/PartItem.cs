@@ -37,6 +37,8 @@ public struct ReasoningTime
     public string QuestionJson = "";
     public string AnswerJson = "";
     public string QuestionRequestId = "";
+    public string ErrorName = "";
+    public string ErrorMessage = "";
     public ReasoningTime Time;
     """)]
 public partial class PartItem

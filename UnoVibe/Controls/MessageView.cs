@@ -83,6 +83,14 @@ namespace UnoVibe.Controls;
                                 <ToolViewQuestion Part=`p` />
                             else
                                 <ToolViewGeneric Part=`p` />
+                        else if (`p.Type == "error"`)
+                            <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(10, 6)` Margin=`new Thickness(0, 2, 0, 2)`
+                                    BorderBrush=`theme.SystemCritical` BorderThickness=`new Thickness(1)` HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left` MaxWidth=640>
+                                <StackPanel Spacing=2>
+                                    <TextBlock Text=`p.ErrorName.Length > 0 ? p.ErrorName : "Error"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SystemCritical` IsTextSelectionEnabled=true />
+                                    <TextBlock Text=`p.ErrorMessage` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                </StackPanel>
+                            </Border>
                         else
                             <TextBlock Text=`$"[{p.Type}]"` FontSize=11 Foreground=`theme.TertiaryText` IsTextSelectionEnabled=true />
                     }

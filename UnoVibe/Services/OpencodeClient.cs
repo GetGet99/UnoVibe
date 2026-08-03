@@ -238,6 +238,32 @@ public sealed class OpencodeClient
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
         return doc.RootElement.Clone();
     }
+
+    public async Task<JsonElement> GetPendingPermissionsAsync(CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/permission", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Post /permission/{requestID}/reply — answers a pending permission request.
+    /// <c>reply</c> is "once", "always", or "reject"; an optional message may be sent
+    /// with a rejection.
+    /// </summary>
+    public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null,
+        CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["reply"] = reply,
+        };
+        if (!string.IsNullOrEmpty(message)) body["message"] = message;
+        using var response = await Http.PostAsJsonAsync($"/permission/{requestId}/reply", body, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
 }
 
 file static class OpencodeClientExtensions

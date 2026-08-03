@@ -12,11 +12,14 @@ namespace UnoVibe.Pages;
     using QuickMarkup.WinUI;
     inject ChatStore Store;
     string Input = "";
+    string PermissionStage = "choose";
+    string RejectText = "";
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
         <Grid RowDefinitions=<>
+            <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
             <RowDefinition />
             <RowDefinition Height=Auto />
@@ -44,7 +47,17 @@ namespace UnoVibe.Pages;
                     <ProgressBar Value=`Store.ContextUsage` Minimum=0 Maximum=100 Width=70 Height=4 VerticalAlignment=Center />
                 </StackPanel>
             </Grid>
-            <Grid Grid.Row=1>
+            <Grid Grid.Row=1 Padding=`new Thickness(16, 0, 16, 4)`>
+                if (`Store.StatusMessage.Length > 0`)
+                    <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(10, 6)`
+                            BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` HorizontalAlignment=Stretch>
+                        <StackPanel Orientation=Horizontal Spacing=8>
+                            <ProgressRing Width=14 Height=14 IsActive=true VerticalAlignment=Center />
+                            <TextBlock Text=`Store.StatusMessage` FontSize=12 Foreground=`theme.SystemCaution` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                        </StackPanel>
+                    </Border>
+            </Grid>
+            <Grid Grid.Row=2>
                 scrollHost = <ScrollViewer>
                     <StackPanel Padding=16>
                         if (`Store.HiddenMessages > 0`)
@@ -53,14 +66,52 @@ namespace UnoVibe.Pages;
                             </Border>
                         foreach (var m in `Store.Messages`)
                             <MessageView Message=`m` />
+                        if (`Store.ActivePermission is not null`)
+                        {
+                            <Border Background=`theme.CardBackground` CornerRadius=10 Padding=`new Thickness(16, 12, 16, 12)` Margin=`new Thickness(0, 8, 0, 0)`
+                                    BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=720 HorizontalAlignment=Stretch>
+                                <StackPanel Spacing=10>
+                                    <StackPanel Spacing=2>
+                                        <TextBlock Text=`Store.ActivePermission?.Title ?? ""` FontSize=14 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                        if (`(Store.ActivePermission?.Body?.Length ?? 0) > 0`)
+                                            <TextBlock Text=`Store.ActivePermission?.Body ?? ""` FontSize=12 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                        if (`(Store.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
+                                            <TextBlock Text=`Store.ActivePermission?.PatternsText ?? ""` FontSize=11 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                        <TextBlock Text=`$"Session: {Store.ActivePermission?.SessionId ?? ""}"` FontSize=10 Foreground=`theme.TertiaryText` />
+                                    </StackPanel>
+                                    if (`PermissionStage == "choose"`)
+                                        <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
+                                            <Button Content="Reject" @Click+=`StartReject()` CornerRadius=6 />
+                                            <Button Content="Allow once" @Click+=`await AllowPermissionOnceAsync()` CornerRadius=6 />
+                                            <Button Content="Always allow" @Click+=`BeginAlwaysPermission()` CornerRadius=6 />
+                                        </StackPanel>
+                                    else if (`PermissionStage == "always"`)
+                                        <StackPanel Spacing=8>
+                                            <TextBlock Text=`$"Always allow: {Store.ActivePermission?.Permission ?? ""}"` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                                            <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
+                                                <Button Content="Cancel" @Click+=`CancelPermission()` CornerRadius=6 />
+                                                <Button Content="Always allow" @Click+=`await AllowPermissionAlwaysAsync()` CornerRadius=6 />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    else if (`PermissionStage == "reject"`)
+                                        <StackPanel Spacing=8>
+                                            <TextBox Text<=>`RejectText` PlaceholderText="Reason for rejection (optional)" AcceptsReturn=false MinHeight=40 />
+                                            <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
+                                                <Button Content="Cancel" @Click+=`CancelPermission()` CornerRadius=6 />
+                                                <Button Content="Reject" @Click+=`await RejectPermissionAsync()` CornerRadius=6 />
+                                            </StackPanel>
+                                        </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        }
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
-            <Grid Grid.Row=2 ColumnSpacing=8 Padding=`new Thickness(16, 8, 16, 16)` ColumnDefinitions=<>
+            <Grid Grid.Row=3 ColumnSpacing=8 Padding=`new Thickness(16, 8, 16, 16)` ColumnDefinitions=<>
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` />
+                inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 IsEnabled=`Store.ActivePermission is null` PreviewKeyDown+=`OnPreviewKeyDown` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     if (`Store.PendingPrompts > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
@@ -68,10 +119,10 @@ namespace UnoVibe.Pages;
                         </Border>
                     if (`Store.IsBusy`)
                         <Button Content="⏹ Stop" @Click+=`await Store.InterruptAsync()` CornerRadius=6 />
-                    <Button Content="Send" @Click+=`await SendAsync()` IsEnabled=`true` />
+                    <Button Content="Send" @Click+=`await SendAsync()` IsEnabled=`Store.ActivePermission is null` />
                 </StackPanel>
             </Grid>
-            <Grid Grid.Row=3 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
+            <Grid Grid.Row=4 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
                 <ColumnDefinition Width=Auto />
                 <ColumnDefinition Width=Auto />
                 <ColumnDefinition Width=Auto />
@@ -103,8 +154,22 @@ public partial class ChatPage : Page
         store.Messages.CollectionChanged += OnMessagesChanged;
         foreach (var message in store.Messages) HookParts(message);
 
+        store.ActivePermissionProp.Watch(_newReq =>
+        {
+            PermissionStage = "choose";
+            RejectText = "";
+            _ = ScrollToPermissionAsync();
+        });
+
         _ = store.ConnectAsync();
         inputBox.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Scrolls to the permission card once it has been added to the message list.</summary>
+    private async Task ScrollToPermissionAsync()
+    {
+        await Task.Yield();
+        ScrollToBottom();
     }
 
     private async void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -156,6 +221,33 @@ public partial class ChatPage : Page
 
     private static string Capitalize(string? value) =>
         string.IsNullOrEmpty(value) ? "" : char.ToUpper(value[0]) + value.Substring(1);
+
+    private async Task AllowPermissionOnceAsync()
+    {
+        var req = Store.ActivePermission;
+        if (req is null) return;
+        await Store.ReplyPermissionAsync(req.Id, "once");
+    }
+
+    private void BeginAlwaysPermission() => PermissionStage = "always";
+
+    private async Task AllowPermissionAlwaysAsync()
+    {
+        var req = Store.ActivePermission;
+        if (req is null) return;
+        await Store.ReplyPermissionAsync(req.Id, "always");
+    }
+
+    private void StartReject() => PermissionStage = "reject";
+
+    private async Task RejectPermissionAsync()
+    {
+        var req = Store.ActivePermission;
+        if (req is null) return;
+        await Store.ReplyPermissionAsync(req.Id, "reject", RejectText.Trim());
+    }
+
+    private void CancelPermission() => PermissionStage = "choose";
 
     private void ScrollToBottom()
     {

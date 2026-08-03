@@ -47,6 +47,14 @@ public sealed class ChatStore : IDisposable
     public Reference<string> ActiveSessionIdProp { get; } = Ref("");
     public string ActiveSessionId { get => ActiveSessionIdProp.Value; set => ActiveSessionIdProp.Value = value; }
 
+    /// <summary>Human-readable session status banner (busy/retry messages); empty means idle.</summary>
+    public Reference<string> StatusMessageProp { get; } = Ref("");
+    public string StatusMessage { get => StatusMessageProp.Value; set => StatusMessageProp.Value = value; }
+
+    /// <summary>The permission request currently shown to the user (oldest pending), or null.</summary>
+    public Reference<PermissionRequestItem?> ActivePermissionProp { get; } = Ref<PermissionRequestItem?>(null);
+    public PermissionRequestItem? ActivePermission { get => ActivePermissionProp.Value; set => ActivePermissionProp.Value = value; }
+
     public Reference<string> ModeProp { get; } = Ref("build");
     public string Mode { get => ModeProp.Value; set => ModeProp.Value = value; }
 
@@ -89,6 +97,7 @@ public sealed class ChatStore : IDisposable
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
     private readonly Dictionary<string, MessageItem> _messagesById = new();
     private readonly Queue<string> _pendingPrompts = new();
+    private readonly List<PermissionRequestItem> _permissions = new();
     private CancellationTokenSource? _cts;
     private DispatcherQueue? _dispatcher;
     private bool _started;
@@ -121,6 +130,9 @@ public sealed class ChatStore : IDisposable
         SessionTitle = "New Chat";
         ResetUsageStats();
         IsBusy = false;
+        StatusMessage = "";
+        _permissions.Clear();
+        ActivePermission = null;
         Messages.Clear();
         HiddenMessages = 0;
         _messagesById.Clear();
@@ -431,15 +443,16 @@ public sealed class ChatStore : IDisposable
         {
             var id = await _client.CreateSessionAsync("New Chat", directory, Mode, ProviderId, ModelId, Variant) ?? "";
             if (id.Length == 0) return;
-            _sessionId = id;
-            SessionTitle = "New Chat";
-            ActiveSessionId = id;
-            Messages.Clear();
+        _sessionId = id;
+        SessionTitle = "New Chat";
+        ActiveSessionId = id;
+        Messages.Clear();
         HiddenMessages = 0;
-            _messagesById.Clear();
-            ResetUsageStats();
-            IsBusy = false;
-            ClearPendingPrompts();
+        _messagesById.Clear();
+        ResetUsageStats();
+        IsBusy = false;
+        StatusMessage = "";
+        ClearPendingPrompts();
             await RefreshSessionsAsync();
         }
         catch (Exception ex)
@@ -458,6 +471,7 @@ public sealed class ChatStore : IDisposable
         HiddenMessages = 0;
         _messagesById.Clear();
         IsBusy = false;
+        StatusMessage = "";
         ClearPendingPrompts();
 
         var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
@@ -476,6 +490,7 @@ public sealed class ChatStore : IDisposable
             }
             UpdateSessionStats();
             await SyncPendingQuestionsAsync();
+            await SyncPendingPermissionsAsync();
         }
         catch (Exception ex)
         {
@@ -508,6 +523,10 @@ public sealed class ChatStore : IDisposable
             item.Interrupted = true;
             item.Parts.Add(new PartItem { Id = $"aborted-{item.Id}", MessageId = item.Id, Type = "aborted" });
         }
+        else
+        {
+            ApplyMessageError(item, info);
+        }
         if (item.Role == "user" && item.Parts.Count == 0) return null;
         return item;
     }
@@ -539,7 +558,10 @@ public sealed class ChatStore : IDisposable
     private void Apply(OpencodeEvent evt)
     {
         if (evt.Type is "message.updated" or "message.part.updated" or "message.part.delta"
-            or "message.part.removed" or "session.status" or "question.asked" or "question.replied")
+            or "message.part.removed" or "message.removed" or "session.status" or "session.idle"
+            or "session.created" or "session.updated" or "session.deleted" or "session.error"
+            or "session.diff" or "session.compacted" or "question.asked" or "question.replied"
+            or "question.rejected")
         {
             var sessionId = evt.Properties.GetStringProperty("sessionID");
             if (sessionId.Length > 0 && sessionId != _sessionId) return;
@@ -565,6 +587,96 @@ public sealed class ChatStore : IDisposable
             case "question.asked":
                 ApplyQuestionAsked(evt.Properties);
                 break;
+            case "permission.asked":
+                ApplyPermissionAsked(evt.Properties);
+                break;
+            case "permission.replied":
+                ApplyPermissionReplied(evt.Properties);
+                break;
+
+            // -------------------------------------------------------------------
+            // Events the opencode server /event stream emits but this client does
+            // not act on yet. Tracked as future gaps (see AGENTS.md, "opencode
+            // Server Integration"). Implement each and remove its TODO marker.
+            // -------------------------------------------------------------------
+
+            // Messages
+            case "message.removed":
+                // TODO: properties { sessionID, messageID }; drop the message from Messages/_messagesById.
+                break;
+
+            // Sessions
+            case "session.created":
+            case "session.updated":
+                // TODO: properties { sessionID, info } (info = SessionInfo); refresh the sidebar session list.
+                break;
+            case "session.deleted":
+                // TODO: properties { sessionID, info }; remove the session from Sessions/DirectoryGroups.
+                break;
+            case "session.error":
+                // TODO: properties { sessionID?, error }; surface server-side session errors.
+                break;
+            case "session.diff":
+                // TODO: properties { sessionID, diff }; show file diffs produced by the session.
+                break;
+            case "session.idle":
+                // TODO: properties { sessionID }; deprecated — superseded by session.status {type:"idle"}.
+                break;
+            case "session.compacted":
+                // TODO: properties { sessionID }; mark the session as compacted.
+                break;
+
+            // Questions
+            case "question.replied":
+                // TODO: properties { sessionID, requestID, answers }; answered elsewhere — mark the form answered.
+                break;
+            case "question.rejected":
+                // TODO: properties { sessionID, requestID }; question rejected — clear the pending form.
+                break;
+
+            // Files / project / VCS
+            case "file.edited":
+                // TODO: properties { file }; the agent edited a file on disk.
+                break;
+            case "file.watcher.updated":
+                // TODO: properties { file, event: "add"|"change"|"unlink" }.
+                break;
+            case "vcs.branch.updated":
+                // TODO: properties { branch }; the git branch changed in the workspace.
+                break;
+            case "todo.updated":
+                // TODO: the todo list changed; the TUI renders it inline.
+                break;
+            case "lsp.updated":
+                // TODO: LSP status changed; properties {}.
+                break;
+
+            // Tools / commands / MCP
+            case "command.executed":
+                // TODO: a custom command was executed server-side.
+                break;
+            case "mcp.tools.changed":
+                // TODO: an MCP server's tool set changed.
+                break;
+            case "mcp.browser.open.failed":
+                // TODO: an MCP browser-open attempt failed.
+                break;
+
+            // Server / stream control
+            case "server.connected":
+                // TODO: first event on the /event stream ({}); could drive connection state.
+                break;
+            case "server.heartbeat":
+                // TODO: sent every 10s ({}) to keep the stream alive; ignoring is fine.
+                break;
+            case "server.instance.disposed":
+                // TODO: the server instance was disposed ({}); the stream ends after this event.
+                break;
+
+            // TUI command plumbing (server → client commands; relevant only if adopting them)
+            case "tui.toast.show":
+                // TODO: properties { title?, message, variant: "info"|"success"|"warning"|"error", duration }; show a toast.
+                break;
         }
     }
 
@@ -580,6 +692,7 @@ public sealed class ChatStore : IDisposable
             if (role.Length > 0) message.Role = role;
             ApplyMessageStats(message, info);
             MarkInterrupted(message, info);
+            ApplyMessageError(message, info);
             if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
             UpdateSessionStats();
             return;
@@ -593,6 +706,7 @@ public sealed class ChatStore : IDisposable
         };
         ApplyMessageStats(message, info);
         MarkInterrupted(message, info);
+        ApplyMessageError(message, info);
         if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
         _messagesById[id] = message;
         AppendMessage(message);
@@ -617,6 +731,45 @@ public sealed class ChatStore : IDisposable
     {
         if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object) return false;
         return error.GetStringProperty("name") == "MessageAbortedError";
+    }
+
+    /// <summary>
+    /// Adds a reactive "error" part when the message carries a non-abort error (e.g. a
+    /// streaming failure like <c>"Streaming response failed: [503] The request queue is full."</c>).
+    /// Aborts are rendered via the interrupted path instead.
+    /// </summary>
+    private static void ApplyMessageError(MessageItem message, JsonElement info)
+    {
+        if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object) return;
+        var name = error.GetStringProperty("name");
+        if (name == "MessageAbortedError") return;
+        if (message.Parts.Any(p => p.Type == "error")) return;
+
+        message.Parts.Add(new PartItem
+        {
+            Id = $"error-{message.Id}-{Guid.NewGuid():N}",
+            MessageId = message.Id,
+            Type = "error",
+            ErrorName = name,
+            ErrorMessage = UnwrapErrorMessage(error),
+        });
+    }
+
+    private static string UnwrapErrorMessage(JsonElement error)
+    {
+        string message = "";
+        if (error.TryGetProperty("data", out var data))
+        {
+            if (data.ValueKind == JsonValueKind.String)
+                message = data.GetString() ?? "";
+            else if (data.ValueKind == JsonValueKind.Object)
+                message = data.GetStringProperty("message");
+        }
+
+        message = message.Trim();
+        if (message.Length >= 2 && message[0] == '"' && message[^1] == '"')
+            message = message.Substring(1, message.Length - 2);
+        return message;
     }
 
     /// <summary>Runs when the active turn ends (message finished or session idle).</summary>
@@ -676,7 +829,23 @@ public sealed class ChatStore : IDisposable
     private void ApplySessionStatus(JsonElement properties)
     {
         if (!properties.TryGetProperty("status", out var status)) return;
-        IsBusy = status.GetStringProperty("type") == "busy";
+        var type = status.GetStringProperty("type");
+        IsBusy = type != "idle";
+
+        if (type == "retry")
+        {
+            var message = status.GetStringProperty("message");
+            var attempt = status.GetInt64Property("attempt");
+            var next = status.GetInt64Property("next");
+            var prefix = attempt > 0 ? $"Retry #{attempt}" : "Retry";
+            if (next > 0) prefix += $" ({next} left)";
+            StatusMessage = message.Length > 0 ? $"{prefix}: {message}" : prefix;
+        }
+        else
+        {
+            StatusMessage = "";
+        }
+
         if (!IsBusy) _ = DrainPendingPromptsAsync();
     }
 
@@ -704,6 +873,53 @@ public sealed class ChatStore : IDisposable
         {
             part.QuestionJson = JsonSerializer.Serialize(questions, JsonDefaults);
             PopulateQuestionForm(part, questions);
+        }
+    }
+
+    // Permission events are intentionally NOT filtered by session: subagents run in
+    // their own sessions, and a pending subagent permission would otherwise hang forever.
+
+    private void ApplyPermissionAsked(JsonElement properties)
+    {
+        var requestId = properties.GetStringProperty("id");
+        if (requestId.Length == 0) return;
+        AddPermissionRequest(PermissionRequestItem.FromJson(properties));
+    }
+
+    private void ApplyPermissionReplied(JsonElement properties)
+    {
+        var requestId = properties.GetStringProperty("requestID");
+        if (requestId.Length > 0) RemovePermissionRequest(requestId);
+    }
+
+    public void AddPermissionRequest(PermissionRequestItem request)
+    {
+        if (_permissions.Any(p => p.Id == request.Id)) return;
+        _permissions.Add(request);
+        UpdateActivePermission();
+    }
+
+    public void RemovePermissionRequest(string requestId)
+    {
+        var index = _permissions.FindIndex(p => p.Id == requestId);
+        if (index < 0) return;
+        _permissions.RemoveAt(index);
+        UpdateActivePermission();
+    }
+
+    private void UpdateActivePermission() => ActivePermission = _permissions.FirstOrDefault();
+
+    /// <summary>Replies to a pending permission request and surfaces the next pending one, if any.</summary>
+    public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null)
+    {
+        try
+        {
+            await _client.ReplyPermissionAsync(requestId, reply, message);
+            RemovePermissionRequest(requestId);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
         }
     }
 
@@ -735,6 +951,30 @@ public sealed class ChatStore : IDisposable
                 if (part is null || part.QuestionRequestId.Length > 0) continue;
 
                 AttachQuestion(part, question.GetStringProperty("id"), question);
+            }
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Re-attaches pending permission requests after a session reload (requestIDs only
+    /// exist in the live permission.asked event and the server's in-memory pending map).
+    /// </summary>
+    public async Task SyncPendingPermissionsAsync()
+    {
+        try
+        {
+            var root = await _client.GetPendingPermissionsAsync();
+            if (root.ValueKind != JsonValueKind.Array) return;
+
+            foreach (var request in root.EnumerateArray())
+            {
+                var id = request.GetStringProperty("id");
+                if (id.Length == 0) continue;
+                AddPermissionRequest(PermissionRequestItem.FromJson(request));
             }
         }
         catch (Exception ex)
