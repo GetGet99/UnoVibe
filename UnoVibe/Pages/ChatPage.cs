@@ -61,7 +61,15 @@ namespace UnoVibe.Pages;
                 <ColumnDefinition Width=Auto />
             </>>
                 inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` />
-                <Button Grid.Column=1 Content="Send" @Click+=`await SendAsync()` IsEnabled=`!Store.IsBusy` />
+                <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
+                    if (`Store.PendingPrompts > 0`)
+                        <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
+                            <TextBlock Text=`$"⏳ {Store.PendingPrompts} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                        </Border>
+                    if (`Store.IsBusy`)
+                        <Button Content="⏹ Stop" @Click+=`await Store.InterruptAsync()` CornerRadius=6 />
+                    <Button Content="Send" @Click+=`await SendAsync()` IsEnabled=`true` />
+                </StackPanel>
             </Grid>
             <Grid Grid.Row=3 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
                 <ColumnDefinition Width=Auto />

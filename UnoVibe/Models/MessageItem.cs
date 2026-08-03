@@ -13,5 +13,7 @@ public partial class MessageItem
     public long TokensReasoning { get; set; }
     public long TokensCacheRead { get; set; }
     public long TokensCacheWrite { get; set; }
+    /// <summary>True when this message was aborted by a user interrupt.</summary>
+    public bool Interrupted { get; set; }
     public ObservableCollection<PartItem> Parts { get; } = new();
 }

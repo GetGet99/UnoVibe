@@ -85,9 +85,11 @@ Note: `pkill -f "opencode serve ..."` and similar broad patterns can hang the sh
 - **Auth**: Basic auth `Authorization: Basic base64(username:password)`. Env vars: `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME` (default username `opencode`). Password empty/unset ⇒ unsecured. **Every** endpoint requires auth when a password is set — including `GET /global/health` — so health/startup probes must send the header too.
 - **Startup readiness**: poll `GET /global/health` until it returns `{"healthy":true,...}`.
 - **SSE events**: `GET /event` (long-lived stream).
-- **Session API**: `POST /session` (create), `GET /session` (list).
+- **Session API**: `POST /session` (create), `GET /session` (list), `POST /session/:id/abort` (interrupt the running turn).
 - `opencode serve` flags: `--port` default 0 (random), `--hostname` default `127.0.0.1`. Server instance is resolved per-request via the `x-opencode-directory` header, so it can be launched from any directory.
 - Port probing at runtime should use a real bind (e.g., `TcpListener` on `127.0.0.1:0`, or Python `socket`); bash `shuf` can pick an occupied port.
+- **Interrupt / send-while-busy**: `ChatStore.InterruptAsync()` calls `POST /session/:id/abort` (the server cancels the runner + in-flight tools and marks aborted tool parts with `state.metadata.interrupted=true` and the assistant message `error.name === "MessageAbortedError"`).
+- **Send while busy**: fire `prompt_async` immediately even when a turn is running — the server serializes it itself. `createUserMessage` stores the prompt at once; the running session loop picks it up at the **next agent step** (after the in-flight tool call), not at full idle. This matches the TUI (`stream.transport.ts` `runPromptTurn` calls `promptAsync` regardless of busy; its `state.wait` gate only prevents a second concurrent UI submit). `ChatStore.SendAsync` always sends immediately and defers ordering to the server. A client-side queue (`PendingPrompts`/`EnqueuePrompt`/`DrainPendingPromptsAsync`) is kept dormant behind a `TODO(settings/queuing)` for a future "queue on client" mode.
 
 ## Known Working State / Conventions
 

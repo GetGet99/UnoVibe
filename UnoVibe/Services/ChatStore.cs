@@ -23,6 +23,9 @@ public sealed class ChatStore : IDisposable
     public Reference<bool> IsBusyProp { get; } = Ref(false);
     public bool IsBusy { get => IsBusyProp.Value; set => IsBusyProp.Value = value; }
 
+    public Reference<int> PendingPromptsProp { get; } = Ref(0);
+    public int PendingPrompts { get => PendingPromptsProp.Value; set => PendingPromptsProp.Value = value; }
+
     public Reference<string> ConnectionStatusProp { get; } = Ref("Connecting...");
     public string ConnectionStatus { get => ConnectionStatusProp.Value; set => ConnectionStatusProp.Value = value; }
 
@@ -85,6 +88,7 @@ public sealed class ChatStore : IDisposable
     private OpencodeClient _client = null!;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
     private readonly Dictionary<string, MessageItem> _messagesById = new();
+    private readonly Queue<string> _pendingPrompts = new();
     private CancellationTokenSource? _cts;
     private DispatcherQueue? _dispatcher;
     private bool _started;
@@ -123,6 +127,7 @@ public sealed class ChatStore : IDisposable
         Sessions.Clear();
         DirectoryGroups.Clear();
         ConnectionStatus = "Connecting...";
+        ClearPendingPrompts();
     }
 
     /// <summary>
@@ -192,11 +197,92 @@ public sealed class ChatStore : IDisposable
         try
         {
             if (!await EnsureSessionAsync()) return;
-            await _client.SendPromptAsync(_sessionId, text, Mode, ProviderId, ModelId, Variant);
+
+            // The server serializes `prompt_async` itself: if a turn is busy, the
+            // message is stored immediately and the running session loop processes it
+            // at the next agent step (after the in-flight tool call). So we always send
+            // right away and defer ordering to the server — this matches the opencode TUI
+            // (stream.transport.ts `runPromptTurn` fires promptAsync regardless of busy).
+            //
+            // TODO(settings/queuing): a future "queue on client" mode can route here
+            // through EnqueuePrompt/DrainPendingPromptsAsync instead of sending now.
+            await SendPromptNowAsync(text);
         }
         catch (Exception ex)
         {
             ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Interrupts the currently-running turn (aborts in-flight tool calls and the
+    /// model loop). Any queued prompts are flushed when the session goes idle.
+    /// </summary>
+    public async Task InterruptAsync()
+    {
+        if (_sessionId.Length == 0) return;
+        try
+        {
+            await _client.AbortAsync(_sessionId);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    // TODO(settings/queuing): client-side prompt queue, kept dormant for a future
+    // "queue on client" mode. Currently unwired — SendAsync always sends immediately
+    // and lets the server serialize prompts (see SendAsync comment). To enable a
+    // client-owned queue, call EnqueuePrompt(text) from SendAsync when IsBusy, then
+    // flush via DrainPendingPromptsAsync when the session goes idle.
+    private void EnqueuePrompt(string text)
+    {
+        _pendingPrompts.Enqueue(text);
+        PendingPrompts = _pendingPrompts.Count;
+    }
+
+    private void ClearPendingPrompts()
+    {
+        _pendingPrompts.Clear();
+        PendingPrompts = 0;
+    }
+
+    private async Task SendPromptNowAsync(string text)
+    {
+        // Mark busy optimistically so interleaved SendAsync calls queue instead of
+        // racing the HTTP call; the server's session.status busy event confirms it.
+        IsBusy = true;
+        await _client.SendPromptAsync(_sessionId, text, Mode, ProviderId, ModelId, Variant);
+    }
+
+    private bool _draining;
+
+    /// <summary>Drains queued prompts one at a time. Called when the session goes idle.</summary>
+    private async Task DrainPendingPromptsAsync()
+    {
+        if (_draining || IsBusy || _pendingPrompts.Count == 0) return;
+        _draining = true;
+        try
+        {
+            while (!IsBusy && _pendingPrompts.Count > 0)
+            {
+                var text = _pendingPrompts.Dequeue();
+                PendingPrompts = _pendingPrompts.Count;
+                try
+                {
+                    await SendPromptNowAsync(text);
+                }
+                catch (Exception ex)
+                {
+                    ConnectionStatus = $"Error: {ex.Message}";
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            _draining = false;
         }
     }
 
@@ -353,6 +439,7 @@ public sealed class ChatStore : IDisposable
             _messagesById.Clear();
             ResetUsageStats();
             IsBusy = false;
+            ClearPendingPrompts();
             await RefreshSessionsAsync();
         }
         catch (Exception ex)
@@ -371,6 +458,7 @@ public sealed class ChatStore : IDisposable
         HiddenMessages = 0;
         _messagesById.Clear();
         IsBusy = false;
+        ClearPendingPrompts();
 
         var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
         if (known is not null) ApplySessionSettings(known);
@@ -414,6 +502,11 @@ public sealed class ChatStore : IDisposable
                 if (p.Type == "text" && p.Synthetic) continue;
                 if (p.Id.Length > 0) item.Parts.Add(p);
             }
+        }
+        if (IsAbortedError(info) && item.Parts.All(p => p.Type != "aborted"))
+        {
+            item.Interrupted = true;
+            item.Parts.Add(new PartItem { Id = $"aborted-{item.Id}", MessageId = item.Id, Type = "aborted" });
         }
         if (item.Role == "user" && item.Parts.Count == 0) return null;
         return item;
@@ -486,7 +579,8 @@ public sealed class ChatStore : IDisposable
             var role = info.GetStringProperty("role");
             if (role.Length > 0) message.Role = role;
             ApplyMessageStats(message, info);
-            if (info.TryGetProperty("finish", out _)) IsBusy = false;
+            MarkInterrupted(message, info);
+            if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
             UpdateSessionStats();
             return;
         }
@@ -498,10 +592,38 @@ public sealed class ChatStore : IDisposable
             Agent = info.GetStringProperty("agent"),
         };
         ApplyMessageStats(message, info);
-        if (info.TryGetProperty("finish", out _)) IsBusy = false;
+        MarkInterrupted(message, info);
+        if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
         _messagesById[id] = message;
         AppendMessage(message);
         UpdateSessionStats();
+    }
+
+    /// <summary>Appends a reactive "aborted" marker part when the message carries an abort error.</summary>
+    private static void MarkInterrupted(MessageItem message, JsonElement info)
+    {
+        if (!IsAbortedError(info)) return;
+        message.Interrupted = true;
+        if (message.Parts.Any(p => p.Type == "aborted")) return;
+        message.Parts.Add(new PartItem
+        {
+            Id = $"aborted-{Guid.NewGuid():N}",
+            MessageId = message.Id,
+            Type = "aborted",
+        });
+    }
+
+    private static bool IsAbortedError(JsonElement info)
+    {
+        if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object) return false;
+        return error.GetStringProperty("name") == "MessageAbortedError";
+    }
+
+    /// <summary>Runs when the active turn ends (message finished or session idle).</summary>
+    private void OnTurnCompleted()
+    {
+        IsBusy = false;
+        _ = DrainPendingPromptsAsync();
     }
 
     private void ApplyPartUpdated(JsonElement properties)
@@ -555,6 +677,7 @@ public sealed class ChatStore : IDisposable
     {
         if (!properties.TryGetProperty("status", out var status)) return;
         IsBusy = status.GetStringProperty("type") == "busy";
+        if (!IsBusy) _ = DrainPendingPromptsAsync();
     }
 
     private void ApplyQuestionAsked(JsonElement properties)
@@ -700,8 +823,7 @@ public sealed class ChatStore : IDisposable
         {
             item.ToolStatus = state.GetStringProperty("status");
             var title = state.GetStringProperty("title");
-            if (title.Length > 0) item.ToolTitle = title;
-            if (state.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
+            if (title.Length > 0) item.ToolTitle = title;            if (state.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
             {
                 var serialized = JsonSerializer.Serialize(input, JsonDefaults);
                 if (serialized != "{}") item.ToolInput = serialized;
@@ -727,6 +849,12 @@ public sealed class ChatStore : IDisposable
                 item.ToolError = error.GetString() ?? "";
             if (state.TryGetProperty("metadata", out var meta) && meta.ValueKind == JsonValueKind.Object)
             {
+                if (meta.TryGetProperty("interrupted", out var interm)) item.Interrupted = interm.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.String => interm.GetString() == "true",
+                    _ => item.Interrupted,
+                };
                 if (meta.TryGetProperty("output", out var mOutput)) item.ShellOutput = mOutput.GetString() ?? "";
                 if (meta.TryGetProperty("diff", out var mDiff)) item.Diff = mDiff.GetString() ?? "";
                 if (meta.TryGetProperty("count", out var mCount)) item.MatchCount = mCount.ToString();

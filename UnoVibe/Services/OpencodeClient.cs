@@ -91,6 +91,16 @@ public sealed class OpencodeClient
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Post /session/{id}/abort — interrupts the currently-running turn and stops all
+    /// ongoing AI processing / command execution for the session. Safe to call anytime.
+    /// </summary>
+    public async Task AbortAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/abort", new { }, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers,
         CancellationToken ct = default)
     {

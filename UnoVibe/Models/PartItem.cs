@@ -17,6 +17,7 @@ public struct ReasoningTime
     public string? ToolName;
     public string? ToolStatus;
     public string? ToolTitle;
+    public bool Interrupted = false;
     public string ToolInput = "";
     public string ToolOutput = "";
     public string ToolError = "";

@@ -36,6 +36,13 @@ namespace UnoVibe.Controls;
                                 <TextBlock Text=`p.Text` TextWrapping=Wrap IsTextSelectionEnabled=true
                                            Foreground=`Message.Role == "user" ? AppTheme.TextOnAccent : theme.PrimaryText` />
                             </Border>
+                        else if (`p.Type == "aborted"`)
+                            <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(10, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
+                                <StackPanel Orientation=Horizontal Spacing=6>
+                                    <TextBlock Text="⏹" FontSize=12 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                                    <TextBlock Text="Interrupted by you — the response was stopped." FontSize=12 Foreground=`theme.SystemCaution` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                                </StackPanel>
+                            </Border>
                         else if (`p.Type == "compaction"`)
                             <Border BorderThickness=`new Thickness(0, 1, 0, 0)` BorderBrush=`theme.DividerStroke` Padding=`new Thickness(0, 6, 0, 6)` Margin=`new Thickness(0, 8, 0, 8)`>
                                 <TextBlock Text="Compaction" FontSize=11 Foreground=`theme.SecondaryText`

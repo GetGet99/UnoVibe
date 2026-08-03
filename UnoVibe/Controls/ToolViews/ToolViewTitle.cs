@@ -25,6 +25,10 @@ namespace UnoVibe.Controls.ToolViews;
                        FontFamily="Consolas"
                        Foreground=`IsShell ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+            if (`Part.Interrupted`)
+                <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(5, 1, 5, 2)` VerticalAlignment=Center>
+                    <TextBlock Text="interrupted" FontSize=10 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                </Border>
         </StackPanel>
     </root>
     """)]
