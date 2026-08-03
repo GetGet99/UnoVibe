@@ -18,6 +18,7 @@ namespace UnoVibe.Controls;
         <Grid Background=`theme.CardBackground` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 0, 1, 0)` RowDefinitions=<>
             <RowDefinition Height=Auto />
             <RowDefinition />
+            <RowDefinition Height=Auto />
         </>>
             <StackPanel Padding=`new Thickness(12, 12, 12, 8)` Spacing=8>
                 <Button Content="+ New session" Click+=`(sender, e) => OnNewSession(sender, e)` HorizontalAlignment=Stretch />
@@ -51,6 +52,9 @@ namespace UnoVibe.Controls;
                     }
                 </StackPanel>
             </ScrollViewer>
+            <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
+                <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+            </Border>
         </Grid>
     </root>
     """)]

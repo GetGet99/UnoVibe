@@ -32,7 +32,6 @@ namespace UnoVibe.Pages;
                         <ProgressRing Width=16 Height=16 IsActive=`Store.IsBusy`
                                       Visibility=`Store.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
                     </StackPanel>
-                    <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` />
                 </StackPanel>
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Center>
                     <TextBlock Text=`Store.UsageCostLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
