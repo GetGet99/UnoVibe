@@ -152,4 +152,26 @@ public static class ToolViewShared
         if (value.Length <= max) return value;
         return value.Substring(0, max) + "\n… (truncated, " + (value.Length - max) + " more chars)";
     }
+
+    public const int ShellMaxLines = 10;
+
+    public static bool ShellOverflow(PartItem p) => CollapseShellOutput(p).Overflow;
+
+    public static string ShellCollapsed(PartItem p) => CollapseShellOutput(p).Output;
+
+    private static (string Output, bool Overflow) CollapseShellOutput(PartItem p)
+    {
+        var output = p.ShellOutput.Length > 0 ? p.ShellOutput : p.ToolOutput;
+        if (output.Length == 0) return (output, false);
+        return CollapseLines(output, ShellMaxLines);
+    }
+
+    public static (string Output, bool Overflow) CollapseLines(string output, int maxLines)
+    {
+        var lines = output.Split('\n');
+        if (lines.Length <= maxLines) return (output, false);
+
+        var preview = string.Join("\n", lines.Take(maxLines));
+        return (preview + "\n…", true);
+    }
 }

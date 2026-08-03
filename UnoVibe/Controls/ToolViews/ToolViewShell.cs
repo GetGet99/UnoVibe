@@ -6,6 +6,7 @@ namespace UnoVibe.Controls.ToolViews;
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
     PartItem Part;
+    bool Expanded = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -14,9 +15,13 @@ namespace UnoVibe.Controls.ToolViews;
             <TextBlock Text=`ToolViewShared.Shell(Part)` FontSize=12 FontWeight=`FontWeights.SemiBold` FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
         </Border>
         if (`Part.ShellOutput.Length > 0`)
-            <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                <TextBlock Text=`ToolViewShared.Truncate(Part.ShellOutput, 4000)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
-            </Border>
+        {
+            <Button Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Expanded = !Expanded`>
+                <TextBlock Text=`Expanded ? Part.ShellOutput : ToolViewShared.ShellCollapsed(Part)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
+            </Button>
+            if (`ToolViewShared.ShellOverflow(Part)`)
+                <TextBlock Text=`Expanded ? "Click to collapse" : "Click to expand"` FontSize=11 FontFamily="Consolas" Foreground=`theme.TertiaryText` />
+        }
         if (`Part.ToolError.Length > 0`)
             <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`Part.ToolError` FontSize=12 FontFamily="Consolas" Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
