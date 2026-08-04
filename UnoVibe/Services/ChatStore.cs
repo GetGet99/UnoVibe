@@ -24,6 +24,12 @@ namespace UnoVibe.Services;
     public string UsageTokensLabel = "0";
     public string ContextLabel = "0%";
     public double ContextUsage;
+    public long UsageTokensInput;
+    public long UsageTokensOutput;
+    public long UsageTokensReasoning;
+    public long UsageTokensCacheRead;
+    public long UsageTokensCacheWrite;
+    public long ContextLimit;
     public string ActiveSessionId = "";
     // Human-readable session status banner (busy/retry messages); empty means idle.
     public string StatusMessage = "";
@@ -1303,6 +1309,12 @@ public sealed partial class ChatStore : IDisposable
         UsageTokensLabel = "0";
         ContextLabel = "0%";
         ContextUsage = 0;
+        UsageTokensInput = 0;
+        UsageTokensOutput = 0;
+        UsageTokensReasoning = 0;
+        UsageTokensCacheRead = 0;
+        UsageTokensCacheWrite = 0;
+        ContextLimit = 0;
     }
 
     private void UpdateSessionStats()
@@ -1314,13 +1326,21 @@ public sealed partial class ChatStore : IDisposable
             return;
         }
 
-        UsageCostLabel = FormatCost(last.Cost);
+        var sessionCost = Messages.Where(m => m.Role == "assistant").Sum(m => m.Cost);
+        UsageCostLabel = FormatCost(sessionCost);
+
+        UsageTokensInput = last.TokensInput;
+        UsageTokensOutput = last.TokensOutput;
+        UsageTokensReasoning = last.TokensReasoning;
+        UsageTokensCacheRead = last.TokensCacheRead;
+        UsageTokensCacheWrite = last.TokensCacheWrite;
 
         var tokens = last.TokensInput + last.TokensOutput + last.TokensReasoning
             + last.TokensCacheRead + last.TokensCacheWrite;
         UsageTokensLabel = tokens.ToString("N0");
 
         var limit = ResolveContextLimit(last);
+        ContextLimit = limit;
         if (limit > 0)
         {
             var percent = (int)Math.Round(tokens / (double)limit * 100);
