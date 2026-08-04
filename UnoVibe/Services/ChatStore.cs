@@ -17,18 +17,6 @@ public sealed class ChatStore : IDisposable
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
 
-    /// <summary>
-    /// Matches the server's placeholder title ("New session - &lt;ISO&gt;" / "Child session - &lt;ISO&gt;").
-    /// Such sessions get a generated name from the server's title agent on the first prompt; until then we
-    /// display "New Chat".
-    /// </summary>
-    private static readonly Regex DefaultTitleRegex = new(
-        @"^(New session - |Child session - )\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$");
-
-    private static bool IsDefaultTitle(string title) => DefaultTitleRegex.IsMatch(title);
-
-    private static string NormalizeTitle(string title) => IsDefaultTitle(title) ? "New Chat" : title;
-
     public Reference<int> HiddenMessagesProp { get; } = Ref(0);
     public int HiddenMessages { get => HiddenMessagesProp.Value; set => HiddenMessagesProp.Value = value; }
 
@@ -375,7 +363,6 @@ public sealed class ChatStore : IDisposable
             Sessions.Clear();
             foreach (var session in list)
             {
-                session.Title = NormalizeTitle(session.Title);
                 Sessions.Add(session);
             }
 
@@ -419,7 +406,7 @@ public sealed class ChatStore : IDisposable
         if (existing is not null)
         {
             var directoryChanged = existing.Directory != session.Directory;
-            existing.Title = NormalizeTitle(session.Title);
+            existing.Title = session.Title;
             existing.Updated = session.Updated;
             existing.Agent = session.Agent;
             if (session.ModelId.Length > 0)
@@ -437,7 +424,6 @@ public sealed class ChatStore : IDisposable
         }
         else
         {
-            session.Title = NormalizeTitle(session.Title);
             Sessions.Add(session);
             RebuildDirectoryGroups();
         }
@@ -622,7 +608,7 @@ public sealed class ChatStore : IDisposable
     {
         if (sessionId.Length == 0 || sessionId == _sessionId) return;
         _sessionId = sessionId;
-        SessionTitle = NormalizeTitle(Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat");
+        SessionTitle = Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat";
         ActiveSessionId = sessionId;
         Messages.Clear();
         HiddenMessages = 0;

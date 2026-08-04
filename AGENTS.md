@@ -52,6 +52,8 @@ Without `OPENCODE_BASE_URL` set, the app shows `ConnectPage` (connect to existin
 
 Note: `pkill -f "opencode serve ..."` and similar broad patterns can hang the shell session in this environment — prefer `pkill -9 -x <exact-name>` or `pkill -f` with a unique exact port, and check with `ps aux | grep "opencode serve"` afterward.
 
+**CRITICAL — do NOT kill the dev `opencode serve` (port 4196) during this chat session**: this opencode session itself is served by that instance, so killing it terminates the chat and the command. If a server-side change (e.g. `small_model`/auth/setting edits in `~/.config/opencode/opencode.jsonc`, global opencode.json, or plugins) requires a restart to take effect, ask the user to restart it themselves rather than running `pkill -9 -x opencode` (or dropping into the session's own TUI to `/session` restart).
+
 ## Source Layout
 
 - `UnoVibe/Pages/` — top-level pages: `ConnectPage`, `MainPage`, `ChatPage`.
