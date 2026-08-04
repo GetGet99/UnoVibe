@@ -2,74 +2,46 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using UnoVibe.Models;
-using static QuickMarkup.Infra.QuickRefs;
 
 namespace UnoVibe.Services;
 
 /// <summary>
 /// Reactive store for the current chat session. Holds messages and applies SSE events
 /// to them. All mutations happen on the UI thread via the dispatcher pump.
+///
+/// The mutable display fields are QuickMarkup reactive references (declared in the
+/// markup header), so the pages bind to them directly. The references are created
+/// lazily on first access, which must therefore happen on the UI thread for reactivity.
 /// </summary>
-public sealed class ChatStore : IDisposable
+[QuickMarkup("""
+    using UnoVibe.Models;
+    public int HiddenMessages;
+    public bool IsBusy;
+    public int PendingPrompts;
+    public string ConnectionStatus = "Connecting...";
+    public string SessionTitle = "New Chat";
+    public string UsageCostLabel = "$0.00";
+    public string UsageTokensLabel = "0";
+    public string ContextLabel = "0%";
+    public double ContextUsage;
+    public string ActiveSessionId = "";
+    // Human-readable session status banner (busy/retry messages); empty means idle.
+    public string StatusMessage = "";
+    // The permission request currently shown to the user (oldest pending), or null.
+    public PermissionRequestItem? ActivePermission;
+    public string Mode = "build";
+    public string ModelId = "";
+    public string ProviderId = "";
+    public string Variant = "Default";
+    public bool HasVariants;
+    public ToastItem? CurrentToast;
+    """)]
+public sealed partial class ChatStore : IDisposable
 {
     private static readonly JsonSerializerOptions JsonDefaults = new() { WriteIndented = false };
 
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
-
-    public Reference<int> HiddenMessagesProp { get; } = Ref(0);
-    public int HiddenMessages { get => HiddenMessagesProp.Value; set => HiddenMessagesProp.Value = value; }
-
-    // Refs are created here, so the singleton must first be accessed on the UI thread.
-    public Reference<bool> IsBusyProp { get; } = Ref(false);
-    public bool IsBusy { get => IsBusyProp.Value; set => IsBusyProp.Value = value; }
-
-    public Reference<int> PendingPromptsProp { get; } = Ref(0);
-    public int PendingPrompts { get => PendingPromptsProp.Value; set => PendingPromptsProp.Value = value; }
-
-    public Reference<string> ConnectionStatusProp { get; } = Ref("Connecting...");
-    public string ConnectionStatus { get => ConnectionStatusProp.Value; set => ConnectionStatusProp.Value = value; }
-
-    public Reference<string> SessionTitleProp { get; } = Ref("New Chat");
-    public string SessionTitle { get => SessionTitleProp.Value; set => SessionTitleProp.Value = value; }
-
-    public Reference<string> UsageCostLabelProp { get; } = Ref("$0.00");
-    public string UsageCostLabel { get => UsageCostLabelProp.Value; set => UsageCostLabelProp.Value = value; }
-
-    public Reference<string> UsageTokensLabelProp { get; } = Ref("0");
-    public string UsageTokensLabel { get => UsageTokensLabelProp.Value; set => UsageTokensLabelProp.Value = value; }
-
-    public Reference<string> ContextLabelProp { get; } = Ref("0%");
-    public string ContextLabel { get => ContextLabelProp.Value; set => ContextLabelProp.Value = value; }
-
-    public Reference<double> ContextUsageProp { get; } = Ref(0d);
-    public double ContextUsage { get => ContextUsageProp.Value; set => ContextUsageProp.Value = value; }
-
-    public Reference<string> ActiveSessionIdProp { get; } = Ref("");
-    public string ActiveSessionId { get => ActiveSessionIdProp.Value; set => ActiveSessionIdProp.Value = value; }
-
-    /// <summary>Human-readable session status banner (busy/retry messages); empty means idle.</summary>
-    public Reference<string> StatusMessageProp { get; } = Ref("");
-    public string StatusMessage { get => StatusMessageProp.Value; set => StatusMessageProp.Value = value; }
-
-    /// <summary>The permission request currently shown to the user (oldest pending), or null.</summary>
-    public Reference<PermissionRequestItem?> ActivePermissionProp { get; } = Ref<PermissionRequestItem?>(null);
-    public PermissionRequestItem? ActivePermission { get => ActivePermissionProp.Value; set => ActivePermissionProp.Value = value; }
-
-    public Reference<string> ModeProp { get; } = Ref("build");
-    public string Mode { get => ModeProp.Value; set => ModeProp.Value = value; }
-
-    public Reference<string> ModelIdProp { get; } = Ref("");
-    public string ModelId { get => ModelIdProp.Value; set => ModelIdProp.Value = value; }
-
-    public Reference<string> ProviderIdProp { get; } = Ref("");
-    public string ProviderId { get => ProviderIdProp.Value; set => ProviderIdProp.Value = value; }
-
-    public Reference<string> VariantProp { get; } = Ref("Default");
-    public string Variant { get => VariantProp.Value; set => VariantProp.Value = value; }
-
-    public Reference<bool> HasVariantsProp { get; } = Ref(false);
-    public bool HasVariants { get => HasVariantsProp.Value; set => HasVariantsProp.Value = value; }
 
     public ObservableCollection<string> ModeOptions { get; } = new();
     public ObservableCollection<ModelOption> ModelOptions { get; } = new();
@@ -107,10 +79,6 @@ public sealed class ChatStore : IDisposable
     private string _baseUrl = "";
     private string? _password;
     private string? _username;
-
-    public ChatStore()
-    {
-    }
 
     /// <summary>
     /// Configures the server to connect to. Must be called before <see cref="ConnectAsync"/>.
@@ -825,10 +793,6 @@ public sealed class ChatStore : IDisposable
                 break;
         }
     }
-
-    /// <summary>Shows the current toast, or null if none is visible. One toast at a time (new replaces old).</summary>
-    public Reference<ToastItem?> CurrentToastProp { get; } = Ref<ToastItem?>(null);
-    public ToastItem? CurrentToast { get => CurrentToastProp.Value; set => CurrentToastProp.Value = value; }
 
     private CancellationTokenSource? _toastCts;
 
