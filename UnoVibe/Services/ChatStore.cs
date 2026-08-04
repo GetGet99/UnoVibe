@@ -140,6 +140,7 @@ public sealed class ChatStore : IDisposable
         DirectoryGroups.Clear();
         ConnectionStatus = "Connecting...";
         ClearPendingPrompts();
+        DismissToast();
     }
 
     /// <summary>
@@ -156,6 +157,8 @@ public sealed class ChatStore : IDisposable
     {
         _cts?.Cancel();
         _cts = null;
+        _toastCts?.Cancel();
+        _toastCts = null;
         ServeProcess?.Dispose();
         ServeProcess = null;
     }
@@ -675,9 +678,67 @@ public sealed class ChatStore : IDisposable
 
             // TUI command plumbing (server → client commands; relevant only if adopting them)
             case "tui.toast.show":
-                // TODO: properties { title?, message, variant: "info"|"success"|"warning"|"error", duration }; show a toast.
+                ApplyToastShow(evt.Properties);
                 break;
         }
+    }
+
+    /// <summary>Shows the current toast, or null if none is visible. One toast at a time (new replaces old).</summary>
+    public Reference<ToastItem?> CurrentToastProp { get; } = Ref<ToastItem?>(null);
+    public ToastItem? CurrentToast { get => CurrentToastProp.Value; set => CurrentToastProp.Value = value; }
+
+    private CancellationTokenSource? _toastCts;
+
+    private void ApplyToastShow(JsonElement properties)
+    {
+        var variant = properties.GetStringProperty("variant");
+        var duration = properties.GetInt64Property("duration");
+        ShowToast(new ToastItem
+        {
+            Title = properties.GetStringProperty("title"),
+            Message = properties.GetStringProperty("message"),
+            Variant = variant.Length > 0 ? variant : "info",
+            DurationMs = duration > 0 ? (int)duration : 5000,
+        });
+    }
+
+    /// <summary>Shows a toast, replacing any current one, and auto-dismisses it after <see cref="ToastItem.DurationMs"/>.</summary>
+    public void ShowToast(ToastItem toast)
+    {
+        _toastCts?.Cancel();
+        _toastCts = null;
+        CurrentToast = toast;
+        if (toast.DurationMs <= 0) return;
+
+        var cts = new CancellationTokenSource();
+        _toastCts = cts;
+        _ = DismissToastAfterAsync(toast.DurationMs, cts.Token);
+    }
+
+    /// <summary>Immediately hides the current toast (clear any pending auto-dismiss).</summary>
+    public void DismissToast()
+    {
+        _toastCts?.Cancel();
+        _toastCts = null;
+        CurrentToast = null;
+    }
+
+    private async Task DismissToastAfterAsync(int durationMs, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(durationMs, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        if (_dispatcher is null) { CurrentToast = null; return; }
+        _dispatcher.TryEnqueue(() =>
+        {
+            if (ct.IsCancellationRequested) return;
+            CurrentToast = null;
+        });
     }
 
     private void ApplyMessageUpdated(JsonElement properties)
