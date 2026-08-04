@@ -14,8 +14,7 @@ namespace UnoVibe.Controls.ToolViews;
     <StackPanel Spacing=4>
         <Button Background=`Hovering ? theme.SystemNeutralBackground : theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Expanded = !Expanded` PointerEntered+=`(s, e) => Hovering = true` PointerExited+=`(s, e) => Hovering = false`>
             <StackPanel Orientation=Horizontal Spacing=8>
-                if (`Part.ToolStatus == "running"`)
-                    <ProgressRing Width=14 Height=14 IsActive=true Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                <ToolBusyIndicator Part=`Part` />
                 <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 FontFamily="Consolas" Foreground=`Hovering ? theme.PrimaryText : theme.SecondaryText` VerticalAlignment=Center />
                 <TextBlock Text=`ToolViewShared.WriteTitle(Part)` FontSize=12 FontFamily="Consolas" Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>

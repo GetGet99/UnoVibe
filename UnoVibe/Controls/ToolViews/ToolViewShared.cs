@@ -52,21 +52,27 @@ public static class ToolViewShared
         var h = (ms % 86400000) / 3600000;
         return $"{days}d {h}h";
     }
+    /// <summary>
+    /// True while a tool part is not finished: either the model is still streaming
+    /// the tool-call arguments ("pending") or the tool call is executing ("running").
+    /// </summary>
+    public static bool Busy(PartItem p) => p.ToolStatus is "pending" or "running";
+
     public static string Shell(PartItem p) =>
         p.ToolCommand.Length > 0
             ? "$ " + p.ToolCommand + (p.ToolWorkdir.Length > 0 ? "  (in " + p.ToolWorkdir + ")" : "")
-            : p.ToolTitle ?? p.ToolName ?? "shell";
+            : p.ToolTitle ?? p.ToolName ?? "Running command...";
 
     public static string Glob(PartItem p)
     {
-        var name = p.ToolPattern.Length > 0 ? "Glob \"" + p.ToolPattern + "\"" : p.ToolTitle ?? p.ToolName ?? "glob";
+        var name = p.ToolPattern.Length > 0 ? "Glob \"" + p.ToolPattern + "\"" : p.ToolTitle ?? p.ToolName ?? "Globbing...";
         var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
         return "✱ " + name + count;
     }
 
     public static string Grep(PartItem p)
     {
-        var name = p.ToolPattern.Length > 0 ? "Grep \"" + p.ToolPattern + "\"" : p.ToolTitle ?? p.ToolName ?? "grep";
+        var name = p.ToolPattern.Length > 0 ? "Grep \"" + p.ToolPattern + "\"" : p.ToolTitle ?? p.ToolName ?? "Grepping...";
         if (p.ToolSearchPath.Length > 0) name += " in " + p.ToolSearchPath;
         if (p.ToolInclude.Length > 0) name += " (" + p.ToolInclude + ")";
         var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
@@ -74,7 +80,7 @@ public static class ToolViewShared
     }
 
     public static string TodoTitle(PartItem p) =>
-        p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "todos";
+        p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "Writing todos...";
 
     public static string TodoLine(TodoItem todo)
     {
@@ -113,7 +119,7 @@ public static class ToolViewShared
     }
 
     public static string QuestionTitle(PartItem p) =>
-        p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "question";
+        p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "Asking question...";
 
     public static List<QuestionItem> ParseQuestions(PartItem p) => ParseQuestions(p.QuestionJson, p.AnswerJson);
 
@@ -170,13 +176,13 @@ public static class ToolViewShared
             : "";
 
     public static string WebFetch(PartItem p) =>
-        "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? p.ToolName ?? "webfetch");
+        "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? p.ToolName ?? "Fetching");
 
     public static string Skill(PartItem p) =>
-        "→ " + (p.ToolSkillName.Length > 0 ? "Skill \"" + p.ToolSkillName + "\"" : p.ToolTitle ?? p.ToolName ?? "skill");
+        "→ " + (p.ToolSkillName.Length > 0 ? "Skill \"" + p.ToolSkillName + "\"" : p.ToolTitle ?? p.ToolName ?? "Reading skill");
 
     public static string Read(PartItem p) =>
-        "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "read");
+        "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "Reading");
 
     public static string Loaded(PartItem p)
     {
@@ -185,10 +191,10 @@ public static class ToolViewShared
     }
 
     public static string Edit(PartItem p) =>
-        "← " + (p.ToolFilePath.Length > 0 ? "Edit " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "edit");
+        "← " + (p.ToolFilePath.Length > 0 ? "Edit " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "Editing");
 
     public static string Write(PartItem p) =>
-        "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "write");
+        "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "Writing");
 
     /// <summary>
     /// Edit title with an added/changed line count derived from the unified diff
@@ -233,7 +239,7 @@ public static class ToolViewShared
 
     public static string Generic(PartItem p)
     {
-        var name = p.ToolTitle ?? p.ToolName ?? "tool";
+        var name = p.ToolTitle ?? p.ToolName ?? "Running tool...";
         var input = p.ToolInput.Length > 0 && p.ToolInput.Length <= 400 ? " " + p.ToolInput : "";
         return "⚙ " + name + input;
     }

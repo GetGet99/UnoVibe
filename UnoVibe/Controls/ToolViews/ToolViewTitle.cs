@@ -18,8 +18,7 @@ namespace UnoVibe.Controls.ToolViews;
     </setup>
     <root>
         <StackPanel Orientation=Horizontal Spacing=8>
-            if (`Part.ToolStatus == "running"`)
-                <ProgressRing Width=14 Height=14 IsActive=true Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+            <ToolBusyIndicator Part=`Part` />
             <TextBlock Text=`Text` FontSize=12
                        FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal`
                        FontFamily="Consolas"
