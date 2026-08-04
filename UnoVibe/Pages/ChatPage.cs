@@ -68,38 +68,29 @@ namespace UnoVibe.Pages;
                             <MessageView Message=`m` />
                         if (`Store.ActivePermission is not null`)
                         {
-                            <Border Background=`theme.CardBackground` CornerRadius=10 Padding=`new Thickness(16, 12, 16, 12)` Margin=`new Thickness(0, 8, 0, 0)`
-                                    BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=720 HorizontalAlignment=Stretch>
-                                <StackPanel Spacing=10>
+                            <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
+                                    BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
+                                <StackPanel Spacing=8>
                                     <StackPanel Spacing=2>
-                                        <TextBlock Text=`Store.ActivePermission?.Title ?? ""` FontSize=14 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                        <TextBlock Text=`Store.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                         if (`(Store.ActivePermission?.Body?.Length ?? 0) > 0`)
-                                            <TextBlock Text=`Store.ActivePermission?.Body ?? ""` FontSize=12 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                            <TextBlock Text=`Store.ActivePermission?.Body ?? ""` FontSize=11 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                         if (`(Store.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
-                                            <TextBlock Text=`Store.ActivePermission?.PatternsText ?? ""` FontSize=11 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                        <TextBlock Text=`$"Session: {Store.ActivePermission?.SessionId ?? ""}"` FontSize=10 Foreground=`theme.TertiaryText` />
+                                            <TextBlock Text=`Store.ActivePermission?.PatternsText ?? ""` FontSize=10 FontFamily="Consolas" Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                     </StackPanel>
-                                    if (`PermissionStage == "choose"`)
-                                        <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
-                                            <Button Content="Reject" @Click+=`StartReject()` CornerRadius=6 />
+                                    if (`PermissionStage == "reject"`)
+                                        <StackPanel Spacing=8>
+                                            <TextBox Text<=>`RejectText` PlaceholderText="Reason for rejection (optional)" AcceptsReturn=false MinHeight=36 />
+                                            <StackPanel Orientation=Horizontal Spacing=8>
+                                                <Button Content="Cancel" @Click+=`CancelPermission()` CornerRadius=6 />
+                                                <Button Content="Deny" @Click+=`await RejectPermissionAsync()` CornerRadius=6 />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    else
+                                        <StackPanel Orientation=Horizontal Spacing=8>
                                             <Button Content="Allow once" @Click+=`await AllowPermissionOnceAsync()` CornerRadius=6 />
-                                            <Button Content="Always allow" @Click+=`BeginAlwaysPermission()` CornerRadius=6 />
-                                        </StackPanel>
-                                    else if (`PermissionStage == "always"`)
-                                        <StackPanel Spacing=8>
-                                            <TextBlock Text=`$"Always allow: {Store.ActivePermission?.Permission ?? ""}"` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
-                                            <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
-                                                <Button Content="Cancel" @Click+=`CancelPermission()` CornerRadius=6 />
-                                                <Button Content="Always allow" @Click+=`await AllowPermissionAlwaysAsync()` CornerRadius=6 />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    else if (`PermissionStage == "reject"`)
-                                        <StackPanel Spacing=8>
-                                            <TextBox Text<=>`RejectText` PlaceholderText="Reason for rejection (optional)" AcceptsReturn=false MinHeight=40 />
-                                            <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
-                                                <Button Content="Cancel" @Click+=`CancelPermission()` CornerRadius=6 />
-                                                <Button Content="Reject" @Click+=`await RejectPermissionAsync()` CornerRadius=6 />
-                                            </StackPanel>
+                                            <Button Content="Always allow" @Click+=`await AllowPermissionAlwaysAsync()` CornerRadius=6 />
+                                            <Button Content="Deny…" @Click+=`StartReject()` CornerRadius=6 />
                                         </StackPanel>
                                 </StackPanel>
                             </Border>
@@ -228,8 +219,6 @@ public partial class ChatPage : Page
         if (req is null) return;
         await Store.ReplyPermissionAsync(req.Id, "once");
     }
-
-    private void BeginAlwaysPermission() => PermissionStage = "always";
 
     private async Task AllowPermissionAlwaysAsync()
     {
