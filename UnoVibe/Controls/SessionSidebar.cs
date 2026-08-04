@@ -21,7 +21,12 @@ namespace UnoVibe.Controls;
             <RowDefinition Height=Auto />
         </>>
             <StackPanel Padding=`new Thickness(12, 12, 12, 8)` Spacing=8>
-                <Button Content="+ New session" Click+=`(sender, e) => OnNewSession(sender, e)` HorizontalAlignment=Stretch />
+                <Button Click+=`(sender, e) => OnNewSession(sender, e)` HorizontalAlignment=Stretch>
+                    <StackPanel Orientation=Horizontal Spacing=6>
+                        <AppSymbolIcon Symbol=Add FontSize=13 VerticalAlignment=Center />
+                        <TextBlock Text="New session" VerticalAlignment=Center />
+                    </StackPanel>
+                </Button>
                 <Button Content="New window" Click+=`(sender, e) => OnNewWindow(sender, e)` HorizontalAlignment=Stretch />
             </StackPanel>
             <ScrollViewer Grid.Row=1>
@@ -34,7 +39,9 @@ namespace UnoVibe.Controls;
                                 <ColumnDefinition Width=Auto />
                             </>>
                                 <TextBlock Text=`group.Directory` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                <Button Grid.Column=1 Content="+" Padding=`new Thickness(8, 2, 8, 2)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)` />
+                                <Button Grid.Column=1 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)`>
+                                    <AppSymbolIcon Symbol=Add FontSize=11 />
+                                </Button>
                             </Grid>
                             foreach (var s in `group.Sessions`)
                             {

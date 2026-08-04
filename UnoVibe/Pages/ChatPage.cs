@@ -128,7 +128,9 @@ namespace UnoVibe.Pages;
                         </Border>
                     if (`Store.IsBusy`)
                         <Button Content="⏹ Stop" @Click+=`await Store.InterruptAsync()` CornerRadius=6 />
-                    <Button Content="Send" @Click+=`await SendAsync()` IsEnabled=`Store.ActivePermission is null` />
+                    <Button @Click+=`await SendAsync()` IsEnabled=`Store.ActivePermission is null`>
+                        <SymbolIcon Symbol=Send VerticalAlignment=Center />
+                    </Button>
                 </StackPanel>
             </Grid>
             <Grid Grid.Row=4 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
