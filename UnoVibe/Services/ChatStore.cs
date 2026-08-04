@@ -414,6 +414,7 @@ public sealed class ChatStore : IDisposable
         var existing = Sessions.FirstOrDefault(s => s.Id == session.Id);
         if (existing is not null)
         {
+            var directoryChanged = existing.Directory != session.Directory;
             existing.Title = NormalizeTitle(session.Title);
             existing.Updated = session.Updated;
             existing.Agent = session.Agent;
@@ -424,6 +425,11 @@ public sealed class ChatStore : IDisposable
                 existing.ModelVariant = session.ModelVariant;
             }
             if (existing.Id == _sessionId) SessionTitle = existing.Title;
+
+            // Title/Updated/Cost/tokens are QuickMarkup reactive fields on SessionInfo, so
+            // mutating them propagates to the sidebar immediately. Only a directory change (which
+            // moves the session between groups) requires rebuilding the sidebar groups.
+            if (directoryChanged) RebuildDirectoryGroups();
         }
         else
         {
@@ -431,6 +437,39 @@ public sealed class ChatStore : IDisposable
             Sessions.Add(session);
             RebuildDirectoryGroups();
         }
+    }
+
+    /// <summary>
+    /// Applies a <c>session.deleted</c> event: removes the session from the sidebar
+    /// immediately, and clears the active view if the deleted session was active.
+    /// </summary>
+    private void ApplySessionDeleted(JsonElement properties)
+    {
+        var id = properties.GetStringProperty("sessionID");
+        if (id.Length == 0) return;
+
+        var removed = Sessions.FirstOrDefault(s => s.Id == id);
+        if (removed is null) return;
+
+        Sessions.Remove(removed);
+        RebuildDirectoryGroups();
+
+        if (id != _sessionId) return;
+
+        // The active session was deleted; fall back to an empty state.
+        _sessionId = "";
+        ActiveSessionId = "";
+        SessionTitle = "New Chat";
+        Messages.Clear();
+        HiddenMessages = 0;
+        _messagesById.Clear();
+        ResetUsageStats();
+        IsBusy = false;
+        StatusMessage = "";
+        ClearPendingPrompts();
+        _permissions.Clear();
+        ActivePermission = null;
+        DismissToast();
     }
 
     private static SessionInfo SessionInfoFromJson(JsonElement item)
@@ -671,11 +710,14 @@ public sealed class ChatStore : IDisposable
 
     private void Apply(OpencodeEvent evt)
     {
+        // Message/status events are scoped to the active session. Session-level CRUD events
+        // (created/updated/deleted) must NOT be filtered: they reflect the whole sidebar even
+        // when they concern a session that isn't currently active (e.g. created/renamed/deleted
+        // from another client).
         if (evt.Type is "message.updated" or "message.part.updated" or "message.part.delta"
             or "message.part.removed" or "message.removed" or "session.status" or "session.idle"
-            or "session.created" or "session.updated" or "session.deleted" or "session.error"
-            or "session.diff" or "session.compacted" or "question.asked" or "question.replied"
-            or "question.rejected")
+            or "session.error" or "session.diff" or "session.compacted" or "question.asked"
+            or "question.replied" or "question.rejected")
         {
             var sessionId = evt.Properties.GetStringProperty("sessionID");
             if (sessionId.Length > 0 && sessionId != _sessionId) return;
@@ -725,7 +767,7 @@ public sealed class ChatStore : IDisposable
                 ApplySessionUpsert(evt.Properties);
                 break;
             case "session.deleted":
-                // TODO: properties { sessionID, info }; remove the session from Sessions/DirectoryGroups.
+                ApplySessionDeleted(evt.Properties);
                 break;
             case "session.error":
                 // TODO: properties { sessionID?, error }; surface server-side session errors.

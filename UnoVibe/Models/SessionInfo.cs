@@ -1,38 +1,47 @@
 namespace UnoVibe.Models;
 
-public sealed class SessionInfo
+/// <summary>
+/// A session list item. Mutable display fields are QuickMarkup reactive references so
+/// in-place updates (e.g. the server renames a session, or refreshes its cost/token
+/// totals via <c>session.updated</c>) propagate to the UI without replacing the item
+/// or rebuilding the sidebar groups. `Id`/`Directory` determine identity/grouping and
+/// stay plain (they never change for a live session).
+/// </summary>
+[QuickMarkup("""
+    public string Title;
+    public long Updated;
+    public string Agent;
+    public string ModelId;
+    public string ModelProviderId;
+    public string ModelVariant;
+    public double Cost;
+    public long TokensInput;
+    public long TokensOutput;
+    public long TokensReasoning;
+    public long TokensCacheRead;
+    public long TokensCacheWrite;
+    public long TokensTotal => `TokensInput + TokensOutput + TokensReasoning + TokensCacheRead + TokensCacheWrite`;
+    public string TimeLabel => `FormatTimeLabel(Updated)`;
+    """)]
+public sealed partial class SessionInfo
 {
     public string Id { get; set; } = "";
-    public string Title { get; set; } = "";
     public string Directory { get; set; } = "";
     public string ProjectId { get; set; } = "";
     public string Path { get; set; } = "";
-    public long Updated { get; set; }
-    public string Agent { get; set; } = "";
-    public string ModelId { get; set; } = "";
-    public string ModelProviderId { get; set; } = "";
-    public string ModelVariant { get; set; } = "";
-    public double Cost { get; set; }
-    public long TokensInput { get; set; }
-    public long TokensOutput { get; set; }
-    public long TokensReasoning { get; set; }
-    public long TokensCacheRead { get; set; }
-    public long TokensCacheWrite { get; set; }
 
-    public long TokensTotal => TokensInput + TokensOutput + TokensReasoning + TokensCacheRead + TokensCacheWrite;
-
-    public string TimeLabel
+    // QuickMarkup Computed<string> (backing field TimeLabelComp): reads the reactive `Updated`
+    // field, so it caches and re-evaluates automatically whenever Updated changes — the sidebar's
+    // `s.TimeLabel` binding updates without any manual rebuild.
+    private static string FormatTimeLabel(long updated)
     {
-        get
-        {
-            if (Updated <= 0) return "";
-            var elapsed = DateTimeOffset.Now.ToUnixTimeMilliseconds() - Updated;
-            var span = TimeSpan.FromMilliseconds(elapsed);
-            if (span.TotalMinutes < 1) return "now";
-            if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m";
-            if (span.TotalHours < 24) return $"{(int)span.TotalHours}h";
-            if (span.TotalDays < 30) return $"{(int)span.TotalDays}d";
-            return $"{span.TotalDays / 30:0}mo";
-        }
+        if (updated <= 0) return "";
+        var elapsed = DateTimeOffset.Now.ToUnixTimeMilliseconds() - updated;
+        var span = TimeSpan.FromMilliseconds(elapsed);
+        if (span.TotalMinutes < 1) return "now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h";
+        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d";
+        return $"{span.TotalDays / 30:0}mo";
     }
 }
