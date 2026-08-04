@@ -115,6 +115,7 @@ public sealed class ChatStore : IDisposable
     private DispatcherQueue? _dispatcher;
     private bool _started;
     private string _sessionId = "";
+    private string? _pendingDirectory;
     private string _baseUrl = "";
     private string? _password;
     private string? _username;
@@ -345,7 +346,10 @@ public sealed class ChatStore : IDisposable
         _creatingSession = true;
         try
         {
-            _sessionId = await _client.CreateSessionAsync(null, null, Mode, ProviderId, ModelId, Variant) ?? "";
+            // Lazy session creation: no title is passed (null) so the server assigns a
+            // timestamped default title and auto-generates a name on the first prompt.
+            _sessionId = await _client.CreateSessionAsync(null, _pendingDirectory, Mode, ProviderId, ModelId, Variant) ?? "";
+            _pendingDirectory = null;
         }
         finally
         {
@@ -590,15 +594,17 @@ public sealed class ChatStore : IDisposable
         Variant = variant.Length == 0 ? "Default" : variant;
     }
 
-    public async Task NewSessionAsync(string? directory = null)
+    /// <summary>
+    /// Starts a new (unsaved) chat. The session is created lazily on the first message send
+    /// (<see cref="EnsureSessionAsync"/>), so clicking "+" doesn't produce an empty server-side
+    /// session. <paramref name="directory"/> is remembered for that deferred creation.
+    /// </summary>
+    public Task NewSessionAsync(string? directory = null)
     {
-        try
-        {
-            var id = await _client.CreateSessionAsync(null, directory, Mode, ProviderId, ModelId, Variant) ?? "";
-            if (id.Length == 0) return;
-        _sessionId = id;
+        _pendingDirectory = directory;
+        _sessionId = "";
+        ActiveSessionId = "";
         SessionTitle = "New Chat";
-        ActiveSessionId = id;
         Messages.Clear();
         HiddenMessages = 0;
         _messagesById.Clear();
@@ -606,12 +612,10 @@ public sealed class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ClearPendingPrompts();
-            await RefreshSessionsAsync();
-        }
-        catch (Exception ex)
-        {
-            ConnectionStatus = $"Error: {ex.Message}";
-        }
+        _permissions.Clear();
+        ActivePermission = null;
+        DismissToast();
+        return Task.CompletedTask;
     }
 
     public async Task SwitchSessionAsync(string sessionId)
