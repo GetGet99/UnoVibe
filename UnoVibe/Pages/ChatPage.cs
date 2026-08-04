@@ -10,12 +10,16 @@ namespace UnoVibe.Pages;
     using UnoVibe.Services;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
+    using Microsoft.UI;
     inject ChatStore Store;
     string Input = "";
     string PermissionStage = "choose";
     string RejectText = "";
+    bool EditingTitle = false;
+    string TitleEdit = "";
     <setup>
         var theme = ThemeBrushes.Global;
+        var transparent = new SolidColorBrush(Colors.Transparent);
     </setup>
     <root>
         <Grid RowDefinitions=<>
@@ -30,11 +34,25 @@ namespace UnoVibe.Pages;
                 <ColumnDefinition Width=Auto />
             </>>
                 <StackPanel VerticalAlignment=Center>
-                    <StackPanel Orientation=Horizontal Spacing=8>
-                        <TextBlock Text=`Store.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
-                        <ProgressRing Width=16 Height=16 IsActive=`Store.IsBusy`
-                                      Visibility=`Store.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
-                    </StackPanel>
+                    if (`EditingTitle`)
+                    {
+                        <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
+                            titleEdit = <TextBox Text<=>`TitleEdit` MinWidth=220 FontSize=14 VerticalContentAlignment=Center KeyDown+=`OnTitleKeyDown` />
+                            <Button Content="Save" @Click+=`await SaveTitleAsync()` Padding=`new Thickness(10, 4)` CornerRadius=6 />
+                            <Button Content="Cancel" @Click+=`CancelTitleEdit()` Padding=`new Thickness(10, 4)` CornerRadius=6 />
+                        </StackPanel>
+                    }
+                    else
+                    {
+                        <StackPanel Orientation=Horizontal Spacing=8>
+                            <TextBlock Text=`Store.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                            <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6, 2)` Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`StartTitleEdit()`>
+                                <AppSymbolIcon Symbol=Edit FontSize=13 />
+                            </Button>
+                            <ProgressRing Width=16 Height=16 IsActive=`Store.IsBusy`
+                                          Visibility=`Store.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
+                        </StackPanel>
+                    }
                 </StackPanel>
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Center>
                     <TextBlock Text=`Store.UsageCostLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
@@ -212,6 +230,44 @@ public partial class ChatPage : Page
 
     private static string Capitalize(string? value) =>
         string.IsNullOrEmpty(value) ? "" : char.ToUpper(value[0]) + value.Substring(1);
+
+    private void StartTitleEdit()
+    {
+        TitleEdit = Store.SessionTitle;
+        EditingTitle = true;
+        _ = FocusTitleEditAsync();
+    }
+
+    private void CancelTitleEdit() => EditingTitle = false;
+
+    private async Task SaveTitleAsync()
+    {
+        EditingTitle = false;
+        await Store.RenameSessionAsync(TitleEdit);
+    }
+
+    /// <summary>Focuses and selects the rename box once the reactive tree has materialized it.</summary>
+    private async Task FocusTitleEditAsync()
+    {
+        await Task.Delay(16);
+        if (titleEdit is null) return;
+        titleEdit.Focus(FocusState.Programmatic);
+        titleEdit.SelectAll();
+    }
+
+    private void OnTitleKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            e.Handled = true;
+            _ = SaveTitleAsync();
+        }
+        else if (e.Key == Windows.System.VirtualKey.Escape)
+        {
+            e.Handled = true;
+            CancelTitleEdit();
+        }
+    }
 
     private async Task AllowPermissionOnceAsync()
     {

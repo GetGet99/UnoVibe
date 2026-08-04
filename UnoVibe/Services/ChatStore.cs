@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using UnoVibe.Models;
 using static QuickMarkup.Infra.QuickRefs;
@@ -15,6 +16,18 @@ public sealed class ChatStore : IDisposable
 
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
+
+    /// <summary>
+    /// Matches the server's placeholder title ("New session - &lt;ISO&gt;" / "Child session - &lt;ISO&gt;").
+    /// Such sessions get a generated name from the server's title agent on the first prompt; until then we
+    /// display "New Chat".
+    /// </summary>
+    private static readonly Regex DefaultTitleRegex = new(
+        @"^(New session - |Child session - )\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$");
+
+    private static bool IsDefaultTitle(string title) => DefaultTitleRegex.IsMatch(title);
+
+    private static string NormalizeTitle(string title) => IsDefaultTitle(title) ? "New Chat" : title;
 
     public Reference<int> HiddenMessagesProp { get; } = Ref(0);
     public int HiddenMessages { get => HiddenMessagesProp.Value; set => HiddenMessagesProp.Value = value; }
@@ -246,6 +259,26 @@ public sealed class ChatStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Renames the active session via PATCH /session/{id} and updates the local title.
+    /// </summary>
+    public async Task RenameSessionAsync(string title)
+    {
+        title = title.Trim();
+        if (_sessionId.Length == 0 || title.Length == 0) return;
+        try
+        {
+            await _client.UpdateSessionTitleAsync(_sessionId, title);
+            SessionTitle = title;
+            var session = Sessions.FirstOrDefault(s => s.Id == _sessionId);
+            if (session is not null) session.Title = title;
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
     // TODO(settings/queuing): client-side prompt queue, kept dormant for a future
     // "queue on client" mode. Currently unwired — SendAsync always sends immediately
     // and lets the server serialize prompts (see SendAsync comment). To enable a
@@ -312,7 +345,7 @@ public sealed class ChatStore : IDisposable
         _creatingSession = true;
         try
         {
-            _sessionId = await _client.CreateSessionAsync("New Chat", null, Mode, ProviderId, ModelId, Variant) ?? "";
+            _sessionId = await _client.CreateSessionAsync(null, null, Mode, ProviderId, ModelId, Variant) ?? "";
         }
         finally
         {
@@ -336,25 +369,103 @@ public sealed class ChatStore : IDisposable
         {
             var list = await _client.ListSessionsAsync(ct);
             Sessions.Clear();
-            foreach (var session in list) Sessions.Add(session);
+            foreach (var session in list)
+            {
+                session.Title = NormalizeTitle(session.Title);
+                Sessions.Add(session);
+            }
 
-            var groups = list
-                .GroupBy(s => s.Directory)
-                .Select(g => new DirectoryGroup
-                {
-                    Directory = g.Key.Length == 0 ? "(unknown)" : g.Key,
-                    Sessions = new ObservableCollection<SessionInfo>(g.OrderByDescending(s => s.Updated)),
-                })
-                .OrderByDescending(g => g.Sessions.Count > 0 ? g.Sessions[0].Updated : 0)
-                .ToList();
-
-            DirectoryGroups.Clear();
-            foreach (var group in groups) DirectoryGroups.Add(group);
+            RebuildDirectoryGroups();
         }
         catch (Exception ex)
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>.</summary>
+    private void RebuildDirectoryGroups()
+    {
+        DirectoryGroups.Clear();
+        foreach (var group in Sessions
+            .GroupBy(s => s.Directory)
+            .Select(g => new DirectoryGroup
+            {
+                Directory = g.Key.Length == 0 ? "(unknown)" : g.Key,
+                Sessions = new ObservableCollection<SessionInfo>(g.OrderByDescending(s => s.Updated)),
+            })
+            .OrderByDescending(g => g.Sessions.Count > 0 ? g.Sessions[0].Updated : 0))
+        {
+            DirectoryGroups.Add(group);
+        }
+    }
+
+    /// <summary>
+    /// Applies a <c>session.created</c>/<c>session.updated</c> event. Keeps the sidebar and the active
+    /// session header in sync when the server renames a session (e.g. the title agent replaces a
+    /// default title with a generated one).
+    /// </summary>
+    private void ApplySessionUpsert(JsonElement properties)
+    {
+        if (!properties.TryGetProperty("info", out var info)) return;
+        var session = SessionInfoFromJson(info);
+        if (session.Id.Length == 0) return;
+
+        var existing = Sessions.FirstOrDefault(s => s.Id == session.Id);
+        if (existing is not null)
+        {
+            existing.Title = NormalizeTitle(session.Title);
+            existing.Updated = session.Updated;
+            existing.Agent = session.Agent;
+            if (session.ModelId.Length > 0)
+            {
+                existing.ModelId = session.ModelId;
+                existing.ModelProviderId = session.ModelProviderId;
+                existing.ModelVariant = session.ModelVariant;
+            }
+            if (existing.Id == _sessionId) SessionTitle = existing.Title;
+        }
+        else
+        {
+            session.Title = NormalizeTitle(session.Title);
+            Sessions.Add(session);
+            RebuildDirectoryGroups();
+        }
+    }
+
+    private static SessionInfo SessionInfoFromJson(JsonElement item)
+    {
+        var info = new SessionInfo
+        {
+            Id = item.GetStringProperty("id"),
+            Title = item.GetStringProperty("title"),
+            Directory = item.GetStringProperty("directory"),
+            ProjectId = item.GetStringProperty("projectID"),
+            Path = item.GetStringProperty("path"),
+            Agent = item.GetStringProperty("agent"),
+        };
+        if (item.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.Object)
+        {
+            info.ModelId = model.GetStringProperty("id");
+            info.ModelProviderId = model.GetStringProperty("providerID");
+            info.ModelVariant = model.GetStringProperty("variant");
+        }
+        if (item.TryGetProperty("time", out var time))
+            info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
+        if (item.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number)
+            info.Cost = cost.GetDouble();
+        if (item.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
+        {
+            info.TokensInput = tokens.GetInt64Property("input");
+            info.TokensOutput = tokens.GetInt64Property("output");
+            info.TokensReasoning = tokens.GetInt64Property("reasoning");
+            if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
+            {
+                info.TokensCacheRead = cache.GetInt64Property("read");
+                info.TokensCacheWrite = cache.GetInt64Property("write");
+            }
+        }
+        return info;
     }
 
     public async Task RefreshSettingsAsync(CancellationToken ct = default)
@@ -444,7 +555,7 @@ public sealed class ChatStore : IDisposable
     {
         try
         {
-            var id = await _client.CreateSessionAsync("New Chat", directory, Mode, ProviderId, ModelId, Variant) ?? "";
+            var id = await _client.CreateSessionAsync(null, directory, Mode, ProviderId, ModelId, Variant) ?? "";
             if (id.Length == 0) return;
         _sessionId = id;
         SessionTitle = "New Chat";
@@ -468,7 +579,7 @@ public sealed class ChatStore : IDisposable
     {
         if (sessionId.Length == 0 || sessionId == _sessionId) return;
         _sessionId = sessionId;
-        SessionTitle = Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat";
+        SessionTitle = NormalizeTitle(Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat");
         ActiveSessionId = sessionId;
         Messages.Clear();
         HiddenMessages = 0;
@@ -611,7 +722,7 @@ public sealed class ChatStore : IDisposable
             // Sessions
             case "session.created":
             case "session.updated":
-                // TODO: properties { sessionID, info } (info = SessionInfo); refresh the sidebar session list.
+                ApplySessionUpsert(evt.Properties);
                 break;
             case "session.deleted":
                 // TODO: properties { sessionID, info }; remove the session from Sessions/DirectoryGroups.

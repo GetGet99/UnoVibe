@@ -49,15 +49,19 @@ public sealed class OpencodeClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>
+    /// Post /session — creates a session. When <paramref name="title"/> is null/empty the server
+    /// assigns a timestamped default title ("New session - &lt;ISO&gt;"), which its title agent
+    /// later replaces with a generated name on the first prompt. Passing an explicit title skips
+    /// that auto-generation.
+    /// </summary>
     public async Task<string?> CreateSessionAsync(string? title = null, string? directory = null,
         string? agent = null, string? providerId = null, string? modelId = null, string? variant = null,
         CancellationToken ct = default)
     {
         var url = string.IsNullOrEmpty(directory) ? "/session" : $"/session?directory={Uri.EscapeDataString(directory)}";
-        var body = new Dictionary<string, object?>
-        {
-            ["title"] = string.IsNullOrEmpty(title) ? "New Chat" : title,
-        };
+        var body = new Dictionary<string, object?>();
+        if (!string.IsNullOrEmpty(title)) body["title"] = title;
         if (!string.IsNullOrEmpty(agent)) body["agent"] = agent;
         if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
         {
@@ -88,6 +92,16 @@ public sealed class OpencodeClient
             body["model"] = new { providerID = providerId, modelID = modelId };
         if (!string.IsNullOrEmpty(variant) && variant != "Default") body["variant"] = variant;
         using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/prompt_async", body, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Patch /session/{id} — writes a new title for the session. This is how the TUI renames a
+    /// session (and is also what the server's background title generator updates under the hood).
+    /// </summary>
+    public async Task UpdateSessionTitleAsync(string sessionId, string title, CancellationToken ct = default)
+    {
+        using var response = await Http.PatchAsJsonAsync($"/session/{sessionId}", new { title }, Json, ct);
         response.EnsureSuccessStatusCode();
     }
 
