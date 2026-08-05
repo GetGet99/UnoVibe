@@ -235,6 +235,27 @@ public sealed class OpencodeClient
         return list;
     }
 
+    /// <summary>
+    /// Get /session/status — snapshot map of currently-busy sessions
+    /// (<c>{ sessionID: { type: "busy"|"retry", ... } }</c>). Idle sessions are absent,
+    /// so an entry whose <c>type</c> is missing/empty is treated as idle by callers.
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetSessionStatusAsync(CancellationToken ct = default)
+    {
+        var map = new Dictionary<string, string>();
+        using var response = await Http.GetAsync("/session/status", ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return map;
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var type = prop.Value.GetStringProperty("type");
+            if (type.Length > 0) map[prop.Name] = type;
+        }
+        return map;
+    }
+
     public async Task<JsonElement> GetMessagesAsync(string sessionId, CancellationToken ct = default)
     {
         using var response = await Http.GetAsync($"/session/{sessionId}/message", ct);

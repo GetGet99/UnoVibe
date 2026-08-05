@@ -1,4 +1,5 @@
 using UnoVibe.Services;
+using UnoVibe.Models;
 
 namespace UnoVibe.Controls;
 
@@ -7,6 +8,7 @@ namespace UnoVibe.Controls;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
+    using UnoVibe.Models;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject ChatStore Store;
@@ -47,11 +49,19 @@ namespace UnoVibe.Controls;
                             {
                                 <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
                                     <Grid ColumnDefinitions=<>
+                                        <ColumnDefinition Width=Auto />
                                         <ColumnDefinition />
                                         <ColumnDefinition Width=Auto />
                                     </>>
-                                        <TextBlock Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                        <TextBlock Grid.Column=1 Text=`s.TimeLabel` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
+                                        <Grid Width=14 Margin=`new Thickness(0, 0, 6, 0)` VerticalAlignment=Center>
+                                            <AppSymbolIcon Symbol=`AttentionSymbol(s)` FontSize=10 Foreground=`theme.SystemAttention` Visibility=`s.NeedsAttention ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <ProgressRing Width=12 Height=12 IsActive=`s.IsBusy` Visibility=`!s.NeedsAttention && s.IsBusy ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <AppSymbolIcon Symbol=`OutcomeSymbol(s)` FontSize=10 Foreground=`OutcomeBrush(s)` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsBusy && s.Outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <Border Width=6 Height=6 CornerRadius=`new CornerRadius(3)` Background=`theme.SystemAttention` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsBusy && s.Outcome.Length == 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <AppSymbolIcon Symbol=Message FontSize=10 Foreground=`theme.TertiaryText` Visibility=`!s.NeedsAttention && !s.IsBusy && !s.IsUnread ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                        </Grid>
+                                        <TextBlock Grid.Column=1 Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                                        <TextBlock Grid.Column=2 Text=`s.TimeLabel` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
                                     </Grid>
                                 </Button>
                             }
@@ -81,4 +91,23 @@ public partial class SessionSidebar : IQuickMarkupComponent
     }
 
     private void OnNewWindow(object sender, RoutedEventArgs e) => UnoVibe.App.CreateWindow();
+
+    /// <summary>Icon for an unread session's turn outcome: check = success, X = error, stop = interrupted.</summary>
+    private static Symbol OutcomeSymbol(SessionInfo s) => s.Outcome switch
+    {
+        "error" => Symbol.Cancel,
+        "interrupted" => Symbol.Stop,
+        _ => Symbol.Accept,
+    };
+
+    /// <summary>Color for <see cref="OutcomeSymbol"/>: green success, red error, caution interrupted.</summary>
+    private static Brush? OutcomeBrush(SessionInfo s) => s.Outcome switch
+    {
+        "error" => ThemeBrushes.Global.SystemCritical,
+        "interrupted" => ThemeBrushes.Global.SystemCaution,
+        _ => ThemeBrushes.Global.SystemSuccess,
+    };
+
+    /// <summary>Glyph for a pending question/approval: shield for a permission, question mark for a question.</summary>
+    private static Symbol AttentionSymbol(SessionInfo s) => s.AttentionKind == "permission" ? Symbol.Permissions : Symbol.Help;
 }

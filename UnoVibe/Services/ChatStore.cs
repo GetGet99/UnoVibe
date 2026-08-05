@@ -75,6 +75,17 @@ public sealed partial class ChatStore : IDisposable
     private OpencodeClient _client = null!;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
     private readonly Dictionary<string, MessageItem> _messagesById = new();
+    // Per-session busy state keyed by session id; survives sidebar list rebuilds (RefreshSessionsAsync).
+    private readonly Dictionary<string, string> _sessionStatus = new();
+    // Per-session "completed but not viewed yet" state keyed by session id.
+    private readonly Dictionary<string, bool> _unread = new();
+    // Per-session last-turn outcome (""/success/error/interrupted), derived from the final
+    // assistant message's info.error; drives the sidebar icon for unread sessions.
+    private readonly Dictionary<string, string> _sessionOutcome = new();
+    // Per-session counts of pending questions (question.asked not yet replied/rejected).
+    private readonly Dictionary<string, int> _pendingQuestions = new();
+    // Per-session counts of pending permission approvals (permission.asked not yet replied).
+    private readonly Dictionary<string, int> _pendingPermissions = new();
     private readonly Queue<string> _pendingPrompts = new();
     private readonly List<PermissionRequestItem> _permissions = new();
     private CancellationTokenSource? _cts;
@@ -114,6 +125,11 @@ public sealed partial class ChatStore : IDisposable
         _messagesById.Clear();
         Sessions.Clear();
         DirectoryGroups.Clear();
+        _sessionStatus.Clear();
+        _unread.Clear();
+        _sessionOutcome.Clear();
+        _pendingQuestions.Clear();
+        _pendingPermissions.Clear();
         ConnectionStatus = "Connecting...";
         ClearPendingPrompts();
         DismissToast();
@@ -180,6 +196,9 @@ public sealed partial class ChatStore : IDisposable
         }
 
         await RefreshSessionsAsync(ct);
+        await RefreshSessionStatusAsync(ct);
+        await SyncPendingPermissionsAsync();
+        await SyncPendingQuestionsAsync();
         await RefreshSettingsAsync(ct);
     }
 
@@ -337,6 +356,7 @@ public sealed partial class ChatStore : IDisposable
             Sessions.Clear();
             foreach (var session in list)
             {
+                ApplySessionFlags(session);
                 Sessions.Add(session);
             }
 
@@ -346,6 +366,46 @@ public sealed partial class ChatStore : IDisposable
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Polls GET /session/status for the currently-busy sessions. The server only emits
+    /// session.status SSE events on transitions, so a session already mid-turn before we
+    /// connected would otherwise never show as busy.
+    /// </summary>
+    public async Task RefreshSessionStatusAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            _sessionStatus.Clear();
+            foreach (var kv in await _client.GetSessionStatusAsync(ct)) _sessionStatus[kv.Key] = kv.Value;
+            foreach (var s in Sessions) ApplySessionFlags(s);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>Copies the reactive busy/unread/outcome/attention flags from the store's per-session maps onto a session item.</summary>
+    private void ApplySessionFlags(SessionInfo session)
+    {
+        session.IsBusy = _sessionStatus.GetValueOrDefault(session.Id) is not (null or "idle");
+        session.IsUnread = _unread.GetValueOrDefault(session.Id);
+        session.Outcome = _sessionOutcome.GetValueOrDefault(session.Id) ?? "";
+        session.NeedsAttention = SessionNeedsAttention(session.Id);
+        session.AttentionKind = _pendingPermissions.GetValueOrDefault(session.Id) > 0 ? "permission"
+            : _pendingQuestions.GetValueOrDefault(session.Id) > 0 ? "question"
+            : "";
+    }
+
+    private bool SessionNeedsAttention(string sessionId) =>
+        _pendingQuestions.GetValueOrDefault(sessionId) > 0 || _pendingPermissions.GetValueOrDefault(sessionId) > 0;
+
+    /// <summary>Re-applies the reactive per-session flags to every sidebar item (after counters change).</summary>
+    private void RefreshSessionFlags()
+    {
+        foreach (var s in Sessions) ApplySessionFlags(s);
     }
 
     /// <summary>Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>.</summary>
@@ -398,6 +458,7 @@ public sealed partial class ChatStore : IDisposable
         }
         else
         {
+            ApplySessionFlags(session);
             Sessions.Add(session);
             RebuildDirectoryGroups();
         }
@@ -417,6 +478,11 @@ public sealed partial class ChatStore : IDisposable
 
         Sessions.Remove(removed);
         RebuildDirectoryGroups();
+        _sessionStatus.Remove(id);
+        _unread.Remove(id);
+        _sessionOutcome.Remove(id);
+        _pendingQuestions.Remove(id);
+        _pendingPermissions.Remove(id);
 
         if (id != _sessionId) return;
 
@@ -591,6 +657,11 @@ public sealed partial class ChatStore : IDisposable
         StatusMessage = "";
         ClearPendingPrompts();
 
+        // Viewing the session now; clear any unread marker for it.
+        _unread[sessionId] = false;
+        var sessionInfo = Sessions.FirstOrDefault(s => s.Id == sessionId);
+        if (sessionInfo is not null) sessionInfo.IsUnread = false;
+
         var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
         if (known is not null) ApplySessionSettings(known);
 
@@ -677,11 +748,14 @@ public sealed partial class ChatStore : IDisposable
         // Message/status events are scoped to the active session. Session-level CRUD events
         // (created/updated/deleted) must NOT be filtered: they reflect the whole sidebar even
         // when they concern a session that isn't currently active (e.g. created/renamed/deleted
-        // from another client).
-        if (evt.Type is "message.updated" or "message.part.updated" or "message.part.delta"
-            or "message.part.removed" or "message.removed" or "session.status" or "session.idle"
-            or "session.error" or "session.diff" or "session.compacted" or "question.asked"
-            or "question.replied" or "question.rejected")
+        // from another client). session.status, message.updated, and the question events are NOT
+        // filtered either: they carry the busy/unread/outcome/attention data that drives the
+        // sidebar indicators for every session, not just the active one (message.updated for a
+        // background session only feeds the outcome tracker and never touches the active message
+        // list, and question events only feed the pending-attention tracker).
+        if (evt.Type is "message.part.updated" or "message.part.delta"
+            or "message.part.removed" or "message.removed" or "session.idle"
+            or "session.error" or "session.diff" or "session.compacted")
         {
             var sessionId = evt.Properties.GetStringProperty("sessionID");
             if (sessionId.Length > 0 && sessionId != _sessionId) return;
@@ -748,10 +822,8 @@ public sealed partial class ChatStore : IDisposable
 
             // Questions
             case "question.replied":
-                // TODO: properties { sessionID, requestID, answers }; answered elsewhere — mark the form answered.
-                break;
             case "question.rejected":
-                // TODO: properties { sessionID, requestID }; question rejected — clear the pending form.
+                ApplyQuestionReplied(evt.Properties);
                 break;
 
             // Files / project / VCS
@@ -860,6 +932,18 @@ public sealed partial class ChatStore : IDisposable
         var id = info.GetStringProperty("id");
         if (id.Length == 0) return;
 
+        var sessionId = properties.GetStringProperty("sessionID");
+        if (sessionId.Length > 0 && sessionId != _sessionId)
+        {
+            // Background session: record the turn outcome for the sidebar indicator without
+            // touching the active session's message list. message.updated fires with the final
+            // info (error/finish/cost/tokens) once the assistant message completes, so the last
+            // update we see for a turn carries its definitive outcome.
+            if (info.GetStringProperty("role") == "assistant")
+                _sessionOutcome[sessionId] = ClassifyMessageOutcome(info);
+            return;
+        }
+
         if (_messagesById.TryGetValue(id, out var message))
         {
             var role = info.GetStringProperty("role");
@@ -905,6 +989,18 @@ public sealed partial class ChatStore : IDisposable
     {
         if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object) return false;
         return error.GetStringProperty("name") == "MessageAbortedError";
+    }
+
+    /// <summary>
+    /// Classifies how an assistant message's turn ended: "success" (no error), "interrupted"
+    /// (<c>MessageAbortedError</c> — user stopped it), or "error" (any other error). Mirrors
+    /// the opencode web client's turn-outcome logic (rows.ts interrupted/error detection).
+    /// </summary>
+    private static string ClassifyMessageOutcome(JsonElement info)
+    {
+        if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object)
+            return "success";
+        return error.GetStringProperty("name") == "MessageAbortedError" ? "interrupted" : "error";
     }
 
     /// <summary>
@@ -1004,6 +1100,31 @@ public sealed partial class ChatStore : IDisposable
     {
         if (!properties.TryGetProperty("status", out var status)) return;
         var type = status.GetStringProperty("type");
+
+        // Track busy/unread for every session the stream reports on, so the sidebar
+        // indicators stay live even for background sessions.
+        var sessionId = properties.GetStringProperty("sessionID");
+        if (sessionId.Length > 0)
+        {
+            _sessionStatus[sessionId] = type;
+            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (item is not null)
+            {
+                item.IsBusy = type != "idle";
+                // A turn finished in a session we aren't looking at → flag it unread, with the
+                // outcome already tracked from the turn's final message.updated.
+                if (type == "idle" && sessionId != _sessionId)
+                {
+                    _unread[sessionId] = true;
+                    item.IsUnread = true;
+                    item.Outcome = _sessionOutcome.GetValueOrDefault(sessionId) ?? "";
+                }
+            }
+        }
+
+        // The active-session banner (IsBusy/StatusMessage) only applies to the current session.
+        if (sessionId.Length > 0 && sessionId != _sessionId) return;
+
         IsBusy = type != "idle";
 
         if (type == "retry")
@@ -1027,6 +1148,18 @@ public sealed partial class ChatStore : IDisposable
     {
         var requestId = properties.GetStringProperty("id");
         if (requestId.Length == 0) return;
+
+        // Track the pending question per session for the sidebar attention indicator. The active
+        // session's question is also attached inline below; background sessions just get counted.
+        var sessionId = properties.GetStringProperty("sessionID");
+        if (sessionId.Length > 0)
+        {
+            _pendingQuestions[sessionId] = _pendingQuestions.GetValueOrDefault(sessionId) + 1;
+            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (item is not null) ApplySessionFlags(item);
+        }
+        if (sessionId.Length > 0 && sessionId != _sessionId) return;
+
         if (!properties.TryGetProperty("tool", out var tool)) return;
 
         var messageId = tool.GetStringProperty("messageID");
@@ -1038,6 +1171,17 @@ public sealed partial class ChatStore : IDisposable
         if (part is null) return;
 
         AttachQuestion(part, requestId, properties);
+    }
+
+    /// <summary>Clears a session's pending-question count when a question is answered or dismissed.</summary>
+    private void ApplyQuestionReplied(JsonElement properties)
+    {
+        var sessionId = properties.GetStringProperty("sessionID");
+        if (sessionId.Length == 0) return;
+        if (_pendingQuestions.TryGetValue(sessionId, out var count) && count > 0)
+            _pendingQuestions[sessionId] = count - 1;
+        var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+        if (item is not null) ApplySessionFlags(item);
     }
 
     private static void AttachQuestion(PartItem part, string requestId, JsonElement properties)
@@ -1057,6 +1201,17 @@ public sealed partial class ChatStore : IDisposable
     {
         var requestId = properties.GetStringProperty("id");
         if (requestId.Length == 0) return;
+
+        // Track the pending approval per session for the sidebar attention indicator, alongside
+        // the active-view queue below.
+        var sessionId = properties.GetStringProperty("sessionID");
+        if (sessionId.Length > 0)
+        {
+            _pendingPermissions[sessionId] = _pendingPermissions.GetValueOrDefault(sessionId) + 1;
+            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (item is not null) ApplySessionFlags(item);
+        }
+
         AddPermissionRequest(PermissionRequestItem.FromJson(properties));
     }
 
@@ -1064,6 +1219,15 @@ public sealed partial class ChatStore : IDisposable
     {
         var requestId = properties.GetStringProperty("requestID");
         if (requestId.Length > 0) RemovePermissionRequest(requestId);
+
+        var sessionId = properties.GetStringProperty("sessionID");
+        if (sessionId.Length > 0)
+        {
+            if (_pendingPermissions.TryGetValue(sessionId, out var count) && count > 0)
+                _pendingPermissions[sessionId] = count - 1;
+            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (item is not null) ApplySessionFlags(item);
+        }
     }
 
     public void AddPermissionRequest(PermissionRequestItem request)
@@ -1098,10 +1262,10 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
-    /// Re-attaches pending question requestIDs to their tool parts after a session
-    /// was reloaded from the server (the requestID is only present in the live
-    /// question.asked event and the server's in-memory pending map, not in the
-    /// persisted message parts).
+    /// Re-syncs pending questions from the server: rebuilds the per-session pending-question
+    /// counts (drives the sidebar attention indicator) and re-attaches requestIDs to the active
+    /// session's tool parts after a reload (requestIDs only exist in the live question.asked
+    /// event and the server's in-memory pending map, not in the persisted message parts).
     /// </summary>
     public async Task SyncPendingQuestionsAsync()
     {
@@ -1110,10 +1274,14 @@ public sealed partial class ChatStore : IDisposable
             var root = await _client.GetPendingQuestionsAsync();
             if (root.ValueKind != JsonValueKind.Array) return;
 
+            _pendingQuestions.Clear();
             foreach (var question in root.EnumerateArray())
             {
                 var sessionId = question.GetStringProperty("sessionID");
-                if (sessionId.Length > 0 && sessionId != _sessionId) continue;
+                if (sessionId.Length == 0) continue;
+                _pendingQuestions[sessionId] = _pendingQuestions.GetValueOrDefault(sessionId) + 1;
+
+                if (sessionId != _sessionId) continue;
                 if (!question.TryGetProperty("tool", out var tool)) continue;
 
                 var messageId = tool.GetStringProperty("messageID");
@@ -1126,6 +1294,7 @@ public sealed partial class ChatStore : IDisposable
 
                 AttachQuestion(part, question.GetStringProperty("id"), question);
             }
+            RefreshSessionFlags();
         }
         catch (Exception ex)
         {
@@ -1134,8 +1303,10 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
-    /// Re-attaches pending permission requests after a session reload (requestIDs only
-    /// exist in the live permission.asked event and the server's in-memory pending map).
+    /// Re-syncs pending permission requests from the server: rebuilds the per-session pending
+    /// counts (drives the sidebar attention indicator) and re-queues requests for the active
+    /// view after a reload. When no session is active yet (e.g. right after connect), only the
+    /// counts are seeded — the active-view approval dialog is not shown until a session is open.
     /// </summary>
     public async Task SyncPendingPermissionsAsync()
     {
@@ -1144,12 +1315,18 @@ public sealed partial class ChatStore : IDisposable
             var root = await _client.GetPendingPermissionsAsync();
             if (root.ValueKind != JsonValueKind.Array) return;
 
+            _pendingPermissions.Clear();
             foreach (var request in root.EnumerateArray())
             {
                 var id = request.GetStringProperty("id");
                 if (id.Length == 0) continue;
+                var sessionId = request.GetStringProperty("sessionID");
+                if (sessionId.Length > 0)
+                    _pendingPermissions[sessionId] = _pendingPermissions.GetValueOrDefault(sessionId) + 1;
+                if (_sessionId.Length == 0) continue;
                 AddPermissionRequest(PermissionRequestItem.FromJson(request));
             }
+            RefreshSessionFlags();
         }
         catch (Exception ex)
         {

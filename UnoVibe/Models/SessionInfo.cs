@@ -22,6 +22,19 @@ namespace UnoVibe.Models;
     public long TokensCacheWrite;
     public long TokensTotal => `TokensInput + TokensOutput + TokensReasoning + TokensCacheRead + TokensCacheWrite`;
     public string TimeLabel => `FormatTimeLabel(Updated)`;
+    // Server-driven: a turn is in progress (session.status busy/retry). Drives the sidebar spinner.
+    public bool IsBusy;
+    // Client-side: a turn finished in a session we haven't viewed since. Drives the sidebar unread indicator.
+    public bool IsUnread;
+    // Client-side: how the last finished turn ended, one of "" (unknown), "success", "error", "interrupted".
+    // Derived from the last assistant message's info.error/finish; selects the sidebar icon + color.
+    public string Outcome = "";
+    // Client-side: a question is asked or an approval is pending for this session and the user
+    // hasn't answered it yet. Overrides the busy spinner in the sidebar (mirrors the web client's
+    // needsAttention) and shows a distinct glyph.
+    public bool NeedsAttention;
+    // Which kind of attention is pending: "permission" (approval needed), "question", or "" when none.
+    public string AttentionKind = "";
     """)]
 public sealed partial class SessionInfo
 {
