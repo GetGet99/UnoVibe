@@ -29,7 +29,6 @@ namespace UnoVibe.Controls;
                         <TextBlock Text="New session" VerticalAlignment=Center />
                     </StackPanel>
                 </Button>
-                <Button Content="New window" Click+=`(sender, e) => OnNewWindow(sender, e)` HorizontalAlignment=Stretch />
             </StackPanel>
             <ScrollViewer Grid.Row=1>
                 <StackPanel Padding=`new Thickness(12, 0, 12, 12)`>
@@ -70,7 +69,15 @@ namespace UnoVibe.Controls;
                 </StackPanel>
             </ScrollViewer>
             <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
-                <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                <Grid ColumnDefinitions=<>
+                    <ColumnDefinition />
+                    <ColumnDefinition Width=Auto />
+                </>>
+                    <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                    <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" Click+=`(sender, e) => OnNewWindow(sender, e)`>
+                        <AppSymbolIcon Symbol=NewWindow FontSize=11 />
+                    </Button>
+                </Grid>
             </Border>
         </Grid>
     </root>
