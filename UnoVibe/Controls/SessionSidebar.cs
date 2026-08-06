@@ -89,24 +89,26 @@ namespace UnoVibe.Controls;
                     </Grid>
                     if (`McpExpanded`)
                     {
-                        <StackPanel Spacing=6>
-                            foreach (var m in `Store.McpServers`)
-                            {
-                                <Grid ColumnDefinitions=<>
-                                    <ColumnDefinition Width=Auto />
-                                    <ColumnDefinition />
-                                    <ColumnDefinition Width=Auto />
-                                </> ColumnSpacing=8>
-                                    <Border Width=10 Height=10 CornerRadius=`new CornerRadius(5)` Background=`McpDot(m)` VerticalAlignment=Center ToolTipService.ToolTip=`m.Error` />
-                                    <StackPanel Grid.Column=1 VerticalAlignment=Center>
-                                        <TextBlock Text=`m.Name` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` />
-                                        <TextBlock Text=`McpStatusDetail(m)` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
-                                    </StackPanel>
-                                    <Button Grid.Column=2 Padding=`new Thickness(8, 4, 8, 4)` FontSize=11 Content=`m.ToggleLabel` IsEnabled=`!m.Connecting` CommandParameter=`m.Name` Click+=`(sender, e) => OnToggleMcp(sender, e)` />
-                                </Grid>
-                            }
-                            <TextBlock Text=`$"Directory: {Store.McpDirectory}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
-                        </StackPanel>
+                        <ScrollViewer MaxHeight=200 VerticalScrollBarVisibility=Auto>
+                            <StackPanel Spacing=6>
+                                foreach (var m in `Store.McpServers`)
+                                {
+                                    <Grid ColumnDefinitions=<>
+                                        <ColumnDefinition Width=Auto />
+                                        <ColumnDefinition />
+                                        <ColumnDefinition Width=Auto />
+                                    </> ColumnSpacing=8>
+                                        <Border Width=10 Height=10 CornerRadius=`new CornerRadius(5)` Background=`McpDot(m)` VerticalAlignment=Center ToolTipService.ToolTip=`m.Error` />
+                                        <StackPanel Grid.Column=1 VerticalAlignment=Center>
+                                            <TextBlock Text=`m.Name` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                            <TextBlock Text=`McpStatusDetail(m)` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                        </StackPanel>
+                                        <Button Grid.Column=2 Padding=`new Thickness(8, 4, 8, 4)` FontSize=11 Content=`m.ToggleLabel` IsEnabled=`!m.Connecting` CommandParameter=`m.Name` Click+=`(sender, e) => OnToggleMcp(sender, e)` />
+                                    </Grid>
+                                }
+                            </StackPanel>
+                        </ScrollViewer>
+                        <TextBlock Text=`$"Directory: {Store.McpDirectory}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
                     }
                 </StackPanel>
             </Border>
