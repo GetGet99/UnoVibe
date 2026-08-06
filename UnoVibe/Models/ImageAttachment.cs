@@ -52,4 +52,16 @@ public sealed class ImageAttachment
             _ => "image/png",
         };
     }
+
+    /// <summary>Builds an attachment from raw image bytes (e.g. pasted from the clipboard).</summary>
+    public static async Task<ImageAttachment> CreateFromBytesAsync(byte[] bytes, string mime, string fileName)
+    {
+        return new ImageAttachment
+        {
+            FileName = fileName,
+            Mime = mime,
+            Bytes = bytes,
+            Preview = await DecodeAsync(bytes),
+        };
+    }
 }

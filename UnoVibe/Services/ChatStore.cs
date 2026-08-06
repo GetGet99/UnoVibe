@@ -1,6 +1,9 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Streams;
 using UnoVibe.Models;
 
 namespace UnoVibe.Services;
@@ -54,6 +57,12 @@ public sealed partial class ChatStore : IDisposable
 
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
+
+    /// <summary>Image file extensions accepted by the picker and the clipboard uri-list paste path.</summary>
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
+
+    /// <summary>Image MIME types tried when pasting raw image bytes from the clipboard.</summary>
+    private static readonly string[] ImageMimeTypes = { "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp" };
 
     public ObservableCollection<string> ModeOptions { get; } = new();
     public ObservableCollection<ModelOption> ModelOptions { get; } = new();
@@ -259,7 +268,7 @@ public sealed partial class ChatStore : IDisposable
         {
             SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary,
         };
-        foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" })
+        foreach (var ext in ImageExtensions)
             picker.FileTypeFilter.Add(ext);
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
@@ -273,20 +282,95 @@ public sealed partial class ChatStore : IDisposable
         {
             var bytes = await File.ReadAllBytesAsync(path);
             if (bytes.Length == 0) return;
-            var attachment = new ImageAttachment
+            StageAttachment(new ImageAttachment
             {
                 FileName = Path.GetFileName(path),
                 Mime = ImageAttachment.MimeFromPath(path),
                 Bytes = bytes,
                 Preview = await ImageAttachment.DecodeAsync(bytes),
-            };
-            PendingImages.Add(attachment);
-            PendingImageCount = PendingImages.Count;
+            });
         }
         catch (Exception ex)
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Pastes an image from the system clipboard (Ctrl+V). Returns true when at least one
+    /// image was staged; false when the clipboard holds no usable image, so the caller can
+    /// let the default text paste proceed.
+    /// </summary>
+    /// <remarks>
+    /// Uses Uno's built-in <see cref="Clipboard"/> which on Skia/X11 routes to the
+    /// <c>X11ClipboardExtension</c> (supports raw <c>image/png</c>/<c>image/jpeg</c> atoms and
+    /// <c>text/uri-list</c>). Only the read path is needed here; the write path workaround from
+    /// PocketPic is not required for pasting.
+    /// </remarks>
+    public async Task<bool> PasteImageFromClipboardAsync()
+    {
+        try
+        {
+            var content = Clipboard.GetContent();
+            if (content is null) return false;
+
+            foreach (var mime in ImageMimeTypes)
+            {
+                if (!content.Contains(mime)) continue;
+                var item = await content.GetDataAsync(mime);
+                byte[]? bytes = item switch
+                {
+                    byte[] raw => raw,
+                    IRandomAccessStream stream => await ReadAllBytes(stream),
+                    _ => null,
+                };
+                if (bytes is { Length: > 0 })
+                {
+                    var ext = mime[(mime.LastIndexOf('/') + 1)..];
+                    StageAttachment(await ImageAttachment.CreateFromBytesAsync(bytes, mime, $"Pasted image.{ext}"));
+                    return true;
+                }
+            }
+
+            if (content.Contains("text/uri-list"))
+            {
+                var items = await content.GetStorageItemsAsync();
+                var staged = false;
+                foreach (var item in items)
+                {
+                    if (item is not StorageFile file) continue;
+                    var ext = Path.GetExtension(file.Path).ToLowerInvariant();
+                    if (ImageExtensions.Contains(ext))
+                    {
+                        await AddPendingImageAsync(file.Path);
+                        staged = true;
+                    }
+                }
+                if (staged) return true;
+            }
+        }
+        catch
+        {
+            // Foreign clipboard formats or an unavailable selection should not crash paste.
+        }
+        return false;
+    }
+
+    private static async Task<byte[]> ReadAllBytes(IRandomAccessStream stream)
+    {
+        stream.Seek(0);
+        using var reader = new DataReader(stream);
+        var size = (uint)stream.Size;
+        await reader.LoadAsync(size);
+        var bytes = new byte[size];
+        reader.ReadBytes(bytes);
+        return bytes;
+    }
+
+    private void StageAttachment(ImageAttachment attachment)
+    {
+        PendingImages.Add(attachment);
+        PendingImageCount = PendingImages.Count;
     }
 
     /// <summary>Removes a staged image attachment.</summary>

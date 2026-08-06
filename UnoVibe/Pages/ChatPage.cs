@@ -288,6 +288,19 @@ public partial class ChatPage : Page
 
     private async void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == Windows.System.VirtualKey.V &&
+            InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) &&
+            !InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+        {
+            if (await Store.PasteImageFromClipboardAsync())
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key != Windows.System.VirtualKey.Enter) return;
         if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
             return;
