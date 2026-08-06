@@ -41,6 +41,11 @@ namespace UnoVibe.Services;
     public string Variant = "Default";
     public bool HasVariants;
     public ToastItem? CurrentToast;
+    // MCP servers for the active session's directory, in sidebar display order.
+    public string McpDirectory = "";
+    // Compact "N active, M inactive, K error" summary for the collapsed MCP sidebar header.
+    // inactive = explicitly disabled; error = failed/needs_auth/needs_client_registration (mutually exclusive).
+    public string McpSummary = "";
     """)]
 public sealed partial class ChatStore : IDisposable
 {
@@ -66,6 +71,15 @@ public sealed partial class ChatStore : IDisposable
     }
     public ObservableCollection<SessionInfo> Sessions { get; } = new();
     public ObservableCollection<DirectoryGroup> DirectoryGroups { get; } = new();
+
+    public ObservableCollection<McpServerItem> McpServers { get; } = new();
+    // Directory the McpServers collection currently reflects ("" = server default).
+    private string _mcpDirectory = "";
+    // Guards concurrent connect/disconnect requests (one toggle at a time).
+    private bool _mcpBusy;
+    // Background poll is only active while the sidebar MCP section is expanded.
+    private volatile bool _mcpPolling;
+    private const int McpPollIntervalMs = 5000;
 
     public string CurrentSessionId => _sessionId;
 
@@ -130,6 +144,12 @@ public sealed partial class ChatStore : IDisposable
         _sessionOutcome.Clear();
         _pendingQuestions.Clear();
         _pendingPermissions.Clear();
+        McpServers.Clear();
+        _mcpDirectory = "";
+        McpDirectory = "";
+        McpSummary = "";
+        _mcpBusy = false;
+        _mcpPolling = false;
         ConnectionStatus = "Connecting...";
         ClearPendingPrompts();
         DismissToast();
@@ -172,6 +192,7 @@ public sealed partial class ChatStore : IDisposable
 
         _ = Task.Run(() => EventStreamReader.ReadAsync(_client.Http, $"{_client.BaseUrl}/event", _events.Writer, ct));
         _ = Task.Run(() => PumpAsync(ct));
+        _ = Task.Run(() => McpPollLoopAsync(ct));
 
         try
         {
@@ -200,6 +221,7 @@ public sealed partial class ChatStore : IDisposable
         await SyncPendingPermissionsAsync();
         await SyncPendingQuestionsAsync();
         await RefreshSettingsAsync(ct);
+        await RefreshMcpStatusAsync(ct);
     }
 
     public async Task SendAsync(string text)
@@ -345,6 +367,7 @@ public sealed partial class ChatStore : IDisposable
         SessionTitle = "New Chat";
         ActiveSessionId = _sessionId;
         await RefreshSessionsAsync();
+        await RefreshMcpStatusAsync();
         return true;
     }
 
@@ -385,6 +408,115 @@ public sealed partial class ChatStore : IDisposable
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Refreshes the MCP server list from GET /mcp for the active session's directory.
+    /// MCP status is per workspace directory (instance), not per session, so the sidebar
+    /// reflects whichever session is currently open. When there is no session yet, falls
+    /// back to the pending/current directory.
+    /// </summary>
+    public async Task RefreshMcpStatusAsync(CancellationToken ct = default)
+    {
+        var directory = ActiveDirectory();
+        try
+        {
+            var status = await _client.GetMcpStatusAsync(directory, ct);
+            McpServers.Clear();
+            foreach (var (name, info) in status.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                McpServers.Add(new McpServerItem
+                {
+                    Name = name,
+                    Status = info.Status,
+                    Error = info.Error,
+                });
+            }
+            _mcpDirectory = directory;
+            McpDirectory = directory.Length > 0 ? directory : "(default)";
+            var connected = status.Values.Count(s => s.Status == "connected");
+            var inactive = status.Values.Count(s => s.Status == "disabled");
+            var bad = status.Values.Count(s => s.Status is "failed" or "needs_auth" or "needs_client_registration");
+            var summaryParts = new List<string>();
+            if (connected > 0) summaryParts.Add($"{connected} active");
+            if (inactive > 0) summaryParts.Add($"{inactive} inactive");
+            if (bad > 0) summaryParts.Add($"{bad} error");
+            McpSummary = summaryParts.Count > 0 ? string.Join(", ", summaryParts) : "none";
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Connects or disconnects an MCP server based on its current status, then refreshes
+    /// the list. Mirrors the TUI: connected → disconnect, anything else → connect.
+    /// </summary>
+    public async Task ToggleMcpAsync(string name)
+    {
+        if (_mcpBusy) return;
+        var server = McpServers.FirstOrDefault(s => s.Name == name);
+        if (server is null) return;
+        _mcpBusy = true;
+        server.Connecting = true;
+        var directory = _mcpDirectory;
+        try
+        {
+            if (server.IsConnected) await _client.McpDisconnectAsync(name, directory);
+            else await _client.McpConnectAsync(name, directory);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            server.Connecting = false;
+            _mcpBusy = false;
+        }
+        await RefreshMcpStatusAsync();
+    }
+
+    /// <summary>
+    /// Turns the background MCP status poll on or off. The sidebar keeps it on only while
+    /// the MCP section is expanded; the expand action also polls once immediately.
+    /// </summary>
+    public void SetMcpPolling(bool active) => _mcpPolling = active;
+
+    /// <summary>
+    /// Background poll: re-fetches GET /mcp every few seconds while enabled. The server
+    /// pushes no MCP status event (only mcp.tools.changed, without status), so expanded
+    /// sections need periodic polling to stay live. Runs on a background thread and hops
+    /// to the UI dispatcher for the actual refresh, since McpServers/McpSummary are
+    /// reactive references.
+    /// </summary>
+    private async Task McpPollLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(McpPollIntervalMs, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            if (!_mcpPolling || _dispatcher is null) continue;
+            _dispatcher.TryEnqueue(() => _ = RefreshMcpStatusAsync(ct));
+        }
+    }
+
+    /// <summary>The directory used for instance-scoped MCP queries: the active session's, else the pending/current one.</summary>
+    private string ActiveDirectory()
+    {
+        if (_sessionId.Length > 0)
+        {
+            var session = Sessions.FirstOrDefault(s => s.Id == _sessionId);
+            if (session is not null && session.Directory.Length > 0) return session.Directory;
+        }
+        return _pendingDirectory ?? "";
     }
 
     /// <summary>Copies the reactive busy/unread/outcome/attention flags from the store's per-session maps onto a session item.</summary>
@@ -641,6 +773,7 @@ public sealed partial class ChatStore : IDisposable
         _permissions.Clear();
         ActivePermission = null;
         DismissToast();
+        _ = RefreshMcpStatusAsync();
         return Task.CompletedTask;
     }
 
@@ -679,6 +812,7 @@ public sealed partial class ChatStore : IDisposable
             UpdateSessionStats();
             await SyncPendingQuestionsAsync();
             await SyncPendingPermissionsAsync();
+            await RefreshMcpStatusAsync();
         }
         catch (Exception ex)
         {
@@ -848,7 +982,9 @@ public sealed partial class ChatStore : IDisposable
                 // TODO: a custom command was executed server-side.
                 break;
             case "mcp.tools.changed":
-                // TODO: an MCP server's tool set changed.
+                // An MCP server's tool set changed (or its connection closed). The server
+                // doesn't push a status event for connect/disconnect, so re-poll GET /mcp.
+                _ = RefreshMcpStatusAsync();
                 break;
             case "mcp.browser.open.failed":
                 // TODO: an MCP browser-open attempt failed.

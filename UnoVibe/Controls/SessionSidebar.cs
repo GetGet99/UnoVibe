@@ -12,6 +12,7 @@ namespace UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject ChatStore Store;
+    bool McpExpanded = false;
     <setup>
         var theme = ThemeBrushes.Global;
         var transparent = new SolidColorBrush(Colors.Transparent);
@@ -20,6 +21,7 @@ namespace UnoVibe.Controls;
         <Grid Background=`theme.CardBackground` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 0, 1, 0)` RowDefinitions=<>
             <RowDefinition Height=Auto />
             <RowDefinition />
+            <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
         </>>
             <StackPanel Padding=`new Thickness(12, 12, 12, 8)` Spacing=8>
@@ -68,7 +70,47 @@ namespace UnoVibe.Controls;
                     }
                 </StackPanel>
             </ScrollViewer>
-            <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
+            <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 8)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
+                <StackPanel Spacing=6>
+                    <Grid ColumnDefinitions=<>
+                        <ColumnDefinition />
+                        <ColumnDefinition Width=Auto />
+                    </> ColumnSpacing=8>
+                        <Button Padding=`new Thickness(4, 2, 4, 2)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 @Click+=`OnToggleMcpExpanded()` ToolTipService.ToolTip="MCP servers">
+                            <StackPanel Orientation=Horizontal Spacing=6>
+                                <TextBlock Text=`McpExpanded ? "▼" : "▶"` FontSize=9 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                                <TextBlock Text="MCP" FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                                <TextBlock Text=`Store.McpSummary` FontSize=10 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column=1 Padding=`new Thickness(6, 3, 6, 3)` @Click+=`_ = Store.RefreshMcpStatusAsync()` ToolTipService.ToolTip="Refresh MCP status" Visibility=`McpExpanded ? Visibility.Visible : Visibility.Collapsed`>
+                            <AppSymbolIcon Symbol=Refresh FontSize=11 />
+                        </Button>
+                    </Grid>
+                    if (`McpExpanded`)
+                    {
+                        <StackPanel Spacing=6>
+                            foreach (var m in `Store.McpServers`)
+                            {
+                                <Grid ColumnDefinitions=<>
+                                    <ColumnDefinition Width=Auto />
+                                    <ColumnDefinition />
+                                    <ColumnDefinition Width=Auto />
+                                </> ColumnSpacing=8>
+                                    <Border Width=10 Height=10 CornerRadius=`new CornerRadius(5)` Background=`McpDot(m)` VerticalAlignment=Center ToolTipService.ToolTip=`m.Error` />
+                                    <StackPanel Grid.Column=1 VerticalAlignment=Center>
+                                        <TextBlock Text=`m.Name` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                        <TextBlock Text=`McpStatusDetail(m)` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                    </StackPanel>
+                                    <Button Grid.Column=2 Padding=`new Thickness(8, 4, 8, 4)` FontSize=11 Content=`m.ToggleLabel` IsEnabled=`!m.Connecting` CommandParameter=`m.Name` Click+=`(sender, e) => OnToggleMcp(sender, e)` />
+                                </Grid>
+                            }
+                            <TextBlock Text=`$"Directory: {Store.McpDirectory}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                        </StackPanel>
+                    }
+                </StackPanel>
+            </Border>
+            <Border Grid.Row=3 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
                 <Grid ColumnDefinitions=<>
                     <ColumnDefinition />
                     <ColumnDefinition Width=Auto />
@@ -98,6 +140,40 @@ public partial class SessionSidebar : IQuickMarkupComponent
     }
 
     private void OnNewWindow(object sender, RoutedEventArgs e) => UnoVibe.App.CreateWindow();
+
+    private void OnToggleMcp(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.CommandParameter is not string name) return;
+        _ = Store.ToggleMcpAsync(name);
+    }
+
+    /// <summary>
+    /// Expands/collapses the MCP section. Expansion starts the background status poll and
+    /// refreshes immediately; collapsing stops the poll (the store's one-shot refresh on
+    /// connect/session-switch/toggle still applies).
+    /// </summary>
+    private void OnToggleMcpExpanded()
+    {
+        McpExpanded = !McpExpanded;
+        Store.SetMcpPolling(McpExpanded);
+        if (McpExpanded) _ = Store.RefreshMcpStatusAsync();
+    }
+
+    /// <summary>Sidebar status-dot color for an MCP server.</summary>
+    private static Brush? McpDot(McpServerItem m) => m.Status switch
+    {
+        "connected" => ThemeBrushes.Global.SystemSuccess,
+        "failed" => ThemeBrushes.Global.SystemCritical,
+        "needs_auth" => ThemeBrushes.Global.SystemCaution,
+        "needs_client_registration" => ThemeBrushes.Global.SystemCritical,
+        _ => ThemeBrushes.Global.TertiaryText,
+    };
+
+    /// <summary>Detail line under an MCP server name: status label, plus the error when present.</summary>
+    private static string McpStatusDetail(McpServerItem m) =>
+        m.Status == "failed" || m.Status == "needs_client_registration"
+            ? $"{m.StatusLabel}: {m.Error}"
+            : m.StatusLabel;
 
     /// <summary>Icon for an unread session's turn outcome: check = success, X = error, stop = interrupted.</summary>
     private static Symbol OutcomeSymbol(SessionInfo s) => s.Outcome switch

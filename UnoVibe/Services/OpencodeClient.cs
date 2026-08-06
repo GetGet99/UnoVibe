@@ -299,6 +299,53 @@ public sealed class OpencodeClient
         using var response = await Http.PostAsJsonAsync($"/permission/{requestId}/reply", body, Json, ct);
         response.EnsureSuccessStatusCode();
     }
+
+    /// <summary>
+    /// Get /mcp — status of all MCP servers for the given workspace directory (or the
+    /// server's default directory when null). Returns a map of server name → status, where
+    /// status is one of "connected", "disabled", "failed" (with an error message),
+    /// "needs_auth", or "needs_client_registration" (with an error message).
+    /// </summary>
+    public async Task<Dictionary<string, McpServerInfo>> GetMcpStatusAsync(string? directory = null,
+        CancellationToken ct = default)
+    {
+        var url = DirectoryUrl("/mcp", directory);
+        using var response = await Http.GetAsync(url, ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var map = new Dictionary<string, McpServerInfo>();
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return map;
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var status = prop.Value.GetStringProperty("status");
+            var error = prop.Value.GetStringProperty("error");
+            if (status.Length > 0) map[prop.Name] = new McpServerInfo { Status = status, Error = error };
+        }
+        return map;
+    }
+
+    /// <summary>Post /mcp/{name}/connect — (re)connects an MCP server.</summary>
+    public async Task McpConnectAsync(string name, string? directory = null, CancellationToken ct = default)
+    {
+        using var response = await Http.PostAsJsonAsync(
+            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/connect", directory), new { }, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Post /mcp/{name}/disconnect — disconnects an MCP server (its status becomes "disabled").</summary>
+    public async Task McpDisconnectAsync(string name, string? directory = null, CancellationToken ct = default)
+    {
+        using var response = await Http.PostAsJsonAsync(
+            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/disconnect", directory), new { }, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Appends the ?directory= query used by instance-scoped routes when a directory is known.</summary>
+    private static string DirectoryUrl(string path, string? directory) =>
+        string.IsNullOrEmpty(directory)
+            ? path
+            : $"{path}?directory={Uri.EscapeDataString(directory)}";
 }
 
 file static class OpencodeClientExtensions
