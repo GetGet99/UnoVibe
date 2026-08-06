@@ -213,24 +213,20 @@ namespace UnoVibe.Pages;
                     </Button>
                 </StackPanel>
             </Grid>
-            <Grid Grid.Row=4 ColumnSpacing=12 Padding=`new Thickness(16, 0, 16, 10)` ColumnDefinitions=<>
-                <ColumnDefinition Width=Auto />
-                <ColumnDefinition Width=Auto />
-                <ColumnDefinition Width=Auto />
-            </>>
-                <StackPanel Spacing=4>
-                    <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` />
-                    modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 />
+            <StackPanel Grid.Row=4 Orientation=Horizontal Spacing=12 Padding=`new Thickness(16, 0, 16, 10)`>
+                <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
+                    <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                    modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 Height=28 FontSize=12 />
                 </StackPanel>
-                <StackPanel Grid.Column=1 Spacing=4>
-                    <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` />
-                    modelCombo = <ComboBox ItemsSource=`Store.ModelOptions` DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue=`Store.ModelId` SelectionChanged+=`(sender, e) => OnModelChanged(sender, e)` MinWidth=200 MaxWidth=300 />
+                <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
+                    <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                    modelCombo = <ComboBox ItemsSource=`Store.ModelOptions` DisplayMemberPath="Name" SelectedValuePath="Id" SelectedValue=`Store.ModelId` SelectionChanged+=`(sender, e) => OnModelChanged(sender, e)` MinWidth=200 MaxWidth=300 Height=28 FontSize=12 />
                 </StackPanel>
-                <StackPanel Grid.Column=2 Spacing=4>
-                    <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` />
-                    variantCombo = <ComboBox ItemsSource=`Store.VariantOptions` SelectedItem=`Store.Variant` IsEnabled=`Store.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=90 />
+                <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
+                    <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                    variantCombo = <ComboBox ItemsSource=`Store.VariantOptions` SelectedItem=`Store.Variant` IsEnabled=`Store.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=90 Height=28 FontSize=12 />
                 </StackPanel>
-            </Grid>
+            </StackPanel>
         </Grid>
     </root>
     """)]
