@@ -25,10 +25,10 @@ namespace UnoVibe.Controls;
             <RowDefinition Height=Auto />
         </>>
             <StackPanel Padding=`new Thickness(12, 12, 12, 8)` Spacing=8>
-                <Button Click+=`(sender, e) => OnNewSession(sender, e)` HorizontalAlignment=Stretch>
+                <Button Click+=`(sender, e) => OnOpenFolder(sender, e)` HorizontalAlignment=Stretch>
                     <StackPanel Orientation=Horizontal Spacing=6>
-                        <AppSymbolIcon Symbol=Add FontSize=13 VerticalAlignment=Center />
-                        <TextBlock Text="New session" VerticalAlignment=Center />
+                        <AppSymbolIcon Symbol=Folder FontSize=13 VerticalAlignment=Center />
+                        <TextBlock Text="Open Folder" VerticalAlignment=Center />
                     </StackPanel>
                 </Button>
             </StackPanel>
@@ -139,6 +139,26 @@ public partial class SessionSidebar : IQuickMarkupComponent
     {
         var directory = (sender as Button)?.CommandParameter as string;
         _ = Store.NewSessionAsync(directory);
+    }
+
+    private void OnOpenFolder(object sender, RoutedEventArgs e) => _ = OpenFolderAndStartSessionAsync();
+
+    /// <summary>
+    /// Opens a folder picker and starts a new session in the picked folder. The session is
+    /// created lazily on the first message send, so no empty server-side session is produced.
+    /// </summary>
+    private async Task OpenFolderAndStartSessionAsync()
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker();
+        try
+        {
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is not null) await Store.NewSessionAsync(folder.Path);
+        }
+        catch (Exception ex)
+        {
+            Store.ConnectionStatus = $"Folder picker error: {ex.Message}";
+        }
     }
 
     private void OnNewWindow(object sender, RoutedEventArgs e) => UnoVibe.App.CreateWindow();
