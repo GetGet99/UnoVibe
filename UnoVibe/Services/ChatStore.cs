@@ -18,6 +18,7 @@ namespace UnoVibe.Services;
     public int HiddenMessages;
     public bool IsBusy;
     public int PendingPrompts;
+    public int PendingImageCount;
     public string ConnectionStatus = "Connecting...";
     public string SessionTitle = "New Chat";
     public string UsageCostLabel = "$0.00";
@@ -59,6 +60,9 @@ public sealed partial class ChatStore : IDisposable
     public ObservableCollection<string> VariantOptions { get; } = new();
 
     public ObservableCollection<MessageItem> Messages { get; } = new();
+
+    /// <summary>Image attachments staged for the next prompt (shown as thumbnails above the input).</summary>
+    public ObservableCollection<ImageAttachment> PendingImages { get; } = new();
 
     private void AppendMessage(MessageItem message)
     {
@@ -247,6 +251,52 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
+    /// Opens the native file picker and stages the chosen image as a pending attachment.
+    /// </summary>
+    public async Task PickImageAsync()
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker
+        {
+            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary,
+        };
+        foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" })
+            picker.FileTypeFilter.Add(ext);
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+        await AddPendingImageAsync(file.Path);
+    }
+
+    /// <summary>Reads an image file from disk and stages it as a pending attachment.</summary>
+    public async Task AddPendingImageAsync(string path)
+    {
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(path);
+            if (bytes.Length == 0) return;
+            var attachment = new ImageAttachment
+            {
+                FileName = Path.GetFileName(path),
+                Mime = ImageAttachment.MimeFromPath(path),
+                Bytes = bytes,
+                Preview = await ImageAttachment.DecodeAsync(bytes),
+            };
+            PendingImages.Add(attachment);
+            PendingImageCount = PendingImages.Count;
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>Removes a staged image attachment.</summary>
+    public void RemovePendingImage(ImageAttachment attachment)
+    {
+        PendingImages.Remove(attachment);
+        PendingImageCount = PendingImages.Count;
+    }
+
+    /// <summary>
     /// Interrupts the currently-running turn (aborts in-flight tool calls and the
     /// model loop). Any queued prompts are flushed when the session goes idle.
     /// </summary>
@@ -305,7 +355,11 @@ public sealed partial class ChatStore : IDisposable
         // Mark busy optimistically so interleaved SendAsync calls queue instead of
         // racing the HTTP call; the server's session.status busy event confirms it.
         IsBusy = true;
-        await _client.SendPromptAsync(_sessionId, text, Mode, ProviderId, ModelId, Variant);
+        var images = PendingImages.ToArray();
+        await _client.SendPromptAsync(_sessionId, text, images, Mode, ProviderId, ModelId, Variant);
+        // Attachments travel with the prompt, so stage them off once the message is stored.
+        PendingImages.Clear();
+        PendingImageCount = 0;
     }
 
     private bool _draining;
@@ -850,6 +904,7 @@ public sealed partial class ChatStore : IDisposable
             ApplyMessageError(item, info);
         }
         if (item.Role == "user" && item.Parts.Count == 0) return null;
+        LoadPartImages(item);
         return item;
     }
 
@@ -1202,6 +1257,7 @@ public sealed partial class ChatStore : IDisposable
                 return;
             }
             message.Parts.Add(p);
+            _ = p.LoadImageAsync();
             return;
         }
 
@@ -1536,7 +1592,11 @@ public sealed partial class ChatStore : IDisposable
         }
 
         if (item.Type == "file")
-            item.FileName = part.GetStringProperty("filename") != "" ? part.GetStringProperty("filename") : part.GetStringProperty("url");
+        {
+            item.Mime = part.GetStringProperty("mime");
+            item.Url = part.GetStringProperty("url");
+            item.FileName = part.GetStringProperty("filename") != "" ? part.GetStringProperty("filename") : item.Url;
+        }
 
         if (part.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
             item.Files = files.EnumerateArray().Select(f => f.GetString() ?? "").Where(f => f.Length > 0).ToArray();
@@ -1706,7 +1766,20 @@ public sealed partial class ChatStore : IDisposable
             ApplyToolState(item, part);
 
         if (item.Type == "file")
-            item.FileName = part.GetStringProperty("filename") != "" ? part.GetStringProperty("filename") : part.GetStringProperty("url");
+        {
+            item.Mime = part.GetStringProperty("mime");
+            item.Url = part.GetStringProperty("url");
+            item.FileName = part.GetStringProperty("filename") != "" ? part.GetStringProperty("filename") : item.Url;
+        }
+    }
+
+    /// <summary>Kicks off async decode of image file parts so message thumbnails render.</summary>
+    private static void LoadPartImages(MessageItem item)
+    {
+        foreach (var part in item.Parts)
+        {
+            if (part.Type == "file") _ = part.LoadImageAsync();
+        }
     }
 }
 

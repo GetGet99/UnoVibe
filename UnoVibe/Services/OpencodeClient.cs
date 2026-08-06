@@ -80,12 +80,20 @@ public sealed class OpencodeClient
     }
 
     public async Task SendPromptAsync(string sessionId, string text,
+        IReadOnlyList<ImageAttachment>? images = null,
         string? agent = null, string? providerId = null, string? modelId = null, string? variant = null,
         CancellationToken ct = default)
     {
+        // Mirrors the opencode TUI/web clients: text + base64 data-URL file parts. The
+        // text part is omitted when empty so an image-only prompt doesn't carry a blank one.
+        var parts = new List<object?>();
+        if (!string.IsNullOrWhiteSpace(text)) parts.Add(new { type = "text", text });
+        if (images is not null)
+            foreach (var image in images)
+                parts.Add(new { type = "file", mime = image.Mime, filename = image.FileName, url = image.DataUrl });
         var body = new Dictionary<string, object?>
         {
-            ["parts"] = new[] { new { type = "text", text } },
+            ["parts"] = parts,
         };
         if (!string.IsNullOrEmpty(agent)) body["agent"] = agent;
         if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))

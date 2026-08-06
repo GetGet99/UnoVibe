@@ -11,8 +11,11 @@ public struct ReasoningTime
 /// <summary>
 /// A reactive model for a message part. <c>Text</c> is a QuickMarkup reference so
 /// streaming deltas can append without replacing the item in the collection.
+/// <c>Image</c> holds the decoded bitmap for image file parts so message thumbnails
+/// update once the async decode completes.
 /// </summary>
 [QuickMarkup("""
+    using Microsoft.UI.Xaml.Media.Imaging;
     public string Text = "";
     public string? ToolName;
     public string? ToolStatus;
@@ -39,6 +42,10 @@ public struct ReasoningTime
     public string QuestionRequestId = "";
     public string ErrorName = "";
     public string ErrorMessage = "";
+    public string Mime = "";
+    public string Url = "";
+    public BitmapImage? Image;
+    public bool IsImage => `Mime.StartsWith("image/")`;
     public ReasoningTime Time;
     """)]
 public partial class PartItem
@@ -51,4 +58,25 @@ public partial class PartItem
     public string FileName { get; set; } = "";
     public string[] Files { get; set; } = Array.Empty<string>();
     public ObservableCollection<QuestionFormItem> QuestionForm { get; } = new();
+
+    /// <summary>
+    /// Decodes the part's base64 data-URL image into the reactive <see cref="Image"/>
+    /// reference. No-op for non-image parts or parts without a data URL; the part keeps
+    /// its file fallback rendering if the bytes can't be decoded.
+    /// </summary>
+    public async Task LoadImageAsync()
+    {
+        if (Image is not null || !IsImage || !Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return;
+        var comma = Url.IndexOf(',');
+        if (comma < 0) return;
+        try
+        {
+            var bytes = Convert.FromBase64String(Url.Substring(comma + 1));
+            Image = await ImageAttachment.DecodeAsync(bytes);
+        }
+        catch
+        {
+            // Leave Image null; the UI renders the file fallback.
+        }
+    }
 }

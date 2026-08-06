@@ -29,6 +29,7 @@ namespace UnoVibe.Pages;
             <RowDefinition />
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
+            <RowDefinition Height=Auto />
         </>>
             <Grid Grid.Row=0 ColumnSpacing=8 Padding=`new Thickness(16, 12, 16, 8)` ColumnDefinitions=<>
                 <ColumnDefinition />
@@ -196,12 +197,38 @@ namespace UnoVibe.Pages;
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
-            <Grid Grid.Row=3 ColumnSpacing=8 Padding=`new Thickness(16, 8, 16, 16)` ColumnDefinitions=<>
+            <ScrollViewer Grid.Row=3 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
+                          HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled
+                          Visibility=`Store.PendingImageCount > 0 ? Visibility.Visible : Visibility.Collapsed`>
+                <StackPanel Orientation=Horizontal>
+                    foreach (var a in `Store.PendingImages`)
+                    {
+                        <Grid Margin=`new Thickness(0, 4, 8, 4)`>
+                            <Border Width=64 Height=64 CornerRadius=6 BorderBrush=`theme.CardStroke`
+                                    BorderThickness=`new Thickness(1)` Background=`theme.CardBackground`
+                                    VerticalAlignment=Top>
+                                <Image Source=`a.Preview` Stretch=Uniform Margin=2 />
+                            </Border>
+                            <Button Width=18 Height=18 Padding=0 HorizontalAlignment=Right VerticalAlignment=Top
+                                    CornerRadius=9 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke`
+                                    BorderThickness=`new Thickness(1)` Foreground=`theme.PrimaryText` FontSize=10
+                                    ToolTipService.ToolTip="Remove attachment" @Click+=`Store.RemovePendingImage(a)`>
+                                <TextBlock Text="✕" FontSize=10 />
+                            </Button>
+                        </Grid>
+                    }
+                </StackPanel>
+            </ScrollViewer>
+            <Grid Grid.Row=4 ColumnSpacing=8 Padding=`new Thickness(16, 8, 16, 16)` ColumnDefinitions=<>
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
                 inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 IsEnabled=`Store.ActivePermission is null` PreviewKeyDown+=`OnPreviewKeyDown` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
+                    <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
+                            @Click+=`await Store.PickImageAsync()`>
+                        <SymbolIcon Symbol=Camera VerticalAlignment=Center />
+                    </Button>
                     if (`Store.PendingPrompts > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
                             <TextBlock Text=`$"⏳ {Store.PendingPrompts} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
@@ -213,7 +240,7 @@ namespace UnoVibe.Pages;
                     </Button>
                 </StackPanel>
             </Grid>
-            <StackPanel Grid.Row=4 Orientation=Horizontal Spacing=12 Padding=`new Thickness(16, 0, 16, 10)`>
+            <StackPanel Grid.Row=5 Orientation=Horizontal Spacing=12 Padding=`new Thickness(16, 0, 16, 10)`>
                 <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                     <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                     modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 Height=28 FontSize=12 />
@@ -275,7 +302,7 @@ public partial class ChatPage : Page
     private async Task SendAsync()
     {
         var text = Input.Trim();
-        if (text.Length == 0) return;
+        if (text.Length == 0 && Store.PendingImages.Count == 0) return;
         Input = "";
         await Store.SendAsync(text);
         ScrollToBottom();
