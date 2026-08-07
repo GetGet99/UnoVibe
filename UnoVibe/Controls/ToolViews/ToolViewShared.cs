@@ -244,6 +244,27 @@ public static class ToolViewShared
         return "⚙ " + name + input;
     }
 
+    /// <summary>Title for a subagent-spawning <c>task</c> tool call. The state.title is the model's short description.</summary>
+    public static string Task(PartItem p)
+    {
+        var name = p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "Subagent task";
+        return "✳ " + name;
+    }
+
+    /// <summary>Status line for a <c>task</c> tool card: agent type + live state + open hint.</summary>
+    public static string TaskStatus(PartItem p)
+    {
+        var type = p.ToolSubagentType.Length > 0 ? p.ToolSubagentType : "subagent";
+        return p.ToolStatus switch
+        {
+            "pending" => $"Starting {type} agent…",
+            "running" => $"Running {type} agent…",
+            "completed" => p.ToolSessionId.Length > 0 ? "Done — click to open the session" : "Done",
+            "error" => p.ToolError.Length > 0 ? $"Failed: {p.ToolError}" : "Failed",
+            _ => "Click to open the session",
+        };
+    }
+
     public static string Truncate(string value, int max)
     {
         if (value.Length <= max) return value;

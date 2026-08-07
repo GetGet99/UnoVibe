@@ -42,6 +42,10 @@ public sealed partial class SessionInfo
     public string Directory { get; set; } = "";
     public string ProjectId { get; set; } = "";
     public string Path { get; set; } = "";
+    /// <summary>ID of the parent session when this is a subagent session (spawned by a <c>task</c> tool call), else "".</summary>
+    public string ParentId { get; set; } = "";
+    /// <summary>True when this session is a subagent (its server info carries a parentID).</summary>
+    public bool IsSubagent => ParentId.Length > 0;
 
     // QuickMarkup Computed<string> (backing field TimeLabelComp): reads the reactive `Updated`
     // field, so it caches and re-evaluates automatically whenever Updated changes — the sidebar's

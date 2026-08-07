@@ -208,39 +208,59 @@ public sealed class OpencodeClient
         if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
         foreach (var item in doc.RootElement.EnumerateArray())
         {
-            var info = new SessionInfo
-            {
-                Id = item.GetStringProperty("id"),
-                Title = item.GetStringProperty("title"),
-                Directory = item.GetStringProperty("directory"),
-                ProjectId = item.GetStringProperty("projectID"),
-                Path = item.GetStringProperty("path"),
-                Agent = item.GetStringProperty("agent"),
-            };
-            if (item.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.Object)
-            {
-                info.ModelId = model.GetStringProperty("id");
-                info.ModelProviderId = model.GetStringProperty("providerID");
-                info.ModelVariant = model.GetStringProperty("variant");
-            }
-            if (item.TryGetProperty("time", out var time))
-                info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
-            if (item.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number)
-                info.Cost = cost.GetDouble();
-            if (item.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
-            {
-                info.TokensInput = tokens.GetInt64Property("input");
-                info.TokensOutput = tokens.GetInt64Property("output");
-                info.TokensReasoning = tokens.GetInt64Property("reasoning");
-                if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
-                {
-                    info.TokensCacheRead = cache.GetInt64Property("read");
-                    info.TokensCacheWrite = cache.GetInt64Property("write");
-                }
-            }
+            var info = ParseSessionInfo(item);
             if (info.Id.Length > 0) list.Add(info);
         }
         return list;
+    }
+
+    /// <summary>
+    /// Get /session/{id} — fetches a single session's info. Used to resolve a session that
+    /// isn't in the sidebar list yet (e.g. a subagent session opened right after it spawned).
+    /// </summary>
+    public async Task<SessionInfo?> GetSessionAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync($"/session/{sessionId}", ct);
+        if (!response.IsSuccessStatusCode) return null;
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        return ParseSessionInfo(doc.RootElement);
+    }
+
+    private static SessionInfo ParseSessionInfo(JsonElement item)
+    {
+        var info = new SessionInfo
+        {
+            Id = item.GetStringProperty("id"),
+            Title = item.GetStringProperty("title"),
+            Directory = item.GetStringProperty("directory"),
+            ProjectId = item.GetStringProperty("projectID"),
+            Path = item.GetStringProperty("path"),
+            Agent = item.GetStringProperty("agent"),
+            ParentId = item.GetStringProperty("parentID"),
+        };
+        if (item.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.Object)
+        {
+            info.ModelId = model.GetStringProperty("id");
+            info.ModelProviderId = model.GetStringProperty("providerID");
+            info.ModelVariant = model.GetStringProperty("variant");
+        }
+        if (item.TryGetProperty("time", out var time))
+            info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
+        if (item.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number)
+            info.Cost = cost.GetDouble();
+        if (item.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
+        {
+            info.TokensInput = tokens.GetInt64Property("input");
+            info.TokensOutput = tokens.GetInt64Property("output");
+            info.TokensReasoning = tokens.GetInt64Property("reasoning");
+            if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
+            {
+                info.TokensCacheRead = cache.GetInt64Property("read");
+                info.TokensCacheWrite = cache.GetInt64Property("write");
+            }
+        }
+        return info;
     }
 
     /// <summary>

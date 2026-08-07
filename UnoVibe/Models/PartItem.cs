@@ -40,6 +40,12 @@ public struct ReasoningTime
     public string QuestionJson = "";
     public string AnswerJson = "";
     public string QuestionRequestId = "";
+    // Subagent (task tool) link: the child session spawned by a task tool call, its parent
+    // session, and the subagent type (e.g. "explore"). Used by ToolViewTask to open the
+    // subagent session on click and to label the card.
+    public string ToolSessionId = "";
+    public string ToolParentSessionId = "";
+    public string ToolSubagentType = "";
     public string ErrorName = "";
     public string ErrorMessage = "";
     public string Mime = "";

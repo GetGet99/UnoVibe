@@ -35,6 +35,12 @@ namespace UnoVibe.Services;
     public long UsageTokensCacheWrite;
     public long ContextLimit;
     public string ActiveSessionId = "";
+    // Parent session id when the active session is a subagent (spawned by a task tool call).
+    // Empty for root sessions; drives the header's "back to parent" button.
+    public string ParentSessionId = "";
+    // Number of subagent sessions belonging to the active session (ParentId == _sessionId).
+    // Drives the chat page's subagent strip and the flyout's "Tokens (excludes subagents)" label.
+    public int SubagentCount;
     // Human-readable session status banner (busy/retry messages); empty means idle.
     public string StatusMessage = "";
     // The permission request currently shown to the user (oldest pending), or null.
@@ -84,6 +90,10 @@ public sealed partial class ChatStore : IDisposable
     }
     public ObservableCollection<SessionInfo> Sessions { get; } = new();
     public ObservableCollection<DirectoryGroup> DirectoryGroups { get; } = new();
+    // Subagent sessions (ParentId == active session id), in display order for the chat page
+    // subagent strip. Rebuilt via RebuildActiveSubagents whenever the session list or the
+    // active session changes.
+    public ObservableCollection<SessionInfo> ActiveSubagents { get; } = new();
 
     public ObservableCollection<McpServerItem> McpServers { get; } = new();
     // Directory the McpServers collection currently reflects ("" = server default).
@@ -141,6 +151,7 @@ public sealed partial class ChatStore : IDisposable
         _cts = null;
         _sessionId = "";
         ActiveSessionId = "";
+        ParentSessionId = "";
         SessionTitle = "New Chat";
         ResetUsageStats();
         IsBusy = false;
@@ -150,6 +161,8 @@ public sealed partial class ChatStore : IDisposable
         Messages.Clear();
         HiddenMessages = 0;
         _messagesById.Clear();
+        ActiveSubagents.Clear();
+        SubagentCount = 0;
         Sessions.Clear();
         DirectoryGroups.Clear();
         _sessionStatus.Clear();
@@ -504,6 +517,7 @@ public sealed partial class ChatStore : IDisposable
         }
         SessionTitle = "New Chat";
         ActiveSessionId = _sessionId;
+        ParentSessionId = "";
         await RefreshSessionsAsync();
         await RefreshMcpStatusAsync();
         return true;
@@ -522,6 +536,7 @@ public sealed partial class ChatStore : IDisposable
             }
 
             RebuildDirectoryGroups();
+            RebuildActiveSubagents();
         }
         catch (Exception ex)
         {
@@ -678,11 +693,17 @@ public sealed partial class ChatStore : IDisposable
         foreach (var s in Sessions) ApplySessionFlags(s);
     }
 
-    /// <summary>Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>.</summary>
+    /// <summary>
+    /// Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>. Subagent sessions
+    /// (those spawned by a <c>task</c> tool call, identified by a non-empty ParentId) are kept in
+    /// <see cref="Sessions"/> but filtered out of the sidebar — they're opened via their clickable
+    /// task tool card instead, mirroring the TUI which hides them from session lists.
+    /// </summary>
     private void RebuildDirectoryGroups()
     {
         DirectoryGroups.Clear();
         foreach (var group in Sessions
+            .Where(s => !s.IsSubagent)
             .GroupBy(s => s.Directory)
             .Select(g => new DirectoryGroup
             {
@@ -693,6 +714,28 @@ public sealed partial class ChatStore : IDisposable
         {
             DirectoryGroups.Add(group);
         }
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="ActiveSubagents"/> (subagent sessions whose parent is the active
+    /// session) and updates the reactive <see cref="SubagentCount"/>. Subagents are hidden from
+    /// the sidebar, so this collection is the chat page's way to list them.
+    /// </summary>
+    private void RebuildActiveSubagents()
+    {
+        ActiveSubagents.Clear();
+        if (_sessionId.Length == 0)
+        {
+            SubagentCount = 0;
+            return;
+        }
+        foreach (var session in Sessions
+            .Where(s => s.ParentId == _sessionId)
+            .OrderByDescending(s => s.Updated))
+        {
+            ActiveSubagents.Add(session);
+        }
+        SubagentCount = ActiveSubagents.Count;
     }
 
     /// <summary>
@@ -725,12 +768,14 @@ public sealed partial class ChatStore : IDisposable
             // mutating them propagates to the sidebar immediately. Only a directory change (which
             // moves the session between groups) requires rebuilding the sidebar groups.
             if (directoryChanged) RebuildDirectoryGroups();
+            RebuildActiveSubagents();
         }
         else
         {
             ApplySessionFlags(session);
             Sessions.Add(session);
             RebuildDirectoryGroups();
+            RebuildActiveSubagents();
         }
     }
 
@@ -748,6 +793,7 @@ public sealed partial class ChatStore : IDisposable
 
         Sessions.Remove(removed);
         RebuildDirectoryGroups();
+        RebuildActiveSubagents();
         _sessionStatus.Remove(id);
         _unread.Remove(id);
         _sessionOutcome.Remove(id);
@@ -759,6 +805,7 @@ public sealed partial class ChatStore : IDisposable
         // The active session was deleted; fall back to an empty state.
         _sessionId = "";
         ActiveSessionId = "";
+        ParentSessionId = "";
         SessionTitle = "New Chat";
         Messages.Clear();
         HiddenMessages = 0;
@@ -782,6 +829,7 @@ public sealed partial class ChatStore : IDisposable
             ProjectId = item.GetStringProperty("projectID"),
             Path = item.GetStringProperty("path"),
             Agent = item.GetStringProperty("agent"),
+            ParentId = item.GetStringProperty("parentID"),
         };
         if (item.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.Object)
         {
@@ -820,7 +868,8 @@ public sealed partial class ChatStore : IDisposable
             ModelOptions.Clear();
             foreach (var model in models) ModelOptions.Add(model);
 
-            var known = Sessions.FirstOrDefault(s => s.ModelId.Length > 0 && ModelOptions.Any(m => m.Id == s.ModelId));
+            // Prefer a root session (not a subagent) when guessing the model for new chats.
+            var known = Sessions.FirstOrDefault(s => !s.IsSubagent && s.ModelId.Length > 0 && ModelOptions.Any(m => m.Id == s.ModelId));
             if (known is not null)
             {
                 ModelId = known.ModelId;
@@ -900,6 +949,7 @@ public sealed partial class ChatStore : IDisposable
         _pendingDirectory = directory;
         _sessionId = "";
         ActiveSessionId = "";
+        ParentSessionId = "";
         SessionTitle = "New Chat";
         Messages.Clear();
         HiddenMessages = 0;
@@ -908,6 +958,7 @@ public sealed partial class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ClearPendingPrompts();
+        RebuildActiveSubagents();
         _permissions.Clear();
         ActivePermission = null;
         DismissToast();
@@ -919,7 +970,9 @@ public sealed partial class ChatStore : IDisposable
     {
         if (sessionId.Length == 0 || sessionId == _sessionId) return;
         _sessionId = sessionId;
-        SessionTitle = Sessions.FirstOrDefault(s => s.Id == sessionId)?.Title ?? "Chat";
+        var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
+        ParentSessionId = known?.ParentId ?? "";
+        SessionTitle = known?.Title.Length > 0 ? known.Title : "Chat";
         ActiveSessionId = sessionId;
         Messages.Clear();
         HiddenMessages = 0;
@@ -927,14 +980,36 @@ public sealed partial class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ClearPendingPrompts();
+        RebuildActiveSubagents();
 
         // Viewing the session now; clear any unread marker for it.
         _unread[sessionId] = false;
-        var sessionInfo = Sessions.FirstOrDefault(s => s.Id == sessionId);
-        if (sessionInfo is not null) sessionInfo.IsUnread = false;
+        if (known is not null) known.IsUnread = false;
 
-        var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
-        if (known is not null) ApplySessionSettings(known);
+        if (known is not null)
+        {
+            ApplySessionSettings(known);
+        }
+        else
+        {
+            // Session not in the sidebar (e.g. a subagent whose session.created event raced the
+            // click, or a session from another workspace). Fetch its info so the header shows a
+            // real title, the mode/model reflect its agent, and the back button knows the parent.
+            try
+            {
+                var info = await _client.GetSessionAsync(sessionId);
+                if (info is not null)
+                {
+                    if (info.Title.Length > 0) SessionTitle = info.Title;
+                    ParentSessionId = info.ParentId;
+                    ApplySessionSettings(info);
+                }
+            }
+            catch
+            {
+                // Fall back to the placeholder title; the message fetch below still works.
+            }
+        }
 
         try
         {
@@ -956,6 +1031,16 @@ public sealed partial class ChatStore : IDisposable
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Returns to the parent session of the currently-active subagent session. No-op for
+    /// root sessions. Mirrors the TUI's "go to parent session" navigation.
+    /// </summary>
+    public async Task GoToParentAsync()
+    {
+        if (ParentSessionId.Length == 0) return;
+        await SwitchSessionAsync(ParentSessionId);
     }
 
     private static MessageItem? MessageFromJson(JsonElement msg)
@@ -1706,6 +1791,7 @@ public sealed partial class ChatStore : IDisposable
                 if (input.TryGetProperty("workdir", out var workdir)) item.ToolWorkdir = workdir.GetString() ?? "";
                 if (input.TryGetProperty("url", out var url)) item.ToolUrl = url.GetString() ?? "";
                 if (input.TryGetProperty("name", out var skillName)) item.ToolSkillName = skillName.GetString() ?? "";
+                if (input.TryGetProperty("subagent_type", out var subType)) item.ToolSubagentType = subType.GetString() ?? "";
                 if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
                     item.TodoJson = JsonSerializer.Serialize(todos, JsonDefaults);
                 if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
@@ -1736,6 +1822,9 @@ public sealed partial class ChatStore : IDisposable
                     item.TodoJson = JsonSerializer.Serialize(mTodos, JsonDefaults);
                 if (meta.TryGetProperty("answers", out var mAnswers) && mAnswers.ValueKind == JsonValueKind.Array)
                     item.AnswerJson = JsonSerializer.Serialize(mAnswers, JsonDefaults);
+                // The task tool records the spawned subagent session here (see task.ts metadata).
+                if (meta.TryGetProperty("sessionId", out var mSession)) item.ToolSessionId = mSession.GetString() ?? "";
+                if (meta.TryGetProperty("parentSessionId", out var mParent)) item.ToolParentSessionId = mParent.GetString() ?? "";
             }
         }
         if (string.IsNullOrEmpty(item.ToolTitle)) item.ToolTitle = item.ToolName;

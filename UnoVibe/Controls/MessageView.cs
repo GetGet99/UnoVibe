@@ -93,6 +93,8 @@ namespace UnoVibe.Controls;
                                 <ToolViewTodoWrite Part=`p` />
                             else if (`p.ToolName == "question"`)
                                 <ToolViewQuestion Part=`p` />
+                            else if (`p.ToolName == "task"`)
+                                <ToolViewTask Part=`p` />
                             else
                                 <ToolViewGeneric Part=`p` />
                         else if (`p.Type == "error"`)
