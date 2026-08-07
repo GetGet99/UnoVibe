@@ -374,6 +374,173 @@ public sealed class OpencodeClient
         string.IsNullOrEmpty(directory)
             ? path
             : $"{path}?directory={Uri.EscapeDataString(directory)}";
+
+    // ── Suggestion-box data (Phase 2) ──────────────────────────────────────────────
+    // Commands/skills prefer the legacy instance routes (/command, /skill with ?directory=):
+    // on the current dev server (1.17.x) those return the FULL list — user commands, MCP
+    // entries, skills folded in, and the `source` field — while the newer /api/* HttpApi
+    // surface returns only built-ins (init/review; customize-opencode). The /api/* wrapped
+    // forms ({ location: {...}, data: [...] }) are kept as a fallback for servers that drop
+    // the legacy routes. Files have no legacy route (it 404s), so /api/fs/find is primary.
+
+    /// <summary>
+    /// Lists every server/user/MCP/skill command for the directory: legacy <c>/command?directory=</c>
+    /// first, falling back to <c>/api/command?location[directory]=</c>. Returns an empty list on
+    /// failure so the suggestion box degrades gracefully.
+    /// </summary>
+    public async Task<List<ServerCommandItem>> GetCommandsAsync(string? directory = null,
+        CancellationToken ct = default)
+    {
+        var list = new List<ServerCommandItem>();
+        try
+        {
+            var items = await FetchItemArrayAsync(DirectoryUrl("/command", directory), ct)
+                ?? await FetchItemArrayAsync(LocationUrl("/api/command", directory), ct);
+            if (items is null) return list;
+            foreach (var item in items)
+            {
+                var source = item.GetStringProperty("source");
+                if (source.Length == 0) source = "command";
+                list.Add(new ServerCommandItem
+                {
+                    Name = item.GetStringProperty("name"),
+                    Description = item.GetStringProperty("description"),
+                    Source = source,
+                    Subtask = item.TryGetProperty("subtask", out var subtask)
+                        && subtask.ValueKind == JsonValueKind.True,
+                    Hints = GetStringArray(item, "hints"),
+                });
+            }
+        }
+        catch (HttpRequestException) { }
+        catch (TaskCanceledException) { }
+        catch (System.Text.Json.JsonException) { }
+        return list;
+    }
+
+    /// <summary>
+    /// Lists skills available for the directory: legacy <c>/skill?directory=</c> first, falling
+    /// back to <c>/api/skill?location[directory]=</c>. Empty list on failure.
+    /// </summary>
+    public async Task<List<ServerSkillItem>> GetSkillsAsync(string? directory = null,
+        CancellationToken ct = default)
+    {
+        var list = new List<ServerSkillItem>();
+        try
+        {
+            var items = await FetchItemArrayAsync(DirectoryUrl("/skill", directory), ct)
+                ?? await FetchItemArrayAsync(LocationUrl("/api/skill", directory), ct);
+            if (items is null) return list;
+            foreach (var item in items)
+            {
+                list.Add(new ServerSkillItem
+                {
+                    Name = item.GetStringProperty("name"),
+                    Description = item.GetStringProperty("description"),
+                });
+            }
+        }
+        catch (HttpRequestException) { }
+        catch (TaskCanceledException) { }
+        catch (System.Text.Json.JsonException) { }
+        return list;
+    }
+
+    /// <summary>
+    /// Get /api/fs/find — fuzzy file search. The server pre-filters and pre-ranks results
+    /// (frecency, fuzzy score, filename bonus), so callers must NOT re-sort. Empty on failure.
+    /// (The legacy <c>/fs/find</c> route 404s on current servers, so this has no legacy fallback.)
+    /// </summary>
+    public async Task<List<FileSystemEntry>> FindFilesAsync(string query, string? directory = null,
+        string? type = null, int limit = 20, CancellationToken ct = default)
+    {
+        var list = new List<FileSystemEntry>();
+        try
+        {
+            var url = LocationUrl("/api/fs/find", directory);
+            var separator = url.Contains('?') ? '&' : '?';
+            url += $"{separator}query={Uri.EscapeDataString(query)}";
+            if (!string.IsNullOrEmpty(type)) url += $"&type={Uri.EscapeDataString(type)}";
+            url += $"&limit={limit}";
+
+            using var response = await Http.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode) return list;
+            foreach (var item in await GetApiDataAsync(response, ct))
+            {
+                list.Add(new FileSystemEntry
+                {
+                    Path = item.GetStringProperty("path"),
+                    Type = item.GetStringProperty("type"),
+                });
+            }
+        }
+        catch (HttpRequestException) { }
+        catch (TaskCanceledException) { }
+        catch (System.Text.Json.JsonException) { }
+        return list;
+    }
+
+    /// <summary>
+    /// Fetches a URL and returns the item array, or null when the response isn't a usable
+    /// JSON list. Accepts both a bare array (legacy instance routes) and a wrapped
+    /// <c>{ location, data }</c> envelope (/api/* surface). The location field is ignored
+    /// (ChatStore does not track a workspace id — only the directory is ever passed).
+    /// </summary>
+    private async Task<IReadOnlyList<JsonElement>?> FetchItemArrayAsync(string url,
+        CancellationToken ct)
+    {
+        using var response = await Http.GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            var items = new List<JsonElement>();
+            foreach (var item in root.EnumerateArray()) items.Add(item.Clone());
+            return items;
+        }
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+        {
+            var items = new List<JsonElement>();
+            foreach (var item in data.EnumerateArray()) items.Add(item.Clone());
+            return items;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Builds the deep-object location query for the /api/* endpoints. The location param
+    /// serializes as <c>location[directory]=...</c> (OpenAPI deepObject explode); the brackets are
+    /// percent-encoded (<c>%5B</c>/<c>%5D</c>) so the URI stays valid — the server accepts both
+    /// forms. Only the directory is set — UnoVibe uses plain directories, not workspace-v2 ids.
+    /// </summary>
+    private static string LocationUrl(string path, string? directory) =>
+        string.IsNullOrEmpty(directory)
+            ? path
+            : $"{path}?location%5Bdirectory%5D={Uri.EscapeDataString(directory)}";
+
+    /// <summary>Enumerates the <c>data</c> array of an /api/* wrapper response.</summary>
+    private static async Task<IReadOnlyList<JsonElement>> GetApiDataAsync(HttpResponseMessage response,
+        CancellationToken ct)
+    {
+        using var doc = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        if (!doc.RootElement.TryGetProperty("data", out var data)
+            || data.ValueKind != JsonValueKind.Array) return Array.Empty<JsonElement>();
+        var items = new List<JsonElement>();
+        foreach (var item in data.EnumerateArray()) items.Add(item.Clone());
+        return items;
+    }
+
+    private static string[] GetStringArray(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var prop) || prop.ValueKind != JsonValueKind.Array)
+            return Array.Empty<string>();
+        var list = new List<string>();
+        foreach (var item in prop.EnumerateArray()) list.Add(item.GetString() ?? "");
+        return list.ToArray();
+    }
 }
 
 file static class OpencodeClientExtensions

@@ -1,51 +1,174 @@
+using UnoVibe.Services;
+
 namespace UnoVibe.Controls;
 
-/// <summary>
-/// Mock slash-command provider — demonstrates the "/" pipeline until the real
-/// <c>GET /command</c> provider lands. Filtering is a case-insensitive substring match.
-/// </summary>
-public sealed class MockCommandSuggestionProvider : ISuggestionProvider
+/// <summary>Shared case-insensitive substring filter used by the server providers.</summary>
+internal static class SuggestionFilter
 {
-    public char Trigger => '/';
-    public string Name => "mock-commands";
-
-    private static readonly SuggestionItem[] All =
+    public static SuggestionItem[] Filter(IReadOnlyList<SuggestionItem> items, string query)
     {
-        new() { Key = "cmd:new", Kind = "command", Text = "/new", Insert = "/new ", Detail = "Start a new chat", InputStartOnly = true },
-        new() { Key = "cmd:compact", Kind = "command", Text = "/compact", Insert = "/compact ", Detail = "Compact the conversation history", InputStartOnly = true },
-        new() { Key = "cmd:rename", Kind = "command", Text = "/rename", Insert = "/rename ", Detail = "Rename this session", InputStartOnly = true },
-        new() { Key = "cmd:review", Kind = "command", Text = "/review", Insert = "/review ", Detail = "Review the current changes", InputStartOnly = true },
-        new() { Key = "cmd:todo", Kind = "command", Text = "/todo", Insert = "/todo ", Detail = "Show the todo list", InputStartOnly = true },
-    };
-
-    public Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query, CancellationToken ct = default)
-    {
-        var filtered = All.Where(s => string.IsNullOrEmpty(query)
-            || s.Text.Contains(query, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<IReadOnlyList<SuggestionItem>>(filtered.ToArray());
+        if (string.IsNullOrEmpty(query)) return items.ToArray();
+        return items.Where(s => s.Text.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
     }
 }
 
 /// <summary>
-/// Mock skill provider — mirrors the real skills present in this repo so the "/" list shows
-/// both kinds. The real implementation reads <c>GET /command</c> entries with
-/// <c>source == "skill"</c>.
+/// Server slash-command provider — lists every command the opencode server knows for the active
+/// directory (legacy <c>GET /command?directory=</c>, falling back to <c>GET /api/command</c>):
+/// built-ins (<c>init</c>/<c>review</c>), user-defined commands, MCP prompts, and any skill entries
+/// the server folds in (<c>source == "skill"</c>). Mirrors the TUI's command list
+/// (autocomplete.tsx <c>commands</c>): MCP entries get a <c>:mcp</c> display suffix only (the insert
+/// stays clean <c>/name </c>); skills are kept under <c>/</c> as a deliberate UnoVibe extra (the TUI
+/// skips them). Returns an empty list when the server is unreachable or returns nothing — the box
+/// then simply shows no suggestions. Commands are <see cref="SuggestionItem.InputStartOnly"/> so they
+/// only appear when <c>/</c> is the first character, like the TUI.
 /// </summary>
-public sealed class MockSkillSuggestionProvider : ISuggestionProvider
+public sealed class ServerCommandSuggestionProvider : ISuggestionProvider
 {
     public char Trigger => '/';
-    public string Name => "mock-skills";
+    public string Name => "server-commands";
 
-    private static readonly SuggestionItem[] All =
-    {
-        new() { Key = "skill:quickmarkup", Kind = "skill", Text = "/quickmarkup", Insert = "/quickmarkup ", Detail = "Write/edit QuickMarkup declarative UI markup" },
-        new() { Key = "skill:customize-opencode", Kind = "skill", Text = "/customize-opencode", Insert = "/customize-opencode ", Detail = "Edit opencode's own configuration" },
-    };
+    private readonly Func<OpencodeClient?> _client;
+    private readonly Func<string> _directory;
 
-    public Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query, CancellationToken ct = default)
+    public ServerCommandSuggestionProvider(Func<OpencodeClient?> client, Func<string> directory)
     {
-        var filtered = All.Where(s => string.IsNullOrEmpty(query)
-            || s.Text.Contains(query, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<IReadOnlyList<SuggestionItem>>(filtered.ToArray());
+        _client = client;
+        _directory = directory;
+    }
+
+    public async Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var client = _client();
+            if (client is null) return Array.Empty<SuggestionItem>();
+
+            var commands = await client.GetCommandsAsync(_directory(), ct);
+            if (commands.Count == 0) return Array.Empty<SuggestionItem>();
+
+            var items = new List<SuggestionItem>(commands.Count);
+            foreach (var command in commands)
+            {
+                var isSkill = command.Source == "skill";
+                var isMcp = command.Source == "mcp";
+                var display = "/" + command.Name;
+                if (isMcp) display += " :mcp";
+                items.Add(new SuggestionItem
+                {
+                    Key = isSkill ? $"skill:{command.Name}" : $"cmd:{command.Name}",
+                    Kind = isSkill ? "skill" : "command",
+                    Text = display,
+                    Insert = "/" + command.Name + " ",
+                    Detail = command.Description,
+                    InputStartOnly = !isSkill,
+                });
+            }
+            return SuggestionFilter.Filter(items, query);
+        }
+        catch
+        {
+            return Array.Empty<SuggestionItem>();
+        }
+    }
+}
+
+/// <summary>
+/// Server skill provider — lists skills for the active directory (legacy <c>GET /skill?directory=</c>,
+/// falling back to <c>GET /api/skill</c>). Returns an empty list when the server is unreachable or
+/// returns nothing — the box then simply shows no suggestions. Skills are insertable anywhere (not
+/// <see cref="SuggestionItem.InputStartOnly"/>), matching the old mock behavior.
+/// </summary>
+public sealed class ServerSkillSuggestionProvider : ISuggestionProvider
+{
+    public char Trigger => '/';
+    public string Name => "server-skills";
+
+    private readonly Func<OpencodeClient?> _client;
+    private readonly Func<string> _directory;
+
+    public ServerSkillSuggestionProvider(Func<OpencodeClient?> client, Func<string> directory)
+    {
+        _client = client;
+        _directory = directory;
+    }
+
+    public async Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var client = _client();
+            if (client is null) return Array.Empty<SuggestionItem>();
+
+            var skills = await client.GetSkillsAsync(_directory(), ct);
+            if (skills.Count == 0) return Array.Empty<SuggestionItem>();
+
+            var items = skills.Select(skill => new SuggestionItem
+            {
+                Key = $"skill:{skill.Name}",
+                Kind = "skill",
+                Text = "/" + skill.Name,
+                Insert = "/" + skill.Name + " ",
+                Detail = skill.Description,
+                InputStartOnly = false,
+            }).ToList();
+            return SuggestionFilter.Filter(items, query);
+        }
+        catch
+        {
+            return Array.Empty<SuggestionItem>();
+        }
+    }
+}
+
+/// <summary>
+/// Server file provider (<c>@</c>) — fuzzy file search via <c>GET /api/fs/find</c>. The server
+/// pre-filters and pre-ranks results, so results are NOT re-sorted or re-filtered here. Directories
+/// insert a trailing slash so a follow-up commit keeps browsing into them. Empty list when the server
+/// is unreachable or returns nothing.
+/// </summary>
+public sealed class ServerFileSuggestionProvider : ISuggestionProvider
+{
+    public char Trigger => '@';
+    public string Name => "server-files";
+
+    private readonly Func<OpencodeClient?> _client;
+    private readonly Func<string> _directory;
+
+    public ServerFileSuggestionProvider(Func<OpencodeClient?> client, Func<string> directory)
+    {
+        _client = client;
+        _directory = directory;
+    }
+
+    public async Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var client = _client();
+            if (client is null) return Array.Empty<SuggestionItem>();
+
+            var entries = await client.FindFilesAsync(query, _directory(), ct: ct);
+            var items = entries.Select(entry =>
+            {
+                var isDirectory = entry.Type == "directory";
+                return new SuggestionItem
+                {
+                    Key = $"file:{entry.Path}",
+                    Kind = "file",
+                    Text = entry.Path + (isDirectory ? "/" : ""),
+                    Insert = "@" + entry.Path + (isDirectory ? "/" : " "),
+                    Detail = isDirectory ? "directory" : "",
+                };
+            }).ToList();
+            return items;
+        }
+        catch
+        {
+            return Array.Empty<SuggestionItem>();
+        }
     }
 }

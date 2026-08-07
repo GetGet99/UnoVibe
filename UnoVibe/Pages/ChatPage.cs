@@ -332,12 +332,15 @@ public partial class ChatPage : Page
 
         _ = store.ConnectAsync();
 
-        // Suggestion sources for the input box. Phase 1: mock providers; Phase 2 swaps in
-        // server-backed ones (commands, skills, files) without touching the markup.
+        // Suggestion sources for the input box. Server-backed providers (commands, skills, files)
+        // return empty lists when the server is unreachable or has no data (no mock fallback — the
+        // box simply shows nothing); the directory is read fresh on every query so it tracks the
+        // active session.
         suggestBox.Providers = new ISuggestionProvider[]
         {
-            new MockCommandSuggestionProvider(),
-            new MockSkillSuggestionProvider(),
+            new ServerCommandSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
+            new ServerSkillSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
+            new ServerFileSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
         };
 
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);

@@ -35,40 +35,57 @@ command/skill/filesystem data. Phase 1 (UI plumbing + mock providers) is done an
 **Do not regress Phase 1 behavior.** The task is to swap mock data for real server data and add an
 `@file` provider — keyboard/mouse UX, flyout, debounce, and commit path stay as-is.
 
-## The two big risks to verify first (by testing, since they're new server surface)
+## The two big risks (both verified working on the dev server at `http://localhost:4196`)
 
-1. **The `/api/*` experimental endpoints are brand-new HttpApi surface** (`packages/protocol/src/groups/*`,
-   `packages/opencode/src/server/routes/instance/httpapi/*`). Confirm the running server actually serves
-   them (`curl -H "Authorization: Basic ..." http://localhost:4196/api/command`) before coding.
+1. **Route surface version skew** — the running dev server (opencode **1.17.18**) serves BOTH the
+   legacy instance routes (`/command?directory=`, `/skill?directory=`) and the newer `/api/*` HttpApi
+   surface — but they return **different data**:
+   - **Legacy** `/command?directory=` → bare array, FULL list: built-ins (`init`, `review`), user
+     commands (`test-add`), MCP entries (`uno-platform:init` etc.), **and project skills folded in**
+     (`customize-opencode`, `quickmarkup`) — every item carries `source` (`"command"|"mcp"|"skill"`).
+   - **Legacy** `/skill?directory=` → bare array with project skills (`['customize-opencode',
+     'quickmarkup']`).
+   - **HttpApi** `/api/command?location[directory]=` → wrapped `{location, data}` but only built-ins
+     (`['init','review']`) — NO user commands, NO MCP, NO skills, and `source` omitted.
+   - **HttpApi** `/api/skill?location[directory]=` → wrapped, only the built-in skill
+     (`['customize-opencode']`) — project `.agents` skills are missing.
+   → **This is why `/quickmarkup` never appeared in autocomplete**: the Phase-2 code hit only the
+   `/api/*` surface, whose 1.17.x handler returns a non-empty-but-stub list, so the empty-list mock
+   fallback never fired. The fix: try the legacy `/command`/`/skill` routes FIRST (verified complete
+   on 1.17.18), falling back to `/api/*` for servers that drop the legacy routes.
 2. **Deep-object query encoding** — the location param is serialized as `location[directory]=...`
    (OpenAPI `style: deepObject, explode: true`). The generated client sends it via `qs` (brackets
-   encoded as `%5B`/`%5D`). Either `location[directory]=...` or `location%5Bdirectory%5D=...` should
-   parse, but verify with curl. The older instance routes (`/command`, `/skill` in
-   `groups/instance.ts`) historically took plain `?directory=` (see `WorkspaceRoutingQueryFields`) —
-   but the **generated client uses `location` deep-object for `/api/command` too**, so prefer the
-   `location[directory]=` form for consistency; if it 400s, fall back to `?directory=`.
+   encoded as `%5B`/`%5D`). **Confirmed**: both `location[directory]=...` and `location%5Bdirectory%5D=...`
+   parse. UnoVibe sends the percent-encoded form (`location%5Bdirectory%5D=...`).
 
 ## Verified server contracts (opencode-src, current HEAD)
 
 All endpoints require the same Basic auth as everything else (Authorization middleware).
 
-### `GET /api/command`
-Query: `location[directory]` (optional), `location[workspace]` (optional).
-Response: bare array of `Command.Info`:
+### `GET /command?directory=` (legacy, PRIMARY for UnoVibe)
+Query: `directory` (optional; defaults to the server's cwd / `x-opencode-directory` header).
+Response: **bare array** of `Command.Info` (no wrapper) — the full list including user commands, MCP
+entries, and skills folded in, each with `source`:
 ```
-{ name: string, description?: string, agent?: string, model?: string, variant?: string,
-  source?: "command"|"mcp"|"skill", template: unknown /* string or Promise — do NOT use from REST */,
-  subtask?: boolean, hints: string[] }
+[ { name: string, description?: string, agent?: string, model?: string, variant?: string,
+    source: "command"|"mcp"|"skill", subtask?: boolean, hints: string[] } ]
 ```
-Built-in `init` / `review` are included (`source: "command"`). Do not filter them out.
-Source: `packages/opencode/src/command/index.ts` (Info at line 22; init/review at 70/79).
+Confirmed on the 1.17.18 dev server for `/mnt/Data/Codes/UnoVibe`: 7 items (`init`, `review`,
+`test-add`, `uno-platform:init`, `uno-platform:new`, `customize-opencode`, `quickmarkup`), all with
+`source` present. The equivalent HttpApi surface is `GET /api/command?location[directory]=` (wrapped
+`{location, data}`, same `data` item shape); on 1.17.x that surface omits `source` and returns only
+built-ins, so a missing `source` is treated as `"command"` defensively.
+Source: `packages/opencode/src/command/index.ts` (Info at line 22; init/review at 70/79; skills folded
+in at ~132).
 
-### `GET /api/skill`
-Query: `location[directory]`, `location[workspace]`.
-Response: bare array of `Skill.Info`:
+### `GET /skill?directory=` (legacy, PRIMARY for UnoVibe)
+Query: `directory` (optional). Response: **bare array** of `Skill.Info`:
 ```
-{ name: string, description?: string, location: string, content: string }
+[ { name: string, description?: string, location: string, content: string } ]
 ```
+Confirmed on the 1.17.18 dev server: `['customize-opencode', 'quickmarkup']`. The equivalent HttpApi
+surface is `GET /api/skill?location[directory]=` (wrapped `{location, data}`); on 1.17.x it returns
+only the built-in skill.
 Source: `packages/opencode/src/skill/index.ts` (Info at line 37).
 
 ### `GET /api/fs/list`
@@ -117,76 +134,82 @@ This is the behavior to mirror. Key excerpts:
   `/name ` and then a normal `ChatStore.SendAsync(text)` is correct. (Placeholders `$1..$n`/
   `$ARGUMENTS` are for templates with args typed after the command.)
 
-## Implementation plan
+## Implementation plan — **Phase 2 shipped** (all steps landed and building)
 
-1. **`UnoVibe/Models/`** — add small DTOs:
-   - `ServerCommandItem` / `ServerSkillItem` — or reuse `SuggestionItem` directly from providers.
-   - `FileSystemEntry`-like record `{ string Path; string Type }` for the fs wrapper
-     `{ location, data }` (parse only `data`).
-2. **`UnoVibe/Services/OpencodeClient.cs`** — add methods following the existing
-   `JsonDocument` + `GetStringProperty` pattern (see `GetMcpStatusAsync` / `GetModesAsync`):
-   - `GetCommandsAsync(string? directory = null, CancellationToken ct)` → `GET /api/command`
-     with `location[directory]=<escaped>`; parse array of `{name, description, source, hints}`.
-   - `GetSkillsAsync(string? directory = null, CancellationToken ct)` → `GET /api/skill`
-     (parse `{name, description}`).
-   - `FindFilesAsync(string query, string? directory, string? type = null, int limit = 20, ct)`
-     → `GET /api/fs/find` with `query`, `type`, `limit`, and location; parse `data[]` entries.
-   - `ListDirectoryAsync(string path, string? directory, ct)` → `GET /api/fs/list` (optional;
-     only needed if you implement directory expansion via server-side listing rather than `fs/find`).
-   - Add a small private helper to build the deep-object location query string:
-     `$"?location[directory]={Uri.EscapeDataString(dir)}"` (and append `&location[workspace]=...`
-     only when a workspace id is known — ChatStore does not currently track one; passing just
-     `directory` is fine).
-   - Guard every new method with a try/catch returning empty lists on `HttpRequestException` /
-     non-success so the suggestion box degrades gracefully (mock providers as fallback).
-3. **`UnoVibe/Services/SuggestionProviders.cs`** — replace/augment mocks:
-   - `ServerCommandSuggestionProvider` — takes `OpencodeClient` + a `Func<string> directoryProvider`
-     (wire to `ChatStore.ActiveDirectory()` — note it's `private`; expose a public accessor or pass
-     the value from `ChatPage` each call). Maps each command to
-     `SuggestionItem { Key = "cmd:"+name, Kind = Command, Text = name, Insert = "/"+name+" ",
-     Detail = description }`. MCP entries: `Kind = Command`, `Insert = "/"+name+" "`; optionally
-     append `:mcp` to `Text` for display parity (then `Insert` must NOT include `:mcp`). Skills from
-     the command list (`source == "skill"`): `Kind = Skill`, `Insert = "/"+name+" "` (recommended;
-     drop them entirely if we decide to mirror TUI's `continue`).
-   - `ServerFileSuggestionProvider` (for `@`) — calls `FindFilesAsync(query, directory)`, maps each
-     entry to `SuggestionItem { Key = "file:"+path, Kind = File, Text = path, Insert = "@"+path+" ",
-     Detail = type }`. Case-insensitive filter is already applied server-side; do **not** re-filter,
-     do **not** re-sort, respect `limit`. Directory entries → `Insert = "@"+path+"/"` so a second
-     commit keeps browsing (optional nicety; Phase 1 commit closes the box, so either accept that or
-     special-case).
-   - Keep the mocks for offline/no-server fallback, or wire a single provider that returns mocks when
-     the client/directory is unavailable.
-4. **`SuggestionBoxController`** (in `UnoVibe/Controls/`) — already routes by trigger
-   (`"/" → command provider(s)`, `"@" → file provider` via each provider's `Trigger`). Verify it passes
-   the raw query through (no substring filtering in the controller) so `@` providers get the full query
-   for the server to fuzzy-match. Adding a server provider is just an `ISuggestionProvider` with
-   `Trigger = '@'`.
-5. **`ChatPage.cs`** — wire real providers into `SuggestBox.Providers` in code-behind (the `Ctor`
-   already owns the mock list), pulling the directory from `ChatStore` on each call (debounce already
-   exists). No markup changes expected. The component's `CommitSuggestion` already inserts
-   `item.Insert` — for `/` commands that yields `/name ` and a subsequent `SendAsync` round-trips the
-   expansion server-side. Verify a leading-space commit still refocuses (existing behavior).
- 6. **QA checklist** (manual, per AGENTS.md — do not launch/test the app yourself):
-    - `/` at position 0 lists init, review, user commands; MCP entries carry `:mcp`; skills appear
-      badge-skilled; typing filters; Enter/Tab inserts `/name `; typing a space closes the box.
-    - `/` mid-sentence (e.g. `please help with /review-code`) lists skills/insertable commands but
-      NOT position-0-only built-ins like `/new` (intentional divergence from the TUI, which only
-      accepts `/` at position 0).
-    - `@` in a session on a non-empty directory lists real files via `fs/find`; Enter inserts `@path `;
-      `@foo` (mid-token, no whitespace) does NOT trigger, but `foo @file` does.
-    - Send `/init` and confirm the server executes the init prompt (proves no client-side expansion
-      needed).
-    - With server down (or no `OPENCODE_BASE_URL`), the box still works with mock providers.
+1. **`UnoVibe/Models/ServerSuggestionItem.cs`** (new) — `ServerCommandItem {Name, Description, Source, Subtask, Hints[]}`,
+   `ServerSkillItem {Name, Description}`, `FileSystemEntry {Path, Type}`.
+2. **`UnoVibe/Services/OpencodeClient.cs`** — added, following the existing `JsonDocument` +
+   `GetStringProperty` pattern:
+   - `GetCommandsAsync(string? directory, CancellationToken)` → legacy `GET /command?directory=`
+     first, falling back to `GET /api/command?location[directory]=`. Parses bare arrays OR the
+     `{location, data}` wrapper (shared `FetchItemArrayAsync` helper).
+   - `GetSkillsAsync(string? directory, CancellationToken)` → legacy `GET /skill?directory=` first,
+     falling back to `GET /api/skill?location[directory]=`.
+   - `FindFilesAsync(query, directory, type, limit, ct)` → `GET /api/fs/find` only (the legacy
+     `/fs/find` route 404s on 1.17.x — verified returns the SPA fallback HTML).
+   - `LocationUrl(path, directory)` private helper → `path?location%5Bdirectory%5D=<escaped>`
+     (deep-object form, brackets percent-encoded) — used only for the `/api/*` fallbacks.
+   - `DirectoryUrl(path, directory)` private helper → `path?directory=<escaped>` — used for the
+     legacy routes.
+   - `FetchItemArrayAsync` returns the item array (bare array or `data` key) or null when the
+     response isn't a usable JSON list, so the primary/fallback chain degrades cleanly.
+   - Every method is guarded with try/catch (`HttpRequestException`, `TaskCanceledException`,
+     `JsonException`) returning an empty list so the box degrades gracefully.
+ 3. **`UnoVibe/Services/SuggestionProviders.cs`** — server providers added, **mock providers deleted**
+    (no fallback — an unreachable/empty server shows no suggestions, per user request):
+    - `ServerCommandSuggestionProvider(Func<OpencodeClient?> client, Func<string> directory)` —
+      maps `cmd:` keys (`Kind = command`), MCP entries get a ` :mcp` suffix on `Text` **only as a
+      display label** (matches the TUI's `commands` memo in `autocomplete.tsx`; Insert stays clean
+      `/name `), `source == "skill"` entries map to `skill:` keys / `Kind = skill`. Commands and MCP
+      entries set `InputStartOnly = true` so they only appear when `/` is the first character
+      (TUI parity); skills set `InputStartOnly = false` and stay insertable anywhere.
+    - `ServerSkillSuggestionProvider` — maps `/skill` (legacy) / `/api/skill` entries to `skill:` keys.
+    - `ServerFileSuggestionProvider` (`Trigger = '@'`) — passes the raw query through to
+      `FindFilesAsync` (server pre-filters/pre-ranks; **no client re-sort**), `Key = "file:"+path`,
+      `Insert = "@"+path+" "`, directories insert a trailing slash (`"@"+path+"/"`).
+    - **No fallback**: when `client` is null, the server call throws, or the server returns an empty
+      list, all three providers return an empty list — `SuggestBox.ShowSuggestions` closes the flyout
+      for empty results. `SuggestionFilter` holds the shared case-insensitive substring filter.
+4. **`SuggestionBoxController`** — unchanged: already routes by trigger and passes the raw query
+   through; server providers just implement `ISuggestionProvider` with `Trigger = '@'`.
+5. **`ChatPage.cs`** — `Ctor` now wires the three server providers (each takes
+   `() => Store.Client` + `Store.ActiveDirectory` method group, so the directory tracks the active
+   session). No markup changes. `CommitSuggestion` inserting `/name ` + a normal `SendAsync` is all
+   that's needed — the server expands the command server-side.
+6. **`ChatStore.cs`** — `public OpencodeClient? Client => _client;` accessor added, and
+   `ActiveDirectory()` made public (was private).
+7. **QA checklist** (manual, per AGENTS.md — do not launch/test the app yourself):
+   - [ ] `/` at position 0 lists init, review, user commands (`test-add`); MCP entries carry ` :mcp`
+     (display only); skills appear (`/quickmarkup`, `/customize-opencode`) from BOTH the command and
+     skill providers (deduped); typing filters; Enter/Tab inserts `/name ` (clean, no `:mcp`); typing
+     a space closes the box.
+   - [ ] `/` mid-sentence (e.g. `please help with /review-code`) lists only skills — commands/MCP are
+     `InputStartOnly` and drop out (TUI parity).
+   - [ ] `@` in a session on a non-empty directory lists real files via `fs/find`; Enter inserts `@path `;
+     `@foo` (mid-token, no whitespace) does NOT trigger, but `foo @file` does.
+   - [ ] Send `/init` and confirm the server executes the init prompt (proves no client-side expansion
+     needed).
+   - [ ] With server down (or no `OPENCODE_BASE_URL`), the box shows NO suggestions for `/` and `@`
+     (no mock fallback).
 
 ## Notes / caveats
 
 - `Command.Info.template` is `Schema.Unknown` and can serialize as a Promise stub — never read it from
   the REST list. `hints` (from `$1..$n`/`$ARGUMENTS`) can seed a future "show placeholders" detail.
+- **Route skew (why the original Phase 2 missed `/quickmarkup`):** on the running 1.17.18 dev server
+  the legacy `/command?directory=` / `/skill?directory=` routes return the COMPLETE data (skills, MCP,
+  user commands, `source`), while the newer `/api/*` HttpApi surface returns only built-ins. The
+  client therefore prefers the legacy routes and keeps `/api/*` (with its wrapped `{location, data}`
+  envelope) as a fallback. If a future server removes the legacy routes, the fallback still works;
+  if a future server fixes `/api/*` to fold in skills, either path is fine. `source` missing on
+  `/api/*` is treated as `"command"`.
+- Skills appear twice in the box on purpose: once from `ServerCommandSuggestionProvider` (folding in
+  `source == "skill"` from `/command`) and once from `ServerSkillSuggestionProvider` (`/skill`).
+  `SuggestionBoxController.GetSuggestionsAsync` dedupes by `Key` (`skill:<name>` in both), so only one
+  row shows.
 - Location `workspace` is only needed for workspace-v2 setups; UnoVibe uses plain directories, so
   omit it unless a session reports one.
-- The old plain `/fs/list`, `/fs/find` routes found in earlier research **do not exist in current
-  opencode-src** — the surface is `/api/fs/*`. Use the `/api/*` forms above.
-- If `/api/command` 400s on the running server (risk 1), check the serve version:
-  the HttpApi surface requires a recent CLI; update the dev server or pin behavior to the matching
-  legacy routes (`/command` endpoint in the TUI SDK's generated client as the fallback reference).
-- AGENTS.md must be updated once Phase 2 lands (this box now uses live server data).
+- The old plain `/fs/list`, `/fs/find` routes found in earlier research **do not exist** — they 404
+  (SPA fallback HTML) on 1.17.x, so files use `/api/fs/find` with no legacy fallback.
+- Phase 2 is done and building (see the Implementation plan section). AGENTS.md was updated to reflect
+  that the suggestion box now uses live server data.

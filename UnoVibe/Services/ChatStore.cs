@@ -116,6 +116,9 @@ public sealed partial class ChatStore : IDisposable
 
     public string CurrentSessionId => _sessionId;
 
+    /// <summary>The HTTP client for the configured server (null before <see cref="Configure"/>).</summary>
+    public OpencodeClient? Client => _client;
+
     /// <summary>Owns any locally-launched <c>opencode serve</c> process so it stays alive after navigation.</summary>
     public ServeProcess? ServeProcess { get; private set; }
 
@@ -674,7 +677,7 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>The directory used for instance-scoped MCP queries: the active session's, else the pending/current one.</summary>
-    private string ActiveDirectory()
+    public string ActiveDirectory()
     {
         if (_sessionId.Length > 0)
         {
