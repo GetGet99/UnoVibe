@@ -36,7 +36,7 @@ namespace UnoVibe.Controls;
     <root>
         input = <TextBox TextWrapping=Wrap AcceptsReturn=true MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` TextChanged+=`OnTextChanged`
             FlyoutBase.AttachedFlyout=suggestFlyout = <Flyout Placement=Top ShowMode=Transient Closed+=`OnSuggestFlyoutClosed`>
-            <Border Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=`new Thickness(1)` CornerRadius=8 Padding=4 MinWidth=320 MaxWidth=480
+            <Border Padding=4 MinWidth=320 MaxWidth=480
                     GotFocus+=`OnSuggestionsGotFocus`>
                 <ScrollViewer MaxHeight=280>
                     <StackPanel>
@@ -45,7 +45,9 @@ namespace UnoVibe.Controls;
                             <Button Padding=`new Thickness(10, 6)` HorizontalContentAlignment=Left
                                     Background=`index == SelectedIndex ? theme.SubtleFill : Colors.Transparent`
                                     BorderThickness=0 CornerRadius=6
-                                    @Click+=`await CommitSuggestionAsync(item)`>
+                                    @Click+=`await CommitSuggestionAsync(item)`
+                                    HorizontalAlignment=Stretch
+                            >
                                 <StackPanel Orientation=Horizontal Spacing=8>
                                     <Border Background=`KindBadgeBrush(item.Kind)` CornerRadius=3 Padding=`new Thickness(5, 1, 5, 2)` VerticalAlignment=Center>
                                         <TextBlock Text=`item.KindLabel` FontSize=10 Foreground=`AppTheme.TextOnAccent` FontWeight=`FontWeights.SemiBold` />
@@ -64,6 +66,20 @@ namespace UnoVibe.Controls;
     """)]
 public partial class SuggestBox : IQuickMarkupComponent<TextBox>
 {
+    [QuickMarkupConstructor]
+    private void Ctor()
+    {
+        Init();
+        suggestFlyout.FlyoutPresenterStyle = new()
+        {
+            BasedOn = (Style)App.Current.Resources["DefaultFlyoutPresenter"],
+            Setters =
+            {
+                new Setter { Property = Control.PaddingProperty, Value = new Thickness() },
+                new Setter { Property = Control.CornerRadiusProperty, Value = new CornerRadius(8) }
+            }
+        };
+    }
     /// <summary>Handler for <see cref="SubmitRequested"/>.</summary>
     public delegate Task SubmitHandler(SuggestBox sender, string text);
 
