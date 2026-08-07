@@ -54,6 +54,8 @@ Note: `pkill -f "opencode serve ..."` and similar broad patterns can hang the sh
 
 **CRITICAL — do NOT kill the dev `opencode serve` (port 4196) during this chat session**: this opencode session itself is served by that instance, so killing it terminates the chat and the command. If a server-side change (e.g. `small_model`/auth/setting edits in `~/.config/opencode/opencode.jsonc`, global opencode.json, or plugins) requires a restart to take effect, ask the user to restart it themselves rather than running `pkill -9 -x opencode` (or dropping into the session's own TUI to `/session` restart).
 
+**CRITICAL — do NOT kill, relaunch, or auto-test the UnoVibe app**: the user is talking to this opencode session **through the running UnoVibe app**, so killing it (`pkill -9 -x UnoVibe` or otherwise) terminates the user's view of the chat. Do **not** launch the app yourself and do **not** test it yourself via app-mcp (`uno_app_start`, `uno_app_visualtree_snapshot`, `uno_app_get_screenshot`, pointer/key input, etc.). After making changes, **return to the user**: summarize what changed and state clearly what the user should test manually (e.g. "launch/relaunch the app and check X"). Only use app-mcp to investigate when the **user explicitly asks you to** (e.g. "inspect the UI", "take a screenshot", "why is X not rendering").
+
 ## Source Layout
 
 - `UnoVibe/Pages/` — top-level pages: `ConnectPage`, `MainPage`, `ChatPage`.
