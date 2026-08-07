@@ -196,7 +196,28 @@ namespace UnoVibe.Pages;
                                 <TextBlock Text=`$"History truncated: {Store.HiddenMessages} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                             </Border>
                         foreach (var m in `Store.Messages`)
-                            <MessageView Message=`m` />
+                        {
+                            // Undo: the server keeps reverted messages until the next prompt, so
+                            // hide everything at/after the revert point (the card replaces them).
+                            if (`Store.RevertMessageId.Length == 0 || StringComparer.Ordinal.Compare(m.Id, Store.RevertMessageId) < 0`)
+                                <MessageView Message=`m` />
+                        }
+                        if (`Store.RevertMessageId.Length > 0`)
+                        {
+                            <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
+                                    BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
+                                <StackPanel Spacing=6>
+                                    <StackPanel Orientation=Horizontal Spacing=8>
+                                        <AppSymbolIcon Symbol=Undo FontSize=14 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                                        <TextBlock Text=`Store.RevertCountLabel` FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                                    </StackPanel>
+                                    <StackPanel Orientation=Horizontal Spacing=8>
+                                        <Button Content="Redo" @Click+=`await RedoLastMessageAsync()` CornerRadius=6 Padding=`new Thickness(10, 4)` />
+                                        <TextBlock Text="Click redo to restore the reverted messages and continue from here." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap VerticalAlignment=Center />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        }
                         if (`Store.IsRetrying`)
                             <Border Background=`theme.SystemCautionBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
                                     BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
@@ -278,6 +299,10 @@ namespace UnoVibe.Pages;
                     <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
                             @Click+=`await Store.PickImageAsync()`>
                         <SymbolIcon Symbol=Camera VerticalAlignment=Center />
+                    </Button>
+                    <Button ToolTipService.ToolTip="Undo last message" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
+                            @Click+=`await UndoLastMessageAsync()`>
+                        <SymbolIcon Symbol=Undo VerticalAlignment=Center />
                     </Button>
                     if (`Store.PendingPrompts > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
@@ -390,6 +415,24 @@ public partial class ChatPage : Page
     private async Task ContinueAsync()
     {
         await Store.SendAsync("continue");
+        ScrollToBottom();
+    }
+
+    /// <summary>
+    /// Undo the agent's reply to the last user message (revert), then restore the undone
+    /// prompt into the composer so it can be resent (mirrors the TUI's /undo).
+    /// </summary>
+    private async Task UndoLastMessageAsync()
+    {
+        await Store.UndoLastMessageAsync();
+        Input = Store.RevertPromptText;
+        ScrollToBottom();
+    }
+
+    /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
+    private async Task RedoLastMessageAsync()
+    {
+        await Store.RedoLastMessageAsync();
         ScrollToBottom();
     }
 

@@ -66,6 +66,13 @@ namespace UnoVibe.Services;
     // Compact "N active, M inactive, K error" summary for the collapsed MCP sidebar header.
     // inactive = explicitly disabled; error = failed/needs_auth/needs_client_registration (mutually exclusive).
     public string McpSummary = "";
+    // Undo marker for the active session: the id of the user message the conversation is
+    // reverted to (the server's session "revert" field). Empty = not reverted. Drives the
+    // revert card + message filter (messages with id >= RevertMessageId are hidden).
+    public string RevertMessageId = "";
+    // Card label for the revert banner, e.g. "1 message reverted". Computed whenever the
+    // revert point changes (recounts the reverted user messages from the message list).
+    public string RevertCountLabel = "";
     """)]
 public sealed partial class ChatStore : IDisposable
 {
@@ -115,6 +122,12 @@ public sealed partial class ChatStore : IDisposable
     private const int McpPollIntervalMs = 5000;
 
     public string CurrentSessionId => _sessionId;
+
+    /// <summary>
+    /// The user prompt text of the message just undone, restored into the composer by the
+    /// chat page after an undo (TUI parity). Plain field — read from code, not markup.
+    /// </summary>
+    public string RevertPromptText { get; private set; } = "";
 
     /// <summary>The HTTP client for the configured server (null before <see cref="Configure"/>).</summary>
     public OpencodeClient? Client => _client;
@@ -170,6 +183,7 @@ public sealed partial class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ResetTurnFlags();
+        ResetRevertState();
         _permissions.Clear();
         ActivePermission = null;
         Messages.Clear();
@@ -792,6 +806,23 @@ public sealed partial class ChatStore : IDisposable
             RebuildDirectoryGroups();
             RebuildActiveSubagents();
         }
+
+        // Sync the undo marker for the active session. The server's session info carries a
+        // "revert" object ({ messageID, partID?, snapshot?, diff? }) when reverted and omits the
+        // field entirely on unrevert (patch() serializes revert:null to undefined). The chat page
+        // hides messages with id >= the revert point via RevertMessageId. This also covers the
+        // case where a revert is staged from another client or cleared by a new prompt's cleanup.
+        if (session.Id == _sessionId)
+        {
+            var revertMessageId = "";
+            if (info.TryGetProperty("revert", out var revert) && revert.ValueKind == JsonValueKind.Object)
+                revertMessageId = revert.GetStringProperty("messageID");
+            if (revertMessageId != RevertMessageId)
+            {
+                if (revertMessageId.Length == 0) RevertPromptText = "";
+                ApplyRevertMarker(revertMessageId);
+            }
+        }
     }
 
     /// <summary>
@@ -829,6 +860,7 @@ public sealed partial class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ResetTurnFlags();
+        ResetRevertState();
         ClearPendingPrompts();
         _permissions.Clear();
         ActivePermission = null;
@@ -974,6 +1006,7 @@ public sealed partial class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ResetTurnFlags();
+        ResetRevertState();
         ClearPendingPrompts();
         RebuildActiveSubagents();
         _permissions.Clear();
@@ -997,6 +1030,7 @@ public sealed partial class ChatStore : IDisposable
         IsBusy = false;
         StatusMessage = "";
         ResetTurnFlags();
+        ResetRevertState();
         ClearPendingPrompts();
         RebuildActiveSubagents();
 
@@ -1059,6 +1093,201 @@ public sealed partial class ChatStore : IDisposable
     {
         if (ParentSessionId.Length == 0) return;
         await SwitchSessionAsync(ParentSessionId);
+    }
+
+    /// <summary>
+    /// Undoes the agent's reply to the last user message. Mirrors the TUI's <c>session.undo</c>
+    /// command: aborts if the session is busy (the server 409s a revert while busy), targets the
+    /// last user message before the current revert point (so a second undo walks further back),
+    /// calls POST /session/{id}/revert, refreshes the message list, and restores the undone
+    /// user prompt (text + staged images) into the composer.
+    /// </summary>
+    public async Task UndoLastMessageAsync()
+    {
+        if (_sessionId.Length == 0) return;
+        try
+        {
+            var target = FindUndoTargetMessage();
+            if (target is null) return;
+
+            if (IsBusy) await _client.AbortAsync(_sessionId);
+
+            await _client.RevertAsync(_sessionId, target.Id);
+
+            RestorePromptFromMessage(target);
+            await RefreshChatAsync();
+            ApplyRevertMarker(target.Id);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Restores reverted messages. If a user message exists beyond the revert point, reverts
+    /// forward to it; otherwise clears the revert entirely (unrevert). Mirrors the TUI's
+    /// <c>session.redo</c> command.
+    /// </summary>
+    public async Task RedoLastMessageAsync()
+    {
+        if (_sessionId.Length == 0 || RevertMessageId.Length == 0) return;
+        try
+        {
+            var next = Messages
+                .Where(m => m.Role == "user" && StringComparer.Ordinal.Compare(m.Id, RevertMessageId) > 0)
+                .OrderBy(m => m.Id, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (next is null)
+            {
+                await _client.UnrevertAsync(_sessionId);
+                await RefreshChatAsync();
+                ResetRevertState();
+                return;
+            }
+
+            await _client.RevertAsync(_sessionId, next.Id);
+            await RefreshChatAsync();
+            ApplyRevertMarker(next.Id);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Refetches the active session's messages from the server and rebuilds the UI list.
+    /// Used after undo/redo (the server keeps reverted messages until the next prompt, so a
+    /// refetch is required to get an authoritative view). Never throws — errors surface via
+    /// <see cref="ConnectionStatus"/> like the other refresh helpers.
+    /// </summary>
+    private async Task RefreshChatAsync()
+    {
+        if (_sessionId.Length == 0) return;
+        try
+        {
+            var root = await _client.GetMessagesAsync(_sessionId);
+            if (root.ValueKind != JsonValueKind.Array) return;
+            Messages.Clear();
+            _messagesById.Clear();
+            HiddenMessages = 0;
+            foreach (var msg in root.EnumerateArray())
+            {
+                var message = MessageFromJson(msg);
+                if (message is null) continue;
+                _messagesById[message.Id] = message;
+                AppendMessage(message);
+            }
+            UpdateSessionStats();
+            await SyncPendingQuestionsAsync();
+            await SyncPendingPermissionsAsync();
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// The next undo target: the last user message strictly before the current revert point
+    /// (a second undo walks further back), or the last user message overall when nothing is
+    /// reverted yet. Null when there is nothing left to undo.
+    /// </summary>
+    private MessageItem? FindUndoTargetMessage()
+    {
+        for (var i = Messages.Count - 1; i >= 0; i--)
+        {
+            var m = Messages[i];
+            if (m.Role != "user") continue;
+            if (RevertMessageId.Length > 0 && StringComparer.Ordinal.Compare(m.Id, RevertMessageId) >= 0) continue;
+            return m;
+        }
+        return null;
+    }
+
+    /// <summary>Sets the revert point and recomputes the card label.</summary>
+    private void ApplyRevertMarker(string messageId)
+    {
+        RevertMessageId = messageId;
+        RevertCountLabel = ComputeRevertCountLabel(messageId);
+    }
+
+    /// <summary>
+    /// "N message(s) reverted" — counts the reverted user messages (id &gt;= the revert
+    /// point, both user and assistant messages are hidden from view but only user messages
+    /// are counted, matching the TUI's reverted-count).
+    /// </summary>
+    private string ComputeRevertCountLabel(string messageId)
+    {
+        if (messageId.Length == 0) return "";
+        var count = Messages.Count(m => m.Role == "user" && StringComparer.Ordinal.Compare(m.Id, messageId) >= 0);
+        return count == 1 ? "1 message reverted" : $"{count} messages reverted";
+    }
+
+    /// <summary>Clears the undo state. Called on connect / new / switch / delete / unrevert.</summary>
+    private void ResetRevertState()
+    {
+        RevertMessageId = "";
+        RevertCountLabel = "";
+        RevertPromptText = "";
+    }
+
+    /// <summary>
+    /// Restores the undone user message's prompt into the composer: concatenated non-synthetic
+    /// text parts (TUI skips synthetic) plus its data-URL image file parts re-staged as pending
+    /// attachments. Matches the TUI/web undo behavior.
+    /// </summary>
+    private void RestorePromptFromMessage(MessageItem message)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var part in message.Parts)
+        {
+            if (part.Type == "text" && !part.Synthetic) sb.Append(part.Text);
+        }
+        RevertPromptText = sb.ToString();
+
+        PendingImages.Clear();
+        PendingImageCount = 0;
+        foreach (var part in message.Parts)
+        {
+            if (part.Type != "file") continue;
+            var attachment = AttachmentFromPart(part);
+            if (attachment is null) continue;
+            PendingImages.Add(attachment);
+            PendingImageCount = PendingImages.Count;
+        }
+    }
+
+    /// <summary>Rebuilds an <see cref="ImageAttachment"/> from a data-URL image file part; null when not decodable.</summary>
+    private static ImageAttachment? AttachmentFromPart(PartItem part)
+    {
+        if (!part.IsImage || !part.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return null;
+        var comma = part.Url.IndexOf(',');
+        if (comma < 0) return null;
+        try
+        {
+            var bytes = Convert.FromBase64String(part.Url.Substring(comma + 1));
+            var attachment = new ImageAttachment
+            {
+                FileName = part.FileName.Length > 0 ? part.FileName : "attachment",
+                Mime = part.Mime.Length > 0 ? part.Mime : "image/png",
+                Bytes = bytes,
+            };
+            // Decode fire-and-forget like PartItem.LoadImageAsync; the await resumes on the
+            // UI thread so the thumbnail strip updates once the bitmap is ready.
+            _ = DecodePreviewAsync(attachment);
+            return attachment;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static async Task DecodePreviewAsync(ImageAttachment attachment)
+    {
+        attachment.Preview = await ImageAttachment.DecodeAsync(attachment.Bytes);
     }
 
     private static MessageItem? MessageFromJson(JsonElement msg)
@@ -1172,7 +1401,7 @@ public sealed partial class ChatStore : IDisposable
 
             // Messages
             case "message.removed":
-                // TODO: properties { sessionID, messageID }; drop the message from Messages/_messagesById.
+                ApplyMessageRemoved(evt.Properties);
                 break;
 
             // Sessions
@@ -1528,6 +1757,23 @@ public sealed partial class ChatStore : IDisposable
 
         var part = message.Parts.FirstOrDefault(p => p.Id == partId);
         if (part is not null) message.Parts.Remove(part);
+    }
+
+    /// <summary>
+    /// Drops a message from the UI. The server emits this when a reverted session's messages
+    /// are cleaned up at the start of the next prompt (SessionRevert.cleanup), and for other
+    /// message removals. The message is scoped to the active session (see the filter in
+    /// <see cref="Apply"/>), so only the active list is touched.
+    /// </summary>
+    private void ApplyMessageRemoved(JsonElement properties)
+    {
+        var id = properties.GetStringProperty("messageID");
+        if (id.Length == 0) return;
+        if (!_messagesById.TryGetValue(id, out var message)) return;
+
+        _messagesById.Remove(id);
+        Messages.Remove(message);
+        UpdateSessionStats();
     }
 
     private void ApplySessionStatus(JsonElement properties)

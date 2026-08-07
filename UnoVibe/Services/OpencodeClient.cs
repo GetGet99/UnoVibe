@@ -123,6 +123,31 @@ public sealed class OpencodeClient
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Post /session/{id}/revert — rewinds the session to just before the given user
+    /// message (undo of the agent's reply). The server 409s when the session is busy, so
+    /// callers should abort first (mirrors the TUI). Returns the updated session info
+    /// JSON (its <c>revert</c> field carries <c>{ messageID, partID?, snapshot?, diff? }</c>).
+    /// </summary>
+    public async Task<JsonElement> RevertAsync(string sessionId, string messageId, CancellationToken ct = default)
+    {
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/revert", new { messageID = messageId }, Json, ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Post /session/{id}/unrevert — restores a reverted session (undo of undo). The
+    /// server 400s when no revert is active.
+    /// </summary>
+    public async Task UnrevertAsync(string sessionId, CancellationToken ct = default)
+    {
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/unrevert", new { }, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers,
         CancellationToken ct = default)
     {
