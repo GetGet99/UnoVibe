@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using UnoVibe.Controls;
 using UnoVibe.Models;
 using UnoVibe.Services;
 
@@ -12,7 +13,6 @@ namespace UnoVibe.Pages;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
-    using Microsoft.UI.Xaml.Controls.Primitives;
     inject ChatStore Store;
     string Input = "";
     string PermissionStage = "choose";
@@ -272,7 +272,8 @@ namespace UnoVibe.Pages;
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                inputBox = <TextBox Text<=>`Input` PlaceholderText="Message OpenCode..." AcceptsReturn=true TextWrapping=Wrap MinHeight=36 MaxHeight=120 IsEnabled=`Store.ActivePermission is null` PreviewKeyDown+=`OnPreviewKeyDown` />
+                suggestBox = <SuggestBox Text<=>`Input` PlaceholderText="Message OpenCode..." IsEnabled=`Store.ActivePermission is null`
+                    PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
                             @Click+=`await Store.PickImageAsync()`>
@@ -330,7 +331,16 @@ public partial class ChatPage : Page
         countdown.Start();
 
         _ = store.ConnectAsync();
-        inputBox.Focus(FocusState.Programmatic);
+
+        // Suggestion sources for the input box. Phase 1: mock providers; Phase 2 swaps in
+        // server-backed ones (commands, skills, files) without touching the markup.
+        suggestBox.Providers = new ISuggestionProvider[]
+        {
+            new MockCommandSuggestionProvider(),
+            new MockSkillSuggestionProvider(),
+        };
+
+        suggestBox.MarkupNode.Focus(FocusState.Programmatic);
     }
 
     /// <summary>Scrolls to the permission card once it has been added to the message list.</summary>
@@ -349,30 +359,24 @@ public partial class ChatPage : Page
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
         {
             if (await Store.PasteImageFromClipboardAsync())
-            {
                 e.Handled = true;
-                return;
-            }
         }
-
-        if (e.Key != Windows.System.VirtualKey.Enter) return;
-        if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-            return;
-        e.Handled = true;
-        _ = SendAsync();
-        inputBox.Text = "";
-        inputBox.AcceptsReturn = false;
-        await Task.Delay(16);
-        inputBox.AcceptsReturn = true;
     }
 
-    private async Task SendAsync()
+    private async Task SendAsync(string? text = null)
     {
-        var text = Input.Trim();
-        if (text.Length == 0 && Store.PendingImages.Count == 0) return;
+        var content = (text ?? Input).Trim();
+        if (content.Length == 0 && Store.PendingImages.Count == 0) return;
         Input = "";
-        await Store.SendAsync(text);
+        await Store.SendAsync(content);
         ScrollToBottom();
+    }
+
+    /// <summary>Enter was pressed in the input box with the suggestion flyout closed — send the message.</summary>
+    private async Task OnSubmitRequested(SuggestBox sender, string text)
+    {
+        await SendAsync(text);
+        sender.Clear();
     }
 
     /// <summary>
