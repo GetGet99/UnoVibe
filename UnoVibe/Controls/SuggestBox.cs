@@ -78,6 +78,21 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
     /// <summary>Stale-response guard for the async suggestion fetch (bumped on every text change).</summary>
     private int _suggestSeq;
 
+    // Uno workaround state: TextBox's real key processing runs in OnPostKeyDown, which Uno invokes
+    // UNCONDITIONALLY during KeyDown even when the event was already marked Handled (see
+    // UIElement.RoutedEvents.cs "PostKeyDown"). So a handled Up/Down still moves the caret and a
+    // handled Enter still inserts a newline (AcceptsReturn). These flags neutralize those side effects:
+    //   - _suppressArrowSelection: set for Up/Down while the flyout is open; cancels the stray caret
+    //     move (which lands in Select → SelectionChanging) on the next dispatcher tick.
+    //   - _blockStrayTextChange: set when a key was consumed (Enter/Tab commit or bare-Enter submit);
+    //     cancels the stray character the TextBox inserts afterwards, until the next dispatcher tick.
+    //   - _programmaticTextChange: true only while WE write input.Text (commit / clear), so our own
+    //     changes are never cancelled by the guard above.
+    private bool _suppressArrowSelection;
+    private bool _blockStrayTextChange;
+    private bool _programmaticTextChange;
+    private bool _inputGuardsAttached;
+
     private IReadOnlyList<ISuggestionProvider>? _providers;
     private SuggestionBoxController? _controller;
 
@@ -104,7 +119,15 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
     private async Task ClearCoreAsync()
     {
         if (input is null) return;
-        input.Text = "";
+        _programmaticTextChange = true;
+        try
+        {
+            input.Text = "";
+        }
+        finally
+        {
+            _programmaticTextChange = false;
+        }
         input.AcceptsReturn = false;
         await Task.Delay(16);
         input.AcceptsReturn = true;
@@ -188,10 +211,14 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         {
             case Windows.System.VirtualKey.Up:
                 e.Handled = true;
+                _suppressArrowSelection = true;
+                _ = input?.DispatcherQueue?.TryEnqueue(() => _suppressArrowSelection = false);
                 SelectedIndex = SelectedIndex <= 0 ? _items.Count - 1 : SelectedIndex - 1;
                 return true;
             case Windows.System.VirtualKey.Down:
                 e.Handled = true;
+                _suppressArrowSelection = true;
+                _ = input?.DispatcherQueue?.TryEnqueue(() => _suppressArrowSelection = false);
                 SelectedIndex = SelectedIndex >= _items.Count - 1 ? 0 : SelectedIndex + 1;
                 return true;
             case Windows.System.VirtualKey.Enter:
@@ -199,6 +226,7 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
                     .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
                     return false; // Shift+Enter = newline
                 e.Handled = true;
+                BlockStrayTextChange();
                 if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
                     CommitSuggestion(_items[SelectedIndex]);
                 else
@@ -206,6 +234,7 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
                 return true;
             case Windows.System.VirtualKey.Tab:
                 e.Handled = true;
+                BlockStrayTextChange();
                 if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
                     CommitSuggestion(_items[SelectedIndex]);
                 else
@@ -230,8 +259,16 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         if (!Controller.TryGetQuery(text, caret, out _, out _, out var tokenStart)) return;
 
         var newText = text.Remove(tokenStart, caret - tokenStart).Insert(tokenStart, item.Insert);
-        input.Text = newText;
-        input.SelectionStart = tokenStart + item.Insert.Length;
+        _programmaticTextChange = true;
+        try
+        {
+            input.Text = newText;
+            input.SelectionStart = tokenStart + item.Insert.Length;
+        }
+        finally
+        {
+            _programmaticTextChange = false;
+        }
         CloseSuggestions();
         input.Focus(FocusState.Programmatic);
     }
@@ -247,8 +284,57 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
 
     // ── Keyboard handling ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Attaches the guard handlers once. Lazy because they must be active before the TextBox's own
+    /// OnPostKeyDown processing runs for a given key, which is guaranteed since PreviewKeyDown
+    /// tunnels before KeyDown/PostKeyDown fire.
+    /// </summary>
+    private void EnsureInputGuards()
+    {
+        if (_inputGuardsAttached || input is null) return;
+        _inputGuardsAttached = true;
+        input.SelectionChanging += OnSelectionChanging;
+        input.BeforeTextChanging += OnBeforeTextChanging;
+    }
+
+    /// <summary>
+    /// Uno bug workaround (see field docs): a handled Up/Down still makes TextBox move the caret via
+    /// its unconditional OnPostKeyDown processing. That move lands in Select → SelectionChanging, so
+    /// cancelling it here keeps the caret put while the suggestion highlight moves.
+    /// </summary>
+    private void OnSelectionChanging(TextBox sender, TextBoxSelectionChangingEventArgs e)
+    {
+        if (_suppressArrowSelection)
+        {
+            _suppressArrowSelection = false;
+            e.Cancel = true;
+        }
+    }
+
+    /// <summary>
+    /// Uno bug workaround: a handled Enter still inserts a newline (AcceptsReturn) via OnPostKeyDown.
+    /// Cancels any non-programmatic text change that lands while a key was consumed.
+    /// </summary>
+    private void OnBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs e)
+    {
+        if (_blockStrayTextChange && !_programmaticTextChange)
+            e.Cancel = true;
+    }
+
+    /// <summary>
+    /// Opens the "consumed key" window: blocks stray TextBox insertions from the same key's
+    /// OnPostKeyDown processing, then self-closes on the next dispatcher tick (after that processing
+    /// has already run — it is synchronous within the same dispatcher turn).
+    /// </summary>
+    private void BlockStrayTextChange()
+    {
+        _blockStrayTextChange = true;
+        _ = input?.DispatcherQueue?.TryEnqueue(() => _blockStrayTextChange = false);
+    }
+
     private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        EnsureInputGuards();
         if (suggestFlyout is { IsOpen: true } && _items.Count > 0 && HandleSuggestionKey(e))
             return;
 
@@ -257,6 +343,7 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
             return;
         e.Handled = true;
+        BlockStrayTextChange();
 
         var text = input.Text;
         if (SubmitRequested is { } handler)
