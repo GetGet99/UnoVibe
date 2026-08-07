@@ -43,6 +43,16 @@ namespace UnoVibe.Services;
     public int SubagentCount;
     // Human-readable session status banner (busy/retry messages); empty means idle.
     public string StatusMessage = "";
+    // Auto-retry state for the active turn (session.status type "retry"); drives the
+    // end-of-chat retry card. RetryNextMs is the absolute unix-ms time of the next attempt.
+    public bool IsRetrying;
+    public string RetryMessage = "";
+    public int RetryAttempt;
+    public long RetryNextMs;
+    // Live countdown text recomputed each second by the chat page timer ("Attempt #2 · retrying in 3s").
+    public string RetryCountdown = "";
+    // True when the active turn stopped because of a non-interrupt error; drives the "Continue" button.
+    public bool TurnStoppedWithError;
     // The permission request currently shown to the user (oldest pending), or null.
     public PermissionRequestItem? ActivePermission;
     public string Mode = "build";
@@ -156,6 +166,7 @@ public sealed partial class ChatStore : IDisposable
         ResetUsageStats();
         IsBusy = false;
         StatusMessage = "";
+        ResetTurnFlags();
         _permissions.Clear();
         ActivePermission = null;
         Messages.Clear();
@@ -452,6 +463,7 @@ public sealed partial class ChatStore : IDisposable
         // Mark busy optimistically so interleaved SendAsync calls queue instead of
         // racing the HTTP call; the server's session.status busy event confirms it.
         IsBusy = true;
+        ResetTurnFlags();
         var images = PendingImages.ToArray();
         await _client.SendPromptAsync(_sessionId, text, images, Mode, ProviderId, ModelId, Variant);
         // Attachments travel with the prompt, so stage them off once the message is stored.
@@ -813,6 +825,7 @@ public sealed partial class ChatStore : IDisposable
         ResetUsageStats();
         IsBusy = false;
         StatusMessage = "";
+        ResetTurnFlags();
         ClearPendingPrompts();
         _permissions.Clear();
         ActivePermission = null;
@@ -957,6 +970,7 @@ public sealed partial class ChatStore : IDisposable
         ResetUsageStats();
         IsBusy = false;
         StatusMessage = "";
+        ResetTurnFlags();
         ClearPendingPrompts();
         RebuildActiveSubagents();
         _permissions.Clear();
@@ -979,6 +993,7 @@ public sealed partial class ChatStore : IDisposable
         _messagesById.Clear();
         IsBusy = false;
         StatusMessage = "";
+        ResetTurnFlags();
         ClearPendingPrompts();
         RebuildActiveSubagents();
 
@@ -1312,6 +1327,9 @@ public sealed partial class ChatStore : IDisposable
             MarkInterrupted(message, info);
             ApplyMessageError(message, info);
             if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
+            // The server emits status idle before the final message.updated carrying the
+            // error, so surface the Continue button here when the turn is already stopped.
+            if (!IsBusy && LastAssistantMessageErrored()) TurnStoppedWithError = true;
             UpdateSessionStats();
             return;
         }
@@ -1326,6 +1344,7 @@ public sealed partial class ChatStore : IDisposable
         MarkInterrupted(message, info);
         ApplyMessageError(message, info);
         if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
+        if (!IsBusy && LastAssistantMessageErrored()) TurnStoppedWithError = true;
         _messagesById[id] = message;
         AppendMessage(message);
         UpdateSessionStats();
@@ -1361,6 +1380,22 @@ public sealed partial class ChatStore : IDisposable
         if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object)
             return "success";
         return error.GetStringProperty("name") == "MessageAbortedError" ? "interrupted" : "error";
+    }
+
+    /// <summary>
+    /// True when the active session's most recent assistant message carries a non-interrupt
+    /// error part (i.e. the last turn stopped with an error). Interrupts are MessageAbortedError
+    /// → aborted part, not an error part, so they never qualify.
+    /// </summary>
+    private bool LastAssistantMessageErrored()
+    {
+        for (var i = Messages.Count - 1; i >= 0; i--)
+        {
+            var m = Messages[i];
+            if (m.Role != "assistant") continue;
+            return m.Parts.Any(p => p.Type == "error");
+        }
+        return false;
     }
 
     /// <summary>
@@ -1407,6 +1442,41 @@ public sealed partial class ChatStore : IDisposable
     {
         IsBusy = false;
         _ = DrainPendingPromptsAsync();
+    }
+
+    /// <summary>
+    /// Clears the end-of-chat retry card and "Continue" state. Called when the active session
+    /// is reset (connect / new / switch / deleted) and before sending a new prompt.
+    /// </summary>
+    private void ResetTurnFlags()
+    {
+        TurnStoppedWithError = false;
+        IsRetrying = false;
+        RetryMessage = "";
+        RetryAttempt = 0;
+        RetryNextMs = 0;
+        RetryCountdown = "";
+    }
+
+    /// <summary>
+    /// Recomputes the live countdown for the end-of-chat retry card. The chat page ticks this
+    /// once per second while a turn is auto-retrying (<see cref="RetryNextMs"/> is the absolute
+    /// unix-ms time the server will fire the next attempt at).
+    /// </summary>
+    public void UpdateRetryCountdown()
+    {
+        if (!IsRetrying)
+        {
+            RetryCountdown = "";
+            return;
+        }
+        if (RetryNextMs <= 0)
+        {
+            RetryCountdown = RetryAttempt > 0 ? $"Attempt #{RetryAttempt} · retrying…" : "Retrying…";
+            return;
+        }
+        var seconds = Math.Max(0, (int)Math.Ceiling((RetryNextMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) / 1000.0));
+        RetryCountdown = RetryAttempt > 0 ? $"Attempt #{RetryAttempt} · retrying in {seconds}s" : $"Retrying in {seconds}s";
     }
 
     private void ApplyPartUpdated(JsonElement properties)
@@ -1494,12 +1564,26 @@ public sealed partial class ChatStore : IDisposable
             var attempt = status.GetInt64Property("attempt");
             var next = status.GetInt64Property("next");
             var prefix = attempt > 0 ? $"Retry #{attempt}" : "Retry";
-            if (next > 0) prefix += $" ({next} left)";
             StatusMessage = message.Length > 0 ? $"{prefix}: {message}" : prefix;
+
+            IsRetrying = true;
+            RetryMessage = message;
+            RetryAttempt = (int)attempt;
+            RetryNextMs = next;
+            UpdateRetryCountdown();
         }
         else
         {
             StatusMessage = "";
+            IsRetrying = false;
+            RetryMessage = "";
+            RetryAttempt = 0;
+            RetryNextMs = 0;
+            RetryCountdown = "";
+
+            // The turn finished. If it stopped because of a non-interrupt error, surface the
+            // "Continue" button. (Interrupts are MessageAbortedError → aborted part instead.)
+            if (type == "idle") TurnStoppedWithError = LastAssistantMessageErrored();
         }
 
         if (!IsBusy) _ = DrainPendingPromptsAsync();

@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using Microsoft.UI.Input;
+using Microsoft.UI.Xaml;
 using UnoVibe.Models;
 using UnoVibe.Services;
 
@@ -196,6 +197,23 @@ namespace UnoVibe.Pages;
                             </Border>
                         foreach (var m in `Store.Messages`)
                             <MessageView Message=`m` />
+                        if (`Store.IsRetrying`)
+                            <Border Background=`theme.SystemCautionBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
+                                    BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
+                                <StackPanel Spacing=6>
+                                    <StackPanel Orientation=Horizontal Spacing=8>
+                                        <ProgressRing Width=14 Height=14 IsActive=true VerticalAlignment=Center />
+                                        <TextBlock Text="Auto-retrying" FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                                    </StackPanel>
+                                    if (`Store.RetryMessage.Length > 0`)
+                                        <TextBlock Text=`Store.RetryMessage` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    <TextBlock Text=`Store.RetryCountdown` FontSize=11 Foreground=`theme.SystemCaution` TextWrapping=Wrap />
+                                </StackPanel>
+                            </Border>
+                        if (`Store.TurnStoppedWithError`)
+                            <Button Content="⟳ Continue" CornerRadius=6 HorizontalAlignment=Left Margin=`new Thickness(0, 8, 0, 0)`
+                                    ToolTipService.ToolTip=`"Sends a message with content \"continue\" to resume the work from the last incomplete step."`
+                                    @Click+=`await ContinueAsync()` />
                         if (`Store.ActivePermission is not null`)
                         {
                             <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
@@ -306,6 +324,11 @@ public partial class ChatPage : Page
             _ = ScrollToPermissionAsync();
         });
 
+        // One-second tick that keeps the end-of-chat retry card's countdown live.
+        var countdown = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        countdown.Tick += (_, _) => store.UpdateRetryCountdown();
+        countdown.Start();
+
         _ = store.ConnectAsync();
         inputBox.Focus(FocusState.Programmatic);
     }
@@ -349,6 +372,17 @@ public partial class ChatPage : Page
         if (text.Length == 0 && Store.PendingImages.Count == 0) return;
         Input = "";
         await Store.SendAsync(text);
+        ScrollToBottom();
+    }
+
+    /// <summary>
+    /// Resumes a turn that stopped with an error. Sends a "continue" user message — the agent
+    /// is instructed (prompt/beast.txt) to pick up from the last incomplete step in its todo
+    /// list. Matches the TUI, which has no separate continue API: it's just a user message.
+    /// </summary>
+    private async Task ContinueAsync()
+    {
+        await Store.SendAsync("continue");
         ScrollToBottom();
     }
 
