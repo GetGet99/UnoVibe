@@ -71,6 +71,22 @@ References auto-notify the UI on change. Computed variables cache and re-evaluat
 
 References get a `*Prop` backing field and computed get a `*Comp` backing field on the partial class, accessible directly if needed. Async computed gets `*Async` backing field (`AsyncComputed<T>`), plus `*Status` (`AsyncComputedState`) and `*Failure` (`Exception?`) properties. The value property throws if not yet loaded — check `*Status` first.
 
+### Generic types
+
+If you want to use generics inside reference declaration, wrap the type in `` `backticks` ``.
+
+```
+`MyGenericType<int>?` MyData;
+`ObservableCollection<MyType>` Items = `new()`;
+`List<MyType>` Items2 = `new()`;
+```
+
+Collection notes: do note that by putting collections inside here, would generate `Reference<ObservableCollection<MyType>> ItemsProp { get; }` property (with `ObservableCollection<MyType> Items { get; set; }`).
+
+Depending on what you mean, you may either use:
+- Declare inside QuickMarkup if you expect parents to replace the collection or provide their own collection.
+- Declare inside C# as `ObservableCollection<MyType> Items { get; } = new()` if you want the class to own the collection.
+
 ## Required Properties
 
 Mark a reference declaration with the `required` keyword to make it a **required** for consumers to provide:
@@ -355,6 +371,21 @@ else <TextBlock Text="Fallback" />
 
 The `else` branch is required for single-child content positions (e.g., `Content`).
 
+#### Notes about using it on ObservableCollection.
+
+When using with `ObservableCollection<T>` it is worth knowing that `Count` property is NOT reactive. Use the `Reactive` extension property defined by QuickMarkup instead (you need to add `using QuickMarkup.Infra.Collections;` namespace).
+
+```quickmarkup
+// Avoid: won't update when myObservableCollection size changes
+if (`myObservableCollection.Count == 0`) { <TextBlock Text="No items" /> }
+// Use: will update when myObservableCollection size changes
+if (`myObservableCollection.Reactive.Count == 0`) { <TextBlock Text="No items" /> }
+```
+
+Note: `ReactiveList<T>` does not have this limitation and does not need the `Reactive` extension property. You can use `reactiveList.Count`.
+
+There are more important details about the `Reactive` extension property below in the [`ObservableCollection<T>` helpers](#observablecollectiont-helpers) section.
+
 ### Foreach Loops
 
 ```
@@ -362,10 +393,13 @@ The `else` branch is required for single-child content positions (e.g., `Content
 foreach (var i in ..3) { <TextBlock Text=/-$"Row {i}"-/ /> }
 foreach (var i in 1..4) { <TextBlock Text=/-$"Item {i}"-/ /> }
 
-// Iterable — reactive when source implements INotifyCollectionChanged
+// Iterable — any IEnumerable expression is accepted (materialized per reconcile). Reactive when the
+// source implements INotifyCollectionChanged (e.g. ObservableCollection) or is a reference-tracked
+// collection (e.g. ReactiveList<T>), so LINQ like `reactiveList.Take(10)` / `.Where(...)` stays reactive.
 foreach (var item in `items`) { <TextBlock Text=/-item-/ /> }
 
-// With key expression (for stable identity across collection changes), source still must implement INotifyCollectionChanged, but will use id as identity in case of collection reset
+// With key expression (for stable identity across collection changes), works for INotifyCollectionChanged
+// or reference-tracked collections; uses the key as identity across resets/refreshes
 foreach (var item in `animals`; `item.Id`) { <TextBlock Text=`item.Name` /> }
 
 // With index variable
@@ -374,6 +408,10 @@ foreach (index; var item in `items`) { <TextBlock Text=`$"{index + 1}. {item}"` 
 // With both
 foreach (index; var item in `items`; `item.Id`) { <TextBlock Text=`$"{index + 1}. {item}"` /> }
 ```
+
+### IMPORTANT
+
+When using with `ReactiveList<T>` or any reactive expression to create list of items, you should almost always provide the key expression. Without key expression, all UI gets recreated and it will be *very* expensive. QuickMarkup is not VDOM framework so it will recreate actual UI elements and will reset all the UI states and have bad performance without the key.
 
 ### Await Blocks
 
@@ -676,6 +714,56 @@ Effect(() => { ... }, ref1, ref2);  // runs when any listed ref changes
 ```
 
 `ReferenceTracker.NoCapture(() => expr)` reads without tracking dependencies.
+
+### `ReactiveList<T>`
+
+`ReactiveList<T>` is a collection defined by QuickMarkup where mutating it will reevaluate all access.
+
+`ReactiveList<T>` itself is a single reactive reference. Mutating anything in the list will revaluate everything.
+
+```csharp
+ReactiveList<int> integers = new();
+var count = Computed(() => integers.Count);
+var firstTwoItems = Computed(() => integers.Take(2)); // Take from LINQ
+
+// ...
+
+integers.Add(1); // will reevaluate `integers.Count` and `integers.Take(2)`
+integers.Add(2); // will reevaluate `integers.Count` and `integers.Take(2)`
+integers.Add(3); // will reevaluate `integers.Count` and including `integers.Take(2)`
+integers[0] = 4; // yes, this will still reevaluate `integers.Count` and `integers.Take(2)`
+```
+
+Most of the time if you use the list's state with minimal computation like just checking `integers.Count > 0`, it will probably be fine even if `Count` does not change.
+
+Reactive List is a very powerful tool especially when trimming the list of items down like `reactiveList.Take(10)` to render top 10 items, or filtering `reactiveList.Where(x => x.SomeData is not null)`. These LINQ expressions are `IEnumerable<T>` and can be used directly in a `foreach` — the foreach materializes the enumerable each reconcile, and because it re-reads the `ReactiveList` reference, it stays reactive:
+
+```quickmarkup
+foreach (var item in `reactiveList.Take(10)`) { <TextBlock Text=`item.Name` /> }
+foreach (var item in `reactiveList.Where(x => x.SomeData is not null)`) { <TextBlock Text=`item.Name` /> }
+```
+
+### `ObservableCollection<T>` helpers
+
+The `Reactive` extension property enables an `ObservableCollection<T>` to participate in the reactive chain. It returns the same `ObservableCollection<T>` instance (`ReferenceEquals(myCollection, myCollection.Reactive)`). The `.Reactive` getter must be evaluated inside the reactive tracking context (i.e. directly in a backtick expression) for the reference to be tracked. Reading it into a variable first loses reactivity:
+
+```csharp
+// Reactive: `.Reactive` getter invoked inside the tracking context
+var sample1 = Computed(() => myCollection.Reactive.Count);
+
+// NOT reactive: the getter is read outside the tracking context
+var collection2 = myCollection.Reactive;
+var sample2 = Computed(() => collection2);
+```
+
+There is also a `ReactiveProp` extension property that returns the same wrapper as an `IReference<ObservableCollection<T>>`. Like `Reactive`, its `.Value` getter must be invoked in the reactive tracking context to be tracked. `Reactive` is simply `ReactiveProp.Value`.
+
+Like `ReactiveList<T>`, `myCollection.Reactive` works with LINQ too — LINQ expressions like `myCollection.Reactive.Where(...)` / `.Take(...)` stay reactive because the foreach re-reads the `Reactive` reference each reconcile:
+
+```quickmarkup
+foreach (var item in `myCollection.Reactive.Take(10)`) { <TextBlock Text=`item.Name` /> }
+foreach (var item in `myCollection.Reactive.Where(x => x.SomeData is not null)`) { <TextBlock Text=`item.Name` /> }
+```
 
 ## QuickMarkup.WinUI / QuickMarkup.UWP (NuGet Packages)
 
