@@ -1,3 +1,5 @@
+using QuickMarkup.Infra.Collections;
+
 namespace UnoVibe.Models;
 
 public struct ReasoningTime
@@ -63,7 +65,7 @@ public partial class PartItem
     public bool Synthetic { get; set; }
     public string FileName { get; set; } = "";
     public string[] Files { get; set; } = Array.Empty<string>();
-    public ObservableCollection<QuestionFormItem> QuestionForm { get; } = new();
+    public ReactiveList<QuestionFormItem> QuestionForm { get; } = new();
 
     /// <summary>
     /// Decodes the part's base64 data-URL image into the reactive <see cref="Image"/>

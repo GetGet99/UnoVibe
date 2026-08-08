@@ -168,7 +168,7 @@ namespace UnoVibe.Pages;
                         <TextBlock Text=`$"Subagents ({Store.SubagentCount})"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
                         <ScrollViewer HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
                             <StackPanel Orientation=Horizontal Spacing=6>
-                                foreach (var s in `Store.ActiveSubagents`)
+                                foreach (var s in `Store.ActiveSubagents`; `s.Id`)
                                 {
                                     <Button Padding=`new Thickness(10, 6)` CornerRadius=6 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1
                                             @Click+=`await Store.SwitchSessionAsync(s.Id)`

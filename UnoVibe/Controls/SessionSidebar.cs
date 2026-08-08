@@ -34,7 +34,7 @@ namespace UnoVibe.Controls;
             </StackPanel>
             <ScrollViewer Grid.Row=1>
                 <StackPanel Padding=`new Thickness(12, 0, 12, 12)`>
-                    foreach (var group in `Store.DirectoryGroups`)
+                    foreach (var group in `Store.DirectoryGroups`; `group.Directory`)
                     {
                         <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
                             <Grid ColumnDefinitions=<>
@@ -46,7 +46,7 @@ namespace UnoVibe.Controls;
                                     <AppSymbolIcon Symbol=Add FontSize=11 />
                                 </Button>
                             </Grid>
-                            foreach (var s in `group.Sessions`)
+                            foreach (var s in `group.Sessions`; `s.Id`)
                             {
                                 <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
                                     <Grid ColumnDefinitions=<>
@@ -91,7 +91,7 @@ namespace UnoVibe.Controls;
                     {
                         <ScrollViewer MaxHeight=200 VerticalScrollBarVisibility=Auto>
                             <StackPanel Spacing=6>
-                                foreach (var m in `Store.McpServers`)
+                                foreach (var m in `Store.McpServers`; `m.Name`)
                                 {
                                     <Grid ColumnDefinitions=<>
                                         <ColumnDefinition Width=Auto />
