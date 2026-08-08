@@ -149,6 +149,12 @@ public sealed partial class ChatStore : IDisposable
     /// </summary>
     public string RevertPromptText { get; private set; } = "";
 
+    /// <summary>
+    /// The user prompt text of the message just forked, restored into the composer by the
+    /// chat page after a fork (TUI parity). Plain field — read from code, not markup.
+    /// </summary>
+    public string ForkPromptText { get; private set; } = "";
+
     /// <summary>The HTTP client for the configured server (null before <see cref="Configure"/>).</summary>
     public OpencodeClient? Client => _client;
 
@@ -1185,6 +1191,60 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
+    /// Forks the conversation at a specific message (TUI/web parity: "Fork" action). Calls
+    /// POST /session/{id}/fork with the target message id — the server creates a new session
+    /// containing all messages strictly before the fork point (the forked-at message itself is
+    /// excluded) titled "&lt;original&gt; (fork #N)" — then switches to it and restores the
+    /// forked-at message's prompt (text + staged images) into the composer so the user can
+    /// continue from there. Returns the new session id, or null on failure/no session.
+    /// </summary>
+    public async Task<string?> ForkFromMessageAsync(MessageItem message)
+    {
+        if (_sessionId.Length == 0 || message is null) return null;
+        try
+        {
+            var forked = await _client.ForkSessionAsync(_sessionId, message.Id);
+            if (forked is null || forked.Id.Length == 0) return null;
+
+            await SwitchSessionAsync(forked.Id);
+
+            ForkPromptText = PromptTextFromMessage(message);
+            StageImagesFromMessage(message);
+            return forked.Id;
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Forks the whole active session (TUI/web parity: "Full session" fork). Calls
+    /// POST /session/{id}/fork with no message id so the server copies every message and titles
+    /// the new session "&lt;original&gt; (fork #N)", then switches to it. Unlike the per-message
+    /// fork there's no prompt to restore — the composer keeps whatever the user had. Returns the
+    /// new session id, or null on failure/no session.
+    /// </summary>
+    public async Task<string?> ForkFullSessionAsync()
+    {
+        if (_sessionId.Length == 0) return null;
+        try
+        {
+            var forked = await _client.ForkSessionAsync(_sessionId);
+            if (forked is null || forked.Id.Length == 0) return null;
+
+            await SwitchSessionAsync(forked.Id);
+            return forked.Id;
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Restores reverted messages. If a user message exists beyond the revert point, reverts
     /// forward to it; otherwise clears the revert entirely (unrevert). Mirrors the TUI's
     /// <c>session.redo</c> command.
@@ -1256,6 +1316,7 @@ public sealed partial class ChatStore : IDisposable
         RevertMessageId = "";
         RevertCountLabel = "";
         RevertPromptText = "";
+        ForkPromptText = "";
     }
 
     /// <summary>
@@ -1265,13 +1326,24 @@ public sealed partial class ChatStore : IDisposable
     /// </summary>
     private void RestorePromptFromMessage(MessageItem message)
     {
+        RevertPromptText = PromptTextFromMessage(message);
+        StageImagesFromMessage(message);
+    }
+
+    /// <summary>Concatenates a message's non-synthetic text parts into a composer prompt (TUI parity).</summary>
+    private static string PromptTextFromMessage(MessageItem message)
+    {
         var sb = new System.Text.StringBuilder();
         foreach (var part in message.Parts)
         {
             if (part.Type == "text" && !part.Synthetic) sb.Append(part.Text);
         }
-        RevertPromptText = sb.ToString();
+        return sb.ToString();
+    }
 
+    /// <summary>Re-stages a message's data-URL image file parts as pending attachments.</summary>
+    private void StageImagesFromMessage(MessageItem message)
+    {
         PendingImages.Clear();
         PendingImageCount = 0;
         foreach (var part in message.Parts)

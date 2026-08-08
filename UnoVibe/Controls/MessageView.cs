@@ -34,7 +34,7 @@ namespace UnoVibe.Controls;
                             {
                                 // Skip whitespace-only text parts entirely (no element rendered).
                                 if (`p.Text.Trim().Length > 0`)
-                                    <MessageTextPart Part=`p` Message=`Message` RevertRequested+=`OnPartRevertRequested` />
+                                    <MessageTextPart Part=`p` Message=`Message` RevertRequested+=`OnPartRevertRequested` ForkRequested+=`OnPartForkRequested` />
                             }
                         else if (`p.Type == "aborted"`)
                             <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(10, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
@@ -121,6 +121,16 @@ public partial class MessageView : IQuickMarkupComponent
     /// </summary>
     public event RevertHandler? RevertRequested;
 
+    /// <summary>Handler for <see cref="ForkRequested"/>.</summary>
+    public delegate Task ForkHandler(MessageItem message);
+
+    /// <summary>
+    /// Raised when the user clicks the per-message "fork from here" button under a user message.
+    /// The subscriber forks the conversation at that message (ChatStore), switches to the new
+    /// session, and restores the prompt into the composer. Matches the web client / TUI fork.
+    /// </summary>
+    public event ForkHandler? ForkRequested;
+
     [QuickMarkupConstructor]
     private void Ctor()
     {
@@ -137,6 +147,10 @@ public partial class MessageView : IQuickMarkupComponent
     /// <summary>Forwards a per-part revert request (from <see cref="MessageTextPart"/>) to <see cref="RevertRequested"/>.</summary>
     private Task OnPartRevertRequested(MessageItem message) =>
         RevertRequested?.Invoke(message) ?? Task.CompletedTask;
+
+    /// <summary>Forwards a per-part fork request (from <see cref="MessageTextPart"/>) to <see cref="ForkRequested"/>.</summary>
+    private Task OnPartForkRequested(MessageItem message) =>
+        ForkRequested?.Invoke(message) ?? Task.CompletedTask;
 
     private void RecomputeHeader(MessageItem msg) =>
         ShowHeader = !msg.Parts.Any(p => p.Type == "compaction");

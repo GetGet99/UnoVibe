@@ -64,7 +64,13 @@ namespace UnoVibe.Pages;
                         </StackPanel>
                     }
                 </StackPanel>
-                <Button Grid.Column=1 Background=`transparent` BorderThickness=0 Padding=`new Thickness(8, 2)` CornerRadius=6 VerticalAlignment=Center
+                <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=4 VerticalAlignment=Center>
+                    <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8, 2)` CornerRadius=6 VerticalAlignment=Center
+                            ToolTipService.ToolTip="Fork full session"
+                            IsEnabled=`Store.ActiveSessionId.Length > 0` @Click+=`await Store.ForkFullSessionAsync()`>
+                        <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=14 />
+                    </Button>
+                <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8, 2)` CornerRadius=6 VerticalAlignment=Center
                         ToolTipService.ToolTip="Session stats"
                         Flyout=<Flyout Placement=Bottom>
                             <StackPanel Spacing=8 MinWidth=260>
@@ -153,6 +159,7 @@ namespace UnoVibe.Pages;
                         <ProgressBar Value=`Store.ContextUsage` Minimum=0 Maximum=100 Width=70 Height=4 VerticalAlignment=Center />
                     </StackPanel>
                 </Button>
+                </StackPanel>
             </Grid>
             <StackPanel Grid.Row=1 Padding=`new Thickness(16, 0, 16, 4)` Spacing=6>
                 if (`Store.StatusMessage.Length > 0`)
@@ -204,7 +211,7 @@ namespace UnoVibe.Pages;
                             // Undo: the server keeps reverted messages until the next prompt, so
                             // hide everything at/after the revert point (the card replaces them).
                             if (`Store.RevertMessageId.Length == 0 || StringComparer.Ordinal.Compare(m.Id, Store.RevertMessageId) < 0`)
-                                <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` />
+                                <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`OnMessageForkRequested` />
                         }
                         if (`Store.RevertMessageId.Length > 0`)
                         {
@@ -452,6 +459,18 @@ public partial class ChatPage : Page
     {
         await Store.RevertToMessageAsync(message);
         Input = Store.RevertPromptText;
+        ForceScrollToBottom();
+    }
+
+    /// <summary>
+    /// Fork the conversation at a specific user message (web/TUI parity): create a new session
+    /// containing the history up to that message, switch to it, restore the forked-at message's
+    /// prompt into the composer, then scroll to the end.
+    /// </summary>
+    private async Task OnMessageForkRequested(MessageItem message)
+    {
+        await Store.ForkFromMessageAsync(message);
+        Input = Store.ForkPromptText;
         ForceScrollToBottom();
     }
 

@@ -148,6 +148,24 @@ public sealed class OpencodeClient
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Post /session/{id}/fork — creates a new session by forking an existing one at a
+    /// specific message point. Body is either empty (full-session fork) or <c>{ messageID }</c>;
+    /// the server copies all messages strictly before the fork point (the forked-at message
+    /// itself is excluded) and titles the new session "&lt;original&gt; (fork #N)". Returns the
+    /// new session's info. Mirrors the TUI's <c>session.fork</c>.
+    /// </summary>
+    public async Task<SessionInfo?> ForkSessionAsync(string sessionId, string? messageId = null,
+        CancellationToken ct = default)
+    {
+        object body = string.IsNullOrEmpty(messageId) ? new { } : new { messageID = messageId };
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/fork", body, Json, ct);
+        response.EnsureSuccessStatusCode();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        return ParseSessionInfo(doc.RootElement);
+    }
+
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers,
         CancellationToken ct = default)
     {

@@ -37,6 +37,11 @@ namespace UnoVibe.Controls;
             if (`Message?.Role == "user"`)
             {
                 <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
+                        ToolTipService.ToolTip="Fork conversation from this message"
+                        @Click+=`await ForkFromHereAsync()`>
+                    <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                </Button>
+                <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
                         ToolTipService.ToolTip="Undo everything after this message"
                         Flyout=confirmFlyout = <Flyout Placement=BottomEdgeAlignedRight>
                     <StackPanel Spacing=8 MaxWidth=240 Padding=4>
@@ -66,6 +71,16 @@ public partial class MessageTextPart : IQuickMarkupComponent
     /// </summary>
     public event RevertHandler? RevertRequested;
 
+    /// <summary>Handler for <see cref="ForkRequested"/>.</summary>
+    public delegate Task ForkHandler(MessageItem message);
+
+    /// <summary>
+    /// Raised when the user clicks the per-message "fork from here" button under a user message.
+    /// The subscriber forks the conversation at that message (ChatStore), switches to the new
+    /// session, and restores the prompt into the composer. Matches the web client / TUI fork.
+    /// </summary>
+    public event ForkHandler? ForkRequested;
+
     [QuickMarkupConstructor]
     private void Ctor()
     {
@@ -79,5 +94,11 @@ public partial class MessageTextPart : IQuickMarkupComponent
         if (confirmFlyout is { IsOpen: true }) confirmFlyout.Hide();
         if (Message is null) return;
         if (RevertRequested is { } handler) await handler(Message);
+    }
+
+    private async Task ForkFromHereAsync()
+    {
+        if (Message is null) return;
+        if (ForkRequested is { } handler) await handler(Message);
     }
 }
