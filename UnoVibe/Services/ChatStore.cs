@@ -5,7 +5,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Streams;
 using UnoVibe.Models;
-using System.Diagnostics;
 
 namespace UnoVibe.Services;
 
@@ -191,10 +190,6 @@ public sealed partial class ChatStore : IDisposable
         _permissions.Clear();
         ActivePermission = null;
         Messages.Clear();
-        Messages.CollectionChanged += (o, e) =>
-        {
-            Debug.WriteLine($"[Messages] {e.Action} old items: {e.OldItems?.Count}, new items: {e.NewItems?.Count}");
-        };
         HiddenMessages = 0;
         _messagesById.Clear();
         ActiveSubagents.Clear();

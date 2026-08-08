@@ -17,7 +17,7 @@ High-level goals/design:
 
 - **Uno Platform** via `Uno.Sdk` (see `global.json`, currently `6.6.29`). Do **not** bump individual Uno package versions — update the SDK version in `global.json` instead.
 - **.NET 10** (`dotnet --version` → `10.0.110`, `net10.0-desktop`).
-- **QuickMarkup** `0.1.20` (`QuickMarkup.Uno` package; versions pinned in `Directory.Packages.props`). Uses central package management.
+- **QuickMarkup** `0.1.22` (`QuickMarkup.Uno` package; versions pinned in `Directory.Packages.props`, currently a locally-packed build of the upstream `wt-master` repo). Uses central package management.
 - Only external package reference: `QuickMarkup.Uno`. Everything else comes from the Uno.Sdk implicit packages.
 - Build uses `Uno.SingleProject`; `EmitCompilerGeneratedFiles=true` so generated source lands under `UnoVibe/obj/<tfm>/generated/...`.
 
@@ -75,7 +75,7 @@ Note: `pkill -f "opencode serve ..."` and similar broad patterns can hang the sh
 
 - A `[QuickMarkupConstructor]` method **must call `Init()`** (usually first) or the UI tree never builds.
 - Only `Reference<T>` fields declared in the `[QuickMarkup("""...""")]` header are reactive. Plain `ObservableCollection.Count` in an `if` condition is NOT reactive; with `&&` short-circuiting, at least one Reference must be read first to subscribe. QuickMarkup **0.1.21**: `ReactiveList<T>` (from `QuickMarkup.Infra.Collections`) makes `Count`/LINQ natively reactive — `PartItem.QuestionForm` uses it so the question form's `if` count check updates; the `.Reactive` extension (`myCollection.Reactive.Count`) is the ObservableCollection equivalent.
-- **Keyed `foreach`**: the message `foreach`, the sidebar `DirectoryGroups`/`group.Sessions`/`McpServers` loops, and the `ActiveSubagents` strip are keyed (`` `group.Directory` ``/`` `s.Id` ``/`` `m.Name` ``) so QuickMarkup reuses elements across wholesale collection rebuilds (Clear+re-Add). Deliberately **unkeyed**: `Message.Parts` and `PendingImages` — those are mutated incrementally (single Add/Remove), where a keyless ObservableCollection foreach is the O(1) fast path and a key adds reconcile overhead. Add a key only for collections rebuilt via Clear+re-Add.
+- **Keyed `foreach`**: the message `foreach`, the sidebar `DirectoryGroups`/`group.Sessions`/`McpServers` loops, and the `ActiveSubagents` strip are keyed (`` `group.Directory` ``/`` `s.Id` ``/`` `m.Name` ``) so QuickMarkup reuses elements across wholesale collection rebuilds (Clear+re-Add). Deliberately **unkeyed**: `Message.Parts` and `PendingImages` — those are mutated incrementally (single Add/Remove), where a keyless ObservableCollection foreach is the O(1) fast path and a key adds reconcile overhead. Add a key only for collections rebuilt via Clear+re-Add. Since QuickMarkup **0.1.22-beta1** (local patch to `wt-master`), keyed reconciles are **incremental**: a single Add/Remove/Move only mounts/unmounts the affected block and moves surviving blocks in-place, so appending a message no longer unmounts/remounts the whole list (the flicker fix).
 - Two-way binding is `` Property<=>`Var` ``. `CheckBox.IsChecked` is `bool?` and two-way binding it to a `bool` field will not compile — use `ToggleSwitch` (`IsOn` is `bool`) instead.
 - Values in markup are not quoted; use backticks for C# expressions, `<>...</>` for collection-typed properties, `if (`expr`) { }` for conditional children.
 - The QuickMarkup skill lives in `.agents/skills/quickmarkup/SKILL.md` (committed). The upstream source is at `/mnt/Data/Codes/QuickMarkup/wt-master/`.
