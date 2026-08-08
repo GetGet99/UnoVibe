@@ -6,6 +6,34 @@ namespace UnoVibe.Controls.ToolViews;
 
 public static class ToolViewShared
 {
+    private static readonly IReadOnlyDictionary<string, string> ToolDisplayNames =
+        new Dictionary<string, string>
+        {
+            ["bash"] = "Running command...",
+            ["shell"] = "Running command...",
+            ["glob"] = "Globbing...",
+            ["grep"] = "Grepping...",
+            ["webfetch"] = "Fetching",
+            ["skill"] = "Reading skill",
+            ["read"] = "Reading",
+            ["edit"] = "Editing",
+            ["write"] = "Writing",
+            ["todowrite"] = "Writing todos...",
+            ["question"] = "Asking question...",
+            ["task"] = "Delegating...",
+        };
+
+    /// <summary>
+    /// Maps a raw tool name to its friendly display label (the same text each view's
+    /// last-resort fallback uses), so a title-less running tool shows "Editing" instead
+    /// of leaking the raw "edit". Unknown names pass through unchanged.
+    /// </summary>
+    public static string? ToolDisplayName(string? toolName)
+    {
+        if (string.IsNullOrEmpty(toolName)) return null;
+        return ToolDisplayNames.TryGetValue(toolName, out var label) ? label : toolName;
+    }
+
     public static (string Title, string Body) ReasoningSummary(PartItem p)
     {
         var content = p.Text.Replace("[REDACTED]", "").Trim();
@@ -61,18 +89,18 @@ public static class ToolViewShared
     public static string Shell(PartItem p) =>
         p.ToolCommand.Length > 0
             ? "$ " + p.ToolCommand + (p.ToolWorkdir.Length > 0 ? "  (in " + p.ToolWorkdir + ")" : "")
-            : p.ToolTitle ?? p.ToolName ?? "Running command...";
+            : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running command...";
 
     public static string Glob(PartItem p)
     {
-        var name = p.ToolPattern.Length > 0 ? "Glob \"" + p.ToolPattern + "\"" : p.ToolTitle ?? p.ToolName ?? "Globbing...";
+        var name = p.ToolPattern.Length > 0 ? "Glob \"" + p.ToolPattern + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Globbing...";
         var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
         return "✱ " + name + count;
     }
 
     public static string Grep(PartItem p)
     {
-        var name = p.ToolPattern.Length > 0 ? "Grep \"" + p.ToolPattern + "\"" : p.ToolTitle ?? p.ToolName ?? "Grepping...";
+        var name = p.ToolPattern.Length > 0 ? "Grep \"" + p.ToolPattern + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Grepping...";
         if (p.ToolSearchPath.Length > 0) name += " in " + p.ToolSearchPath;
         if (p.ToolInclude.Length > 0) name += " (" + p.ToolInclude + ")";
         var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
@@ -80,7 +108,7 @@ public static class ToolViewShared
     }
 
     public static string TodoTitle(PartItem p) =>
-        p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "Writing todos...";
+        p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Writing todos...";
 
     public static string TodoLine(TodoItem todo)
     {
@@ -119,7 +147,7 @@ public static class ToolViewShared
     }
 
     public static string QuestionTitle(PartItem p) =>
-        p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "Asking question...";
+        p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Asking question...";
 
     public static List<QuestionItem> ParseQuestions(PartItem p) => ParseQuestions(p.QuestionJson, p.AnswerJson);
 
@@ -176,13 +204,13 @@ public static class ToolViewShared
             : "";
 
     public static string WebFetch(PartItem p) =>
-        "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? p.ToolName ?? "Fetching");
+        "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Fetching");
 
     public static string Skill(PartItem p) =>
-        "→ " + (p.ToolSkillName.Length > 0 ? "Skill \"" + p.ToolSkillName + "\"" : p.ToolTitle ?? p.ToolName ?? "Reading skill");
+        "→ " + (p.ToolSkillName.Length > 0 ? "Skill \"" + p.ToolSkillName + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Reading skill");
 
     public static string Read(PartItem p) =>
-        "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "Reading");
+        "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Reading");
 
     public static string Loaded(PartItem p)
     {
@@ -191,10 +219,10 @@ public static class ToolViewShared
     }
 
     public static string Edit(PartItem p) =>
-        "← " + (p.ToolFilePath.Length > 0 ? "Edit " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "Editing");
+        "← " + (p.ToolFilePath.Length > 0 ? "Edit " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Editing");
 
     public static string Write(PartItem p) =>
-        "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? p.ToolName ?? "Writing");
+        "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Writing");
 
     /// <summary>
     /// Edit title with an added/changed line count derived from the unified diff
@@ -239,7 +267,7 @@ public static class ToolViewShared
 
     public static string Generic(PartItem p)
     {
-        var name = p.ToolTitle ?? p.ToolName ?? "Running tool...";
+        var name = p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running tool...";
         var input = p.ToolInput.Length > 0 && p.ToolInput.Length <= 400 ? " " + p.ToolInput : "";
         return "⚙ " + name + input;
     }
@@ -247,7 +275,7 @@ public static class ToolViewShared
     /// <summary>Title for a subagent-spawning <c>task</c> tool call. The state.title is the model's short description.</summary>
     public static string Task(PartItem p)
     {
-        var name = p.ToolTitle?.Length > 0 ? p.ToolTitle : p.ToolName ?? "Subagent task";
+        var name = p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Delegating...";
         return "✳ " + name;
     }
 

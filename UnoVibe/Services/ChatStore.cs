@@ -2144,7 +2144,6 @@ public sealed partial class ChatStore : IDisposable
                 if (meta.TryGetProperty("parentSessionId", out var mParent)) item.ToolParentSessionId = mParent.GetString() ?? "";
             }
         }
-        if (string.IsNullOrEmpty(item.ToolTitle)) item.ToolTitle = item.ToolName;
     }
 
     private static void ApplyMessageStats(MessageItem item, JsonElement info)
