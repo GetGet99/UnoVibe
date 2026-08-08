@@ -8,12 +8,15 @@ namespace UnoVibe.Models;
 /// stay plain (they never change for a live session).
 /// </summary>
 [QuickMarkup("""
-    public string Title;
+    public string Title = "";
     public long Updated;
-    public string Agent;
-    public string ModelId;
-    public string ModelProviderId;
-    public string ModelVariant;
+    public string Agent = "";
+    // The server only includes a "model" object when a model is configured for the session; on
+    // machines with no/limited providers it omits it (or sends null), so these must default to ""
+    // instead of null — a missing model is "no model", not "crash".
+    public string ModelId = "";
+    public string ModelProviderId = "";
+    public string ModelVariant = "";
     public double Cost;
     public long TokensInput;
     public long TokensOutput;
