@@ -81,11 +81,31 @@ public sealed partial class ChatStore : IDisposable
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
 
-    /// <summary>Image file extensions accepted by the picker and the clipboard uri-list paste path.</summary>
+    /// <summary>Image file extensions accepted by the picker and the clipboard storage-items paste path.</summary>
     private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp" };
 
-    /// <summary>Image MIME types tried when pasting raw image bytes from the clipboard.</summary>
-    private static readonly string[] ImageMimeTypes = { "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp" };
+    /// <summary>
+    /// Clipboard format names probed (in order) when pasting raw image bytes. Covers the union
+    /// of what each Skia backend exposes: X11 mime atoms (<c>image/png</c>, <c>image/jpeg</c>,
+    /// ...) returning <c>byte[]</c>, and Win32 registered format names (<c>PNG</c>, <c>JFIF</c>,
+    /// ...) returning <c>IRandomAccessStream</c>, plus the CF_DIB remap
+    /// <c>StandardDataFormats.Bitmap</c> returning a <c>RandomAccessStreamReference</c>.
+    /// </summary>
+    private static readonly (string Name, string Mime, string Ext)[] ImageClipboardFormats =
+    {
+        ("image/png", "image/png", "png"),
+        ("image/jpeg", "image/jpeg", "jpeg"),
+        ("image/gif", "image/gif", "gif"),
+        ("image/webp", "image/webp", "webp"),
+        ("image/bmp", "image/bmp", "bmp"),
+        ("PNG", "image/png", "png"),
+        ("JFIF", "image/jpeg", "jpeg"),
+        ("JPEG", "image/jpeg", "jpeg"),
+        ("GIF", "image/gif", "gif"),
+        ("WEBP", "image/webp", "webp"),
+        ("BMP", "image/bmp", "bmp"),
+        (StandardDataFormats.Bitmap, "image/bmp", "bmp"),
+    };
 
     public ObservableCollection<string> ModeOptions { get; } = new();
     public ObservableCollection<ModelOption> ModelOptions { get; } = new();
@@ -347,10 +367,14 @@ public sealed partial class ChatStore : IDisposable
     /// let the default text paste proceed.
     /// </summary>
     /// <remarks>
-    /// Uses Uno's built-in <see cref="Clipboard"/> which on Skia/X11 routes to the
-    /// <c>X11ClipboardExtension</c> (supports raw <c>image/png</c>/<c>image/jpeg</c> atoms and
-    /// <c>text/uri-list</c>). Only the read path is needed here; the write path workaround from
-    /// PocketPic is not required for pasting.
+    /// Uses Uno's built-in <see cref="Clipboard"/>, probing the union of what each Skia
+    /// backend exposes. On X11 it routes to the <c>X11ClipboardExtension</c> (raw
+    /// <c>image/png</c>/<c>image/jpeg</c> atoms returning <c>byte[]</c>, files via
+    /// <c>text/uri-list</c>); on Windows to the <c>Win32ClipboardExtension</c> (registered
+    /// format names like <c>PNG</c>/<c>JFIF</c> returning <c>IRandomAccessStream</c>, CF_DIB
+    /// remapped to <c>StandardDataFormats.Bitmap</c>, files via <c>CF_HDROP</c>). Both expose
+    /// files under <c>StandardDataFormats.StorageItems</c>, so that check is shared. Only the
+    /// read path is needed here; the write path workaround from PocketPic is not required.
     /// </remarks>
     public async Task<bool> PasteImageFromClipboardAsync()
     {
@@ -359,25 +383,9 @@ public sealed partial class ChatStore : IDisposable
             var content = Clipboard.GetContent();
             if (content is null) return false;
 
-            foreach (var mime in ImageMimeTypes)
-            {
-                if (!content.Contains(mime)) continue;
-                var item = await content.GetDataAsync(mime);
-                byte[]? bytes = item switch
-                {
-                    byte[] raw => raw,
-                    IRandomAccessStream stream => await ReadAllBytes(stream),
-                    _ => null,
-                };
-                if (bytes is { Length: > 0 })
-                {
-                    var ext = mime[(mime.LastIndexOf('/') + 1)..];
-                    StageAttachment(await ImageAttachment.CreateFromBytesAsync(bytes, mime, $"Pasted image.{ext}"));
-                    return true;
-                }
-            }
-
-            if (content.Contains("text/uri-list"))
+            // Files first: "Shell IDList Array" is the cross-platform storage-items format
+            // (X11 maps text/uri-list to it; Win32 maps CF_HDROP to it).
+            if (content.Contains(StandardDataFormats.StorageItems))
             {
                 var items = await content.GetStorageItemsAsync();
                 var staged = false;
@@ -392,6 +400,27 @@ public sealed partial class ChatStore : IDisposable
                     }
                 }
                 if (staged) return true;
+            }
+
+            // Raw image bytes: probe the union of format names each platform exposes. The
+            // retrieved value may be byte[] (X11), IRandomAccessStream (Win32 registered
+            // format), or RandomAccessStreamReference (Win32 CF_DIB).
+            foreach (var (name, mime, ext) in ImageClipboardFormats)
+            {
+                if (!content.Contains(name)) continue;
+                var item = await content.GetDataAsync(name);
+                byte[]? bytes = item switch
+                {
+                    byte[] raw => raw,
+                    IRandomAccessStream stream => await ReadAllBytes(stream),
+                    IRandomAccessStreamReference streamRef => await ReadAllBytes(await streamRef.OpenReadAsync()),
+                    _ => null,
+                };
+                if (bytes is { Length: > 0 })
+                {
+                    StageAttachment(await ImageAttachment.CreateFromBytesAsync(bytes, mime, $"Pasted image.{ext}"));
+                    return true;
+                }
             }
         }
         catch
