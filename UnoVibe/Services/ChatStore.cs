@@ -1099,8 +1099,10 @@ public sealed partial class ChatStore : IDisposable
     /// Undoes the agent's reply to the last user message. Mirrors the TUI's <c>session.undo</c>
     /// command: aborts if the session is busy (the server 409s a revert while busy), targets the
     /// last user message before the current revert point (so a second undo walks further back),
-    /// calls POST /session/{id}/revert, refreshes the message list, and restores the undone
-    /// user prompt (text + staged images) into the composer.
+    /// calls POST /session/{id}/revert, and restores the undone user prompt (text + staged
+    /// images) into the composer. No message refetch is needed — the server keeps reverted
+    /// messages until the next prompt, and the chat page hides messages at/after the revert
+    /// point via <see cref="RevertMessageId"/>.
     /// </summary>
     public async Task UndoLastMessageAsync()
     {
@@ -1115,7 +1117,6 @@ public sealed partial class ChatStore : IDisposable
             await _client.RevertAsync(_sessionId, target.Id);
 
             RestorePromptFromMessage(target);
-            await RefreshChatAsync();
             ApplyRevertMarker(target.Id);
         }
         catch (Exception ex)
@@ -1141,47 +1142,12 @@ public sealed partial class ChatStore : IDisposable
             if (next is null)
             {
                 await _client.UnrevertAsync(_sessionId);
-                await RefreshChatAsync();
                 ResetRevertState();
                 return;
             }
 
             await _client.RevertAsync(_sessionId, next.Id);
-            await RefreshChatAsync();
             ApplyRevertMarker(next.Id);
-        }
-        catch (Exception ex)
-        {
-            ConnectionStatus = $"Error: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Refetches the active session's messages from the server and rebuilds the UI list.
-    /// Used after undo/redo (the server keeps reverted messages until the next prompt, so a
-    /// refetch is required to get an authoritative view). Never throws — errors surface via
-    /// <see cref="ConnectionStatus"/> like the other refresh helpers.
-    /// </summary>
-    private async Task RefreshChatAsync()
-    {
-        if (_sessionId.Length == 0) return;
-        try
-        {
-            var root = await _client.GetMessagesAsync(_sessionId);
-            if (root.ValueKind != JsonValueKind.Array) return;
-            Messages.Clear();
-            _messagesById.Clear();
-            HiddenMessages = 0;
-            foreach (var msg in root.EnumerateArray())
-            {
-                var message = MessageFromJson(msg);
-                if (message is null) continue;
-                _messagesById[message.Id] = message;
-                AppendMessage(message);
-            }
-            UpdateSessionStats();
-            await SyncPendingQuestionsAsync();
-            await SyncPendingPermissionsAsync();
         }
         catch (Exception ex)
         {

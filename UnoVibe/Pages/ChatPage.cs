@@ -195,7 +195,10 @@ namespace UnoVibe.Pages;
                             <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10, 8)` Margin=`new Thickness(0, 0, 0, 8)`>
                                 <TextBlock Text=`$"History truncated: {Store.HiddenMessages} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                             </Border>
-                        foreach (var m in `Store.Messages`)
+                        // Keyed by message id so QuickMarkup reuses MessageView blocks across
+                        // collection resets (session switches/rebuilds) instead of recreating
+                        // every element; the revert filter below then only toggles visibility.
+                        foreach (var m in `Store.Messages`; `m.Id`)
                         {
                             // Undo: the server keeps reverted messages until the next prompt, so
                             // hide everything at/after the revert point (the card replaces them).
