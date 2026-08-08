@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using UnoVibe.Controls;
 using UnoVibe.Models;
 using UnoVibe.Services;
@@ -190,7 +191,7 @@ namespace UnoVibe.Pages;
             </StackPanel>
             <Grid Grid.Row=2>
                 scrollHost = <ScrollViewer>
-                    <StackPanel Padding=16>
+                    messagePanel = <StackPanel Padding=16>
                         if (`Store.HiddenMessages > 0`)
                             <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10, 8)` Margin=`new Thickness(0, 0, 0, 8)`>
                                 <TextBlock Text=`$"History truncated: {Store.HiddenMessages} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
@@ -337,12 +338,31 @@ namespace UnoVibe.Pages;
     """)]
 public partial class ChatPage : Page
 {
+    /// <summary>
+    /// True while the user is pinned to the bottom of the message list; follow-the-stream
+    /// autoscroll only runs in this state. Set by <see cref="OnScrollViewChanged"/> from any
+    /// scroll (scrolling away from the bottom disables it, reaching the bottom re-enables it),
+    /// and re-pinned by <see cref="ForceScrollToBottom"/> on explicit app actions (send,
+    /// continue, undo, redo, permission).
+    /// </summary>
+    private bool _stickToBottom = true;
+
+    /// <summary>Pixels from the very bottom that still count as "at the bottom" for stickiness.</summary>
+    private const double StickToBottomThreshold = 40;
+
     [QuickMarkupConstructor]
     private void Ctor()
     {
         Init();
 
         var store = Store;
+        scrollHost.ViewChanged += OnScrollViewChanged;
+        // Scrolling keyed off the message panel's laid-out size: SizeChanged fires after the
+        // frame's layout pass, so ScrollableHeight reflects the freshly-rendered content
+        // (new session messages, streaming parts). Scrolling earlier — right when a message is
+        // added to the collection — targets a stale ScrollableHeight of 0 and leaves the
+        // viewport at the top.
+        messagePanel.SizeChanged += (_, _) => ScrollToBottom();
         store.Messages.CollectionChanged += OnMessagesChanged;
         foreach (var message in store.Messages) HookParts(message);
 
@@ -378,7 +398,7 @@ public partial class ChatPage : Page
     private async Task ScrollToPermissionAsync()
     {
         await Task.Yield();
-        ScrollToBottom();
+        ForceScrollToBottom();
     }
 
     private async void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -400,7 +420,7 @@ public partial class ChatPage : Page
         if (content.Length == 0 && Store.PendingImages.Count == 0) return;
         Input = "";
         await Store.SendAsync(content);
-        ScrollToBottom();
+        ForceScrollToBottom();
     }
 
     /// <summary>Enter was pressed in the input box with the suggestion flyout closed — send the message.</summary>
@@ -418,7 +438,7 @@ public partial class ChatPage : Page
     private async Task ContinueAsync()
     {
         await Store.SendAsync("continue");
-        ScrollToBottom();
+        ForceScrollToBottom();
     }
 
     /// <summary>
@@ -429,18 +449,22 @@ public partial class ChatPage : Page
     {
         await Store.UndoLastMessageAsync();
         Input = Store.RevertPromptText;
-        ScrollToBottom();
+        ForceScrollToBottom();
     }
 
     /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
     private async Task RedoLastMessageAsync()
     {
         await Store.RedoLastMessageAsync();
-        ScrollToBottom();
+        ForceScrollToBottom();
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        // A full list rebuild (session switch / new session / configure) restarts pinned to
+        // the bottom; the freshly-loaded messages then autoscroll into view.
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+            _stickToBottom = true;
         if (e.NewItems is not null)
             foreach (MessageItem message in e.NewItems) HookParts(message);
         ScrollToBottom();
@@ -549,9 +573,39 @@ public partial class ChatPage : Page
     /// <summary>Glyph for a pending question/approval on a subagent chip: shield for a permission, question mark for a question.</summary>
     private static Symbol SubagentAttentionSymbol(SessionInfo s) => s.AttentionKind == "permission" ? Symbol.Permissions : Symbol.Help;
 
+    /// <summary>
+    /// Follow-the-stream autoscroll: only runs while the user is pinned to the bottom, so a
+    /// manual scroll-up leaves the viewport alone until the user scrolls back down to the
+    /// bottom. The primary trigger is <c>messagePanel.SizeChanged</c>, which fires after the
+    /// frame's layout pass — the moment ScrollableHeight reflects the newly-rendered content.
+    /// </summary>
     private void ScrollToBottom()
     {
+        if (scrollHost is null || !_stickToBottom) return;
+        scrollHost.ChangeView(null, scrollHost.ScrollableHeight, null, true);
+    }
+
+    /// <summary>
+    /// Explicit app-action scroll (send, continue, undo/redo, permission): re-pins the view
+    /// to the bottom regardless of the user's current position, then autoscrolls.
+    /// </summary>
+    private void ForceScrollToBottom()
+    {
         if (scrollHost is null) return;
-        scrollHost.ChangeView(null, scrollHost.ScrollableHeight, null);
+        _stickToBottom = true;
+        ScrollToBottom();
+    }
+
+    /// <summary>
+    /// Tracks whether the user is pinned to the bottom. Every ViewChanged event is honored
+    /// (including intermediate drag/inertia frames) so a scroll-up disables autoscroll
+    /// immediately and a scroll-down to the bottom re-enables it. Our own programmatic
+    /// scrolls use ChangeView with disableAnimation, which raises exactly one
+    /// non-intermediate event at the bottom, so they never falsely unpin.
+    /// </summary>
+    private void OnScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (scrollHost is null) return;
+        _stickToBottom = scrollHost.ScrollableHeight - scrollHost.VerticalOffset <= StickToBottomThreshold;
     }
 }
