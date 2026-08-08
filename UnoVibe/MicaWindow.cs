@@ -46,7 +46,7 @@ public class MicaWindow : Window
         {
             try
             {
-                SystemBackdrop = new MicaBackdrop { Kind = global::Microsoft.UI.Composition.SystemBackdrops.MicaKind.Base };
+                SystemBackdrop = new MicaBackdrop();
                 return; // keep the root transparent so Mica shows through
             }
             catch (Exception ex)
