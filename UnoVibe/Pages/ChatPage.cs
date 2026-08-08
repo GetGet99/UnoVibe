@@ -204,7 +204,7 @@ namespace UnoVibe.Pages;
                             // Undo: the server keeps reverted messages until the next prompt, so
                             // hide everything at/after the revert point (the card replaces them).
                             if (`Store.RevertMessageId.Length == 0 || StringComparer.Ordinal.Compare(m.Id, Store.RevertMessageId) < 0`)
-                                <MessageView Message=`m` />
+                                <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` />
                         }
                         if (`Store.RevertMessageId.Length > 0`)
                         {
@@ -303,10 +303,6 @@ namespace UnoVibe.Pages;
                     <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
                             @Click+=`await Store.PickImageAsync()`>
                         <SymbolIcon Symbol=Camera VerticalAlignment=Center />
-                    </Button>
-                    <Button ToolTipService.ToolTip="Undo last message" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
-                            @Click+=`await UndoLastMessageAsync()`>
-                        <SymbolIcon Symbol=Undo VerticalAlignment=Center />
                     </Button>
                     if (`Store.PendingPrompts > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
@@ -441,21 +437,21 @@ public partial class ChatPage : Page
         ForceScrollToBottom();
     }
 
-    /// <summary>
-    /// Undo the agent's reply to the last user message (revert), then restore the undone
-    /// prompt into the composer so it can be resent (mirrors the TUI's /undo).
-    /// </summary>
-    private async Task UndoLastMessageAsync()
-    {
-        await Store.UndoLastMessageAsync();
-        Input = Store.RevertPromptText;
-        ForceScrollToBottom();
-    }
-
     /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
     private async Task RedoLastMessageAsync()
     {
         await Store.RedoLastMessageAsync();
+        ForceScrollToBottom();
+    }
+
+    /// <summary>
+    /// Revert to a specific user message (web/TUI parity): rewind the conversation to that
+    /// message, restore its prompt into the composer, then scroll to the end.
+    /// </summary>
+    private async Task OnMessageRevertRequested(MessageItem message)
+    {
+        await Store.RevertToMessageAsync(message);
+        Input = Store.RevertPromptText;
         ForceScrollToBottom();
     }
 

@@ -1125,17 +1125,29 @@ public sealed partial class ChatStore : IDisposable
     public async Task UndoLastMessageAsync()
     {
         if (_sessionId.Length == 0) return;
+        var target = FindUndoTargetMessage();
+        if (target is null) return;
+        await RevertToMessageAsync(target);
+    }
+
+    /// <summary>
+    /// Reverts the conversation to a specific user message ("undo to here"), mirroring the web
+    /// client's per-message revert action and the TUI's message dialog "Revert". Aborts if the
+    /// session is busy, calls POST /session/{id}/revert for the target message, and restores
+    /// that message's prompt (text + staged images) into the composer. Messages at/after the
+    /// target are hidden via <see cref="RevertMessageId"/> (the target itself included).
+    /// </summary>
+    public async Task RevertToMessageAsync(MessageItem message)
+    {
+        if (_sessionId.Length == 0 || message is null) return;
         try
         {
-            var target = FindUndoTargetMessage();
-            if (target is null) return;
-
             if (IsBusy) await _client.AbortAsync(_sessionId);
 
-            await _client.RevertAsync(_sessionId, target.Id);
+            await _client.RevertAsync(_sessionId, message.Id);
 
-            RestorePromptFromMessage(target);
-            ApplyRevertMarker(target.Id);
+            RestorePromptFromMessage(message);
+            ApplyRevertMarker(message.Id);
         }
         catch (Exception ex)
         {

@@ -12,6 +12,7 @@ namespace UnoVibe.Controls;
     using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
+    using Windows.UI.Text;
     MessageItem? Message;
     bool ShowHeader = true;
     <setup>
@@ -109,12 +110,48 @@ namespace UnoVibe.Controls;
                             <TextBlock Text=`$"[{p.Type}]"` FontSize=11 Foreground=`theme.TertiaryText` IsTextSelectionEnabled=true />
                     }
                 </StackPanel>
+                // Per-message action row (web/TUI parity): a small always-visible "revert to
+                // here" button under user messages, right-aligned. Future actions (e.g. fork)
+                // go in this same row. Deliberately not hover-revealed — a toggled Visibility
+                // would reflow the message and fight the stick-to-bottom autoscroll. The button
+                // opens a confirmation flyout (Button.Flyout auto-opens on click) whose "Undo"
+                // button performs the actual revert; the flyout is light-dismissed (ShowMode=Auto),
+                // so "click outside" cancels — no explicit Cancel button.
+                if (`Message.Role == "user"`)
+                {
+                    <StackPanel Orientation=Horizontal Spacing=4 HorizontalAlignment=Right>
+                        <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
+                                ToolTipService.ToolTip="Undo everything after this message"
+                                Flyout=confirmFlyout = <Flyout Placement=BottomEdgeAlignedRight>
+                            <StackPanel Spacing=8 MaxWidth=240 Padding=4>
+                                <TextBlock Text="Undo everything after this message?" FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap />
+                                <TextBlock Text="The conversation rewinds to this message and its prompt is restored to the input box." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                                <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
+                                    <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                                    <Button Content="Undo" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`await RevertToHereAsync()` />
+                                </StackPanel>
+                            </StackPanel>
+                        </Flyout>>
+                            <AppSymbolIcon Symbol=Undo FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                        </Button>
+                    </StackPanel>
+                }
             </StackPanel>
         }
     </Grid>
     """)]
 public partial class MessageView : IQuickMarkupComponent
 {
+    /// <summary>Handler for <see cref="RevertRequested"/>.</summary>
+    public delegate Task RevertHandler(MessageItem message);
+
+    /// <summary>
+    /// Raised when the user clicks the per-message "revert to here" button under a user message.
+    /// The subscriber performs the actual revert (ChatStore) and restores the prompt into the
+    /// composer. Matches the web client's per-message revert action / TUI message dialog.
+    /// </summary>
+    public event RevertHandler? RevertRequested;
+
     [QuickMarkupConstructor]
     private void Ctor()
     {
@@ -126,6 +163,13 @@ public partial class MessageView : IQuickMarkupComponent
             msg.Parts.CollectionChanged += (_, _) => RecomputeHeader(msg);
         }
         Init();
+    }
+
+    private async Task RevertToHereAsync()
+    {
+        if (confirmFlyout is { IsOpen: true }) confirmFlyout.Hide();
+        if (Message is null) return;
+        if (RevertRequested is { } handler) await handler(Message);
     }
 
     private void RecomputeHeader(MessageItem msg) =>
