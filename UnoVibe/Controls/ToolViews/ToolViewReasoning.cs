@@ -8,6 +8,7 @@ namespace UnoVibe.Controls.ToolViews;
     PartItem Part;
     bool Expanded = false;
     bool Hovering = false;
+    bool PlainMode = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -23,9 +24,17 @@ namespace UnoVibe.Controls.ToolViews;
         if (`Expanded`)
         {
             if (`ToolViewShared.ReasoningSummary(Part).Body.Length > 0`)
+            {
                 <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                    <TextBlock Text=`ToolViewShared.ReasoningSummary(Part).Body` FontSize=11 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                    <MarkdownView Text=`ToolViewShared.ReasoningSummary(Part).Body` PlainMode=`PlainMode` />
                 </Border>
+                <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
+                        HorizontalAlignment=Left
+                        ToolTipService.ToolTip=`PlainMode ? "Show formatted Markdown" : "Show plain text"`
+                        @Click+=`PlainMode = !PlainMode`>
+                    <AppSymbolIcon Symbol=`PlainMode ? Symbol.Font : Symbol.Bullets` FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                </Button>
+            }
         }
     </StackPanel>
     """)]

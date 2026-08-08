@@ -16,7 +16,6 @@ namespace UnoVibe.Controls;
     using Windows.UI.Text;
     MessageItem? Message;
     bool ShowHeader = true;
-    bool PlainMode = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -35,14 +34,7 @@ namespace UnoVibe.Controls;
                             {
                                 // Skip whitespace-only text parts entirely (no element rendered).
                                 if (`p.Text.Trim().Length > 0`)
-                                    <Border CornerRadius=8 Padding=`new Thickness(12, 8, 12, 8)` MaxWidth=720
-                                            HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`
-                                            Background=`Message.Role == "user"
-                                                ? (theme.Accent is SolidColorBrush accent ? new SolidColorBrush(accent.Color) { Opacity = 0.3 } : theme.CardBackground)
-                                                : theme.CardBackground`
-                                            BorderBrush=`theme.CardStroke` BorderThickness=`new Thickness(1)`>
-                                        <MarkdownView Text=`p.Text` PlainMode=`PlainMode` />
-                                    </Border>
+                                    <MessageTextPart Part=`p` Message=`Message` RevertRequested+=`OnPartRevertRequested` />
                             }
                         else if (`p.Type == "aborted"`)
                             <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(10, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
@@ -113,41 +105,6 @@ namespace UnoVibe.Controls;
                             <TextBlock Text=`$"[{p.Type}]"` FontSize=11 Foreground=`theme.TertiaryText` IsTextSelectionEnabled=true />
                     }
                 </StackPanel>
-                // Per-message action row (web/TUI parity): a small always-visible row under messages
-                // with text parts — a markdown/plain toggle (both roles) plus the "revert to here"
-                // button (user only), right-aligned. Future actions (e.g. fork) go in this same row.
-                // Deliberately not hover-revealed — a toggled Visibility would reflow the message and
-                // fight the stick-to-bottom autoscroll. The undo button opens a confirmation flyout
-                // (Button.Flyout auto-opens on click) whose "Undo" button performs the actual revert;
-                // the flyout is light-dismissed (ShowMode=Auto), so "click outside" cancels — no
-                // explicit Cancel button.
-                if (`Message.Parts.Reactive.Count(p => p.Type == "text" && !p.Synthetic) > 0`)
-                {
-                    <StackPanel Orientation=Horizontal Spacing=4 HorizontalAlignment=Right>
-                        <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
-                                ToolTipService.ToolTip=`PlainMode ? "Show formatted Markdown" : "Show plain text"`
-                                @Click+=`PlainMode = !PlainMode`>
-                            <AppSymbolIcon Symbol=`PlainMode ? Symbol.Font : Symbol.Bullets` FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                        </Button>
-                        if (`Message.Role == "user"`)
-                        {
-                            <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
-                                    ToolTipService.ToolTip="Undo everything after this message"
-                                    Flyout=confirmFlyout = <Flyout Placement=BottomEdgeAlignedRight>
-                                <StackPanel Spacing=8 MaxWidth=240 Padding=4>
-                                    <TextBlock Text="Undo everything after this message?" FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap />
-                                    <TextBlock Text="The conversation rewinds to this message and its prompt is restored to the input box." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
-                                    <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
-                                        <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
-                                        <Button Content="Undo" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`await RevertToHereAsync()` />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Flyout>>
-                                <AppSymbolIcon Symbol=Undo FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                            </Button>
-                        }
-                    </StackPanel>
-                }
             </StackPanel>
         }
     </Grid>
@@ -168,7 +125,6 @@ public partial class MessageView : IQuickMarkupComponent
     private void Ctor()
     {
         ShowHeader = true;
-        PlainMode = Message?.Role == "user"; // user messages default to plain (accent bubble); assistant to markdown
         var msg = Message;
         if (msg is not null)
         {
@@ -178,12 +134,9 @@ public partial class MessageView : IQuickMarkupComponent
         Init();
     }
 
-    private async Task RevertToHereAsync()
-    {
-        if (confirmFlyout is { IsOpen: true }) confirmFlyout.Hide();
-        if (Message is null) return;
-        if (RevertRequested is { } handler) await handler(Message);
-    }
+    /// <summary>Forwards a per-part revert request (from <see cref="MessageTextPart"/>) to <see cref="RevertRequested"/>.</summary>
+    private Task OnPartRevertRequested(MessageItem message) =>
+        RevertRequested?.Invoke(message) ?? Task.CompletedTask;
 
     private void RecomputeHeader(MessageItem msg) =>
         ShowHeader = !msg.Parts.Any(p => p.Type == "compaction");
