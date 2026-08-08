@@ -20,7 +20,7 @@ namespace UnoVibe.Pages;
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <Grid Background=`theme.SolidBackground`>
+        <Grid>
             <Grid ColumnDefinitions=<>
                 <ColumnDefinition Width=280 />
                 <ColumnDefinition />

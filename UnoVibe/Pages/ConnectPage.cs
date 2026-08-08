@@ -24,7 +24,7 @@ namespace UnoVibe.Pages;
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <Grid Background=`theme.SolidBackground` RowDefinitions=<>
+        <Grid RowDefinitions=<>
             <RowDefinition Height=Auto />
             <RowDefinition />
             <RowDefinition Height=Auto />
