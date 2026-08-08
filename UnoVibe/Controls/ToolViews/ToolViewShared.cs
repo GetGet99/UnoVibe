@@ -149,6 +149,15 @@ public static class ToolViewShared
     public static string QuestionTitle(PartItem p) =>
         p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Asking question...";
 
+    /// <summary>Friendly line for a question tool that ended in an error (e.g. the user dismissed it).</summary>
+    public static string QuestionError(PartItem p)
+    {
+        var error = p.ToolError;
+        if (error.StartsWith("Tool execution failed: ", StringComparison.Ordinal))
+            error = error.Substring("Tool execution failed: ".Length);
+        return error.Length > 0 ? error : "Question dismissed";
+    }
+
     public static List<QuestionItem> ParseQuestions(PartItem p) => ParseQuestions(p.QuestionJson, p.AnswerJson);
 
     public static List<QuestionItem> ParseQuestions(string questionsJson, string answersJson)

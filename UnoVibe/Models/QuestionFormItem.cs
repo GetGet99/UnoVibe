@@ -7,6 +7,7 @@ namespace UnoVibe.Models;
     public string Question = "";
     public string Header = "";
     public string CustomText = "";
+    public bool CustomSelected = false;
     public bool AllowCustom = true;
     public bool Multiple = false;
     public bool Answered = false;

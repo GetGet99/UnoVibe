@@ -156,6 +156,12 @@ public sealed class OpencodeClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task RejectQuestionAsync(string requestId, CancellationToken ct = default)
+    {
+        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reject", new { }, Json, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<List<string>> GetModesAsync(CancellationToken ct = default)
     {
         using var response = await Http.GetAsync("/agent", ct);

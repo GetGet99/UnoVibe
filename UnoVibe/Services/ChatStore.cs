@@ -2024,6 +2024,18 @@ public sealed partial class ChatStore : IDisposable
         }
     }
 
+    public async Task RejectQuestionAsync(string requestId)
+    {
+        try
+        {
+            await _client.RejectQuestionAsync(requestId);
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
     private static void PopulateQuestionForm(PartItem item, JsonElement questions)
     {
         item.QuestionForm.Clear();

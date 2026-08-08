@@ -28,11 +28,14 @@ namespace UnoVibe.Controls.ToolViews;
                 </StackPanel>
             }
         }
-        else if (`Part.QuestionRequestId.Length > 0 && Part.QuestionForm.Count > 0`)
+        else if (`Part.QuestionRequestId.Length > 0 && Part.QuestionForm.Count > 0 && ToolViewShared.Busy(Part)`)
         {
             foreach (var q in `Part.QuestionForm`)
                 <ToolViewQuestionItem Q=`q` />
-            <Button Content="Submit answers" @Click+=`await SubmitAnswersAsync()` />
+            <StackPanel Orientation=Horizontal Spacing=8>
+                <Button Content="Submit answers" @Click+=`await SubmitAnswersAsync()` />
+                <Button Content="Reject" @Click+=`await RejectAsync()` />
+            </StackPanel>
         }
         else
         {
@@ -42,6 +45,8 @@ namespace UnoVibe.Controls.ToolViews;
                     <TextBlock Text=`q.Question` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
                 </StackPanel>
             }
+            if (`Part.ToolStatus == "error" && Part.ToolError.Length > 0`)
+                <TextBlock Text=`ToolViewShared.QuestionError(Part)` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
         }
     </StackPanel>
     """)]
@@ -53,13 +58,22 @@ public partial class ToolViewQuestion : IQuickMarkupComponent
         foreach (var q in Part.QuestionForm)
         {
             var selected = q.Options.Where(o => o.IsSelected).Select(o => o.Label).ToList();
-            var custom = q.CustomText.Trim();
-            if (custom.Length > 0) selected.Add(custom);
+            if (q.CustomSelected)
+            {
+                var custom = q.CustomText.Trim();
+                if (custom.Length > 0) selected.Add(custom);
+            }
             if (!q.Multiple) selected = selected.Take(1).ToList();
             answers.Add(selected);
         }
 
         if (Part.QuestionRequestId.Length == 0 || answers.Count == 0) return;
         await Store.ReplyQuestionAsync(Part.QuestionRequestId, answers);
+    }
+
+    private async Task RejectAsync()
+    {
+        if (Part.QuestionRequestId.Length == 0) return;
+        await Store.RejectQuestionAsync(Part.QuestionRequestId);
     }
 }
