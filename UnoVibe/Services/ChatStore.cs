@@ -149,6 +149,9 @@ public sealed partial class ChatStore : IDisposable
     private readonly Dictionary<string, int> _pendingQuestions = new();
     // Per-session counts of pending permission approvals (permission.asked not yet replied).
     private readonly Dictionary<string, int> _pendingPermissions = new();
+    // Per-directory sidebar "show all sessions" state (keyed by directory), preserved across
+    // sidebar group rebuilds so the show-more/show-less toggle survives session list refreshes.
+    private readonly Dictionary<string, bool> _directoryExpanded = new();
     private readonly Queue<string> _pendingPrompts = new();
     private readonly List<PermissionRequestItem> _permissions = new();
     private CancellationTokenSource? _cts;
@@ -198,6 +201,7 @@ public sealed partial class ChatStore : IDisposable
         _sessionOutcome.Clear();
         _pendingQuestions.Clear();
         _pendingPermissions.Clear();
+        _directoryExpanded.Clear();
         McpServers.Clear();
         _mcpDirectory = "";
         McpDirectory = "";
@@ -741,8 +745,22 @@ public sealed partial class ChatStore : IDisposable
             })
             .OrderByDescending(g => g.Sessions.Count > 0 ? g.Sessions[0].Updated : 0))
         {
+            // Re-apply the user's show-more/show-less choice; the toggle mutates the item's
+            // reactive IsExpanded in place, while a rebuild gets its value from the store map.
+            group.IsExpanded = _directoryExpanded.GetValueOrDefault(group.Directory);
             DirectoryGroups.Add(group);
         }
+    }
+
+    /// <summary>
+    /// Expands/collapses a sidebar directory group (show all sessions vs. a capped preview).
+    /// </summary>
+    public void ToggleDirectoryExpanded(string directory)
+    {
+        var expanded = !_directoryExpanded.GetValueOrDefault(directory);
+        _directoryExpanded[directory] = expanded;
+        var group = DirectoryGroups.FirstOrDefault(g => g.Directory == directory);
+        if (group is not null) group.IsExpanded = expanded;
     }
 
     /// <summary>

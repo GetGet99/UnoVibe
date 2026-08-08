@@ -10,6 +10,7 @@ namespace UnoVibe.Controls;
     using UnoVibe.Services;
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
+    using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     inject ChatStore Store;
     bool McpExpanded = false;
@@ -46,7 +47,7 @@ namespace UnoVibe.Controls;
                                     <AppSymbolIcon Symbol=Add FontSize=11 />
                                 </Button>
                             </Grid>
-                            foreach (var s in `group.Sessions`; `s.Id`)
+                            foreach (var s in `group.IsExpanded ? group.Sessions.Reactive : group.Sessions.Reactive.Take(MaxVisibleSessions)`; `s.Id`)
                             {
                                 <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
                                     <Grid ColumnDefinitions=<>
@@ -64,6 +65,12 @@ namespace UnoVibe.Controls;
                                         <TextBlock Grid.Column=1 Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                         <TextBlock Grid.Column=2 Text=`s.TimeLabel` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
                                     </Grid>
+                                </Button>
+                            }
+                            if (`group.Sessions.Reactive.Count > MaxVisibleSessions`)
+                            {
+                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 4, 8, 4)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 CommandParameter=`group.Directory` Click+=`(sender, e) => OnToggleShowMore(sender, e)`>
+                                    <TextBlock Text=`group.IsExpanded ? "Show less" : $"Show more ({group.Sessions.Reactive.Count - MaxVisibleSessions})"` FontSize=11 Foreground=`theme.SecondaryText` />
                                 </Button>
                             }
                         </StackPanel>
@@ -128,6 +135,9 @@ namespace UnoVibe.Controls;
     """)]
 public partial class SessionSidebar : IQuickMarkupComponent
 {
+    /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
+    private const int MaxVisibleSessions = 5;
+
     private void OnSwitchSession(object sender, RoutedEventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not string id) return;
@@ -139,6 +149,12 @@ public partial class SessionSidebar : IQuickMarkupComponent
     {
         var directory = (sender as Button)?.CommandParameter as string;
         _ = Store.NewSessionAsync(directory);
+    }
+
+    private void OnToggleShowMore(object sender, RoutedEventArgs e)
+    {
+        if ((sender as Button)?.CommandParameter is not string directory) return;
+        Store.ToggleDirectoryExpanded(directory);
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e) => _ = OpenFolderAndStartSessionAsync();
