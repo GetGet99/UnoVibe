@@ -47,9 +47,6 @@ public partial class App : Application
         else
             controller.ShowConnect(startup);
 
-#if DEBUG
-        controller.Window.UseStudio();
-#endif
         controller.Window.SetWindowIcon();
 
         controller.Window.Closed += (_, _) =>
