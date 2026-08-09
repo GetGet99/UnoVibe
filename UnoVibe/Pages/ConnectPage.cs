@@ -77,18 +77,19 @@ namespace UnoVibe.Pages;
                                             foreach (var item in `RecentConnectionsStore.Items`; `item.Key`)
                                             {
                                                 <Grid ColumnDefinitions=<>
-                                                    <ColumnDefinition Width=Auto />
                                                     <ColumnDefinition />
                                                     <ColumnDefinition Width=Auto />
                                                 </> ColumnSpacing=10>
-                                                    <AppSymbolIcon Symbol=`item.IsFolder ? Symbol.Folder : Symbol.Globe` FontSize=14 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                                                    <Button Grid.Column=1 HorizontalAlignment=Stretch HorizontalContentAlignment=Left Background=`transparent` BorderThickness=0 Padding=`new Thickness(0, 6, 0, 6)` CommandParameter=`item` Click+=`(sender, e) => OnOpenRecent(sender, e)` IsEnabled=`!Connecting`>
-                                                        <StackPanel Spacing=1>
-                                                            <TextBlock Text=`item.Display` FontSize=13 FontWeight=`FontWeights.SemiBold` TextTrimming=`TextTrimming.CharacterEllipsis` />
-                                                            <TextBlock Text=`item.Detail` FontSize=11 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                                    <Button Grid.Column=0 HorizontalAlignment=Stretch HorizontalContentAlignment=Left Background=`transparent` BorderThickness=0 Padding=`new Thickness(6, 6, 6, 6)` CommandParameter=`item` Click+=`(sender, e) => OnOpenRecent(sender, e)` IsEnabled=`!Connecting`>
+                                                        <StackPanel Orientation=Horizontal Spacing=8>
+                                                            <AppSymbolIcon Symbol=`item.IsFolder ? Symbol.Folder : Symbol.Globe` FontSize=14 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                                                            <StackPanel Spacing=1>
+                                                                <TextBlock Text=`item.Display` FontSize=13 FontWeight=`FontWeights.SemiBold` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                                                <TextBlock Text=`item.Detail` FontSize=11 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                                            </StackPanel>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Grid.Column=2 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center Background=`transparent` BorderThickness=0 CommandParameter=`item.Key` Click+=`(sender, e) => OnRemoveRecent(sender, e)` ToolTipService.ToolTip="Remove from recent" IsEnabled=`!Connecting`>
+                                                    <Button Grid.Column=1 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center Background=`transparent` BorderThickness=0 CommandParameter=`item.Key` Click+=`(sender, e) => OnRemoveRecent(sender, e)` ToolTipService.ToolTip="Remove from recent" IsEnabled=`!Connecting`>
                                                         <AppSymbolIcon Symbol=Cancel FontSize=10 Foreground=`theme.TertiaryText` />
                                                     </Button>
                                                 </Grid>
