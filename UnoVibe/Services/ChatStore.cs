@@ -21,6 +21,11 @@ namespace UnoVibe.Services;
 [QuickMarkup("""
     using UnoVibe.Models;
     public string ConnectionStatus = "Connecting...";
+    public string DisplayLabel = "";
+    // The server's default directory (from GET /path). Used as the reference point for
+    // relative path display in the sidebar — so folders show relative to what the user
+    // actually connected to, not the app's CWD.
+    public string ServerDirectory = "";
     public string ActiveSessionId = "";
     // Number of subagent sessions belonging to the active session (ParentId == active session id).
     // Drives the chat page's subagent strip and the flyout's "Tokens (excludes subagents)" label.
@@ -167,6 +172,8 @@ public sealed partial class ChatStore : IDisposable
         _baseUrl = baseUrl;
         _password = password;
         _username = username;
+        // Reset the display label unless a local serve process already set it (folder launch).
+        if (ServeProcess is null) DisplayLabel = "";
         _client = new OpencodeClient(baseUrl, password, username);
         _started = false;
         _cts?.Cancel();
@@ -209,6 +216,8 @@ public sealed partial class ChatStore : IDisposable
     {
         var old = ServeProcess;
         ServeProcess = serve;
+        if (serve.WorkingDirectory.Length > 0)
+            DisplayLabel = serve.WorkingDirectory;
         old?.Dispose();
     }
 
@@ -249,6 +258,21 @@ public sealed partial class ChatStore : IDisposable
             if (healthy)
             {
                 ConnectionStatus = "Connected";
+                if (ServeProcess is not null)
+                {
+                    // Folder launch: use the folder we started serve in.
+                    ServerDirectory = ServeProcess.WorkingDirectory;
+                }
+                else
+                {
+                    // URL connection: fetch the server's default directory.
+                    var dir = await _client.GetDirectoryAsync(ct);
+                    if (dir is { Length: > 0 })
+                    {
+                        ServerDirectory = dir;
+                        DisplayLabel = $"{_baseUrl} - {dir}";
+                    }
+                }
             }
             else if (_client.LastHealthStatus == System.Net.HttpStatusCode.Unauthorized)
             {

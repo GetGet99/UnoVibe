@@ -242,6 +242,7 @@ public partial class ConnectPage : Page
         Status = $"Connecting to {clean}...";
         var store = Controller.Store;
         store.Configure(clean, password);
+        store.DisplayLabel = clean;
         await store.ConnectAsync();
         Connecting = false;
 

@@ -24,6 +24,9 @@ public sealed class ServeProcess : IDisposable
     /// <summary>Base URL of the launched server (set after startup succeeds).</summary>
     public string BaseUrl { get; private set; } = "";
 
+    /// <summary>Working directory the server was started in (set after startup succeeds).</summary>
+    public string WorkingDirectory { get; private set; } = "";
+
     /// <summary>Password the launched server is protected with (generated unless supplied).</summary>
     public string Password { get; }
 
@@ -100,7 +103,11 @@ public sealed class ServeProcess : IDisposable
             try
             {
                 using var response = await health.GetAsync("/global/health", ct);
-                if (response.IsSuccessStatusCode) return BaseUrl;
+                if (response.IsSuccessStatusCode)
+                {
+                    WorkingDirectory = workingDirectory;
+                    return BaseUrl;
+                }
             }
             catch (Exception)
             {

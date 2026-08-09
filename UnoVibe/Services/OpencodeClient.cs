@@ -50,6 +50,23 @@ public sealed class OpencodeClient
     }
 
     /// <summary>
+    /// Get /path — returns the server instance path info including the working directory.
+    /// Returns null on failure (older servers without this endpoint).
+    /// </summary>
+    public async Task<string?> GetDirectoryAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await Http.GetAsync("/path", ct);
+            if (!response.IsSuccessStatusCode) return null;
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            return doc.RootElement.TryGetProperty("directory", out var dir) ? dir.GetString() : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
     /// Post /session — creates a session. When <paramref name="title"/> is null/empty the server
     /// assigns a timestamped default title ("New session - &lt;ISO&gt;"), which its title agent
     /// later replaces with a generated name on the first prompt. Passing an explicit title skips
