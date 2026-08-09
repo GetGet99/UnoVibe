@@ -25,8 +25,11 @@ public sealed class RecentConnection
     /// <summary>Unix-seconds of last successful open; drives ordering (most recent first).</summary>
     public long LastOpenedUnix { get; set; }
 
-    /// <summary>For servers: the saved password (empty if the server is unsecured).</summary>
-    public string ServerPassword { get; set; } = "";
+    /// <summary>
+    /// For servers: whether the server requires a password. The password itself is never
+    /// persisted — reopening an entry with this flag prompts for the password instead.
+    /// </summary>
+    public bool RequiresPassword { get; set; }
 
     public bool IsFolder => Kind == FolderKind;
 }

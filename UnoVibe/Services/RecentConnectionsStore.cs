@@ -64,10 +64,18 @@ public static class RecentConnectionsStore
                 }
 
                 if (list is null) return;
+
+                // Legacy migration: recent.json files written before server passwords stopped
+                // being persisted carried a raw `serverPassword` per server entry. Detect those
+                // and mark the entries RequiresPassword so reopening prompts for the password.
+                var legacyPasswordKeys = CollectLegacyPasswordKeys(json);
+
                 Items.Clear();
                 foreach (var item in list)
                 {
                     if (item is null || string.IsNullOrWhiteSpace(item.Key)) continue;
+                    if (!item.IsFolder && legacyPasswordKeys.Contains(item.Key))
+                        item.RequiresPassword = true;
                     Items.Add(item);
                 }
             }
@@ -113,8 +121,10 @@ public static class RecentConnectionsStore
         TrimAndSave();
     }
 
-    /// <summary>Records a successful server connection (or refreshes an existing entry).</summary>
-    public static void UpsertServer(string url, string password)
+    /// <summary>Records a successful server connection (or refreshes an existing entry).
+    /// The password itself is never persisted — only the fact that the server needs one,
+    /// so a later click can prompt for it instead of connecting without auth.</summary>
+    public static void UpsertServer(string url, bool requiresPassword)
     {
         var key = NormalizeUrl(url);
         var item = Items.FirstOrDefault(x => !x.IsFolder && x.Key == key);
@@ -134,7 +144,7 @@ public static class RecentConnectionsStore
             Items.Move(Items.IndexOf(item), 0);
         }
 
-        item.ServerPassword = password;
+        item.RequiresPassword = requiresPassword;
         item.LastOpenedUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         TrimAndSave();
     }
@@ -190,6 +200,46 @@ public static class RecentConnectionsStore
     }
 
     private static string NormalizeUrl(string url) => url.Trim().TrimEnd('/');
+
+    /// <summary>
+    /// Scans a persisted <c>recent.json</c> for server entries that stored a raw
+    /// <c>serverPassword</c> (the pre-flag format) and returns their normalized keys.
+    /// </summary>
+    private static HashSet<string> CollectLegacyPasswordKeys(string json)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            var root = JsonSerializer.Deserialize(json, AppJsonContext.Default.JsonElement);
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                // Legacy bare-array format — every element is a connection.
+                foreach (var el in root.EnumerateArray()) ScanLegacyPassword(el, keys);
+            }
+            else if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("items", out var items)
+                && items.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in items.EnumerateArray()) ScanLegacyPassword(el, keys);
+            }
+        }
+        catch
+        {
+            // Best effort; the typed deserialize above already succeeded, so this is only
+            // a fallback for the old `serverPassword` key.
+        }
+        return keys;
+    }
+
+    private static void ScanLegacyPassword(JsonElement el, HashSet<string> keys)
+    {
+        if (el.ValueKind != JsonValueKind.Object) return;
+        if (!el.TryGetProperty("kind", out var kind) || kind.GetString() != RecentConnection.ServerKind) return;
+        if (!el.TryGetProperty("key", out var key) || key.ValueKind != JsonValueKind.String) return;
+        if (!el.TryGetProperty("serverPassword", out var pw) || pw.ValueKind != JsonValueKind.String) return;
+        if (string.IsNullOrEmpty(pw.GetString())) return;
+        keys.Add(NormalizeUrl(key.GetString() ?? ""));
+    }
 
     private static string DisplayName(string path)
     {

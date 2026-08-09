@@ -122,7 +122,7 @@ namespace UnoVibe.Pages;
                                             <TextBox Text<=>`Url` PlaceholderText="http://localhost:4096" IsEnabled=`!Connecting` />
                                             <PasswordBox Password<=>`ServerPassword` PlaceholderText="Server password (optional)" IsEnabled=`!Connecting` />
                                             <Button Content="Connect" @Click+=`await ConnectToUrlAsync()` IsEnabled=`!Connecting` HorizontalAlignment=Right />
-                                            <TextBlock Text="Leave blank if the server has no password. Uses the OPENCODE_SERVER_PASSWORD environment variable when set." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
+                                            <TextBlock Text="Leave blank if the server has no password. Uses the OPENCODE_SERVER_PASSWORD environment variable when set. Passwords are never stored — reopening a password-protected server asks for it again." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                                         </StackPanel>
                                     }
                                     <Border BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)` Margin=`new Thickness(0, 6, 0, 0)` />
@@ -248,7 +248,9 @@ public partial class ConnectPage : Page
 
         if (store.ConnectionStatus == "Connected")
         {
-            RecentConnectionsStore.UpsertServer(clean, password ?? "");
+            // Never persist the password itself — only record that the server needs one,
+            // so a later click on the recent entry can prompt for it.
+            RecentConnectionsStore.UpsertServer(clean, password is { Length: > 0 });
             Controller.ShowMain();
         }
         else
@@ -378,7 +380,15 @@ public partial class ConnectPage : Page
         }
         else
         {
-            await ConnectCoreAsync(item.Detail, item.ServerPassword.Length > 0 ? item.ServerPassword : null);
+            // A password-protected server's password is never stored — ask for it on reopen.
+            string? password = null;
+            if (item.RequiresPassword)
+            {
+                password = await PromptForServerPasswordAsync(item.Detail);
+                if (password is null) return; // cancelled
+                if (password.Length == 0) password = null;
+            }
+            await ConnectCoreAsync(item.Detail, password);
         }
     }
 
@@ -397,5 +407,35 @@ public partial class ConnectPage : Page
         if (passwordFlyout is { IsOpen: true }) passwordFlyout.Hide();
         SaveFolderPassword = save;
         RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, save, CustomPassword);
+    }
+
+    /// <summary>
+    /// Asks the user for the password of a password-protected server URL that has no stored
+    /// password (only the <c>RequiresPassword</c> flag). Returns the entered password, an empty
+    /// string when the user wants to try without one, or null when the dialog is cancelled.
+    /// </summary>
+    private async Task<string?> PromptForServerPasswordAsync(string url)
+    {
+        var box = new PasswordBox { PlaceholderText = "Server password", Width = 300 };
+        var dialog = new ContentDialog
+        {
+            Title = "Password required",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = $"Enter the password for {url}", TextWrapping = TextWrapping.Wrap },
+                    box,
+                },
+            },
+            PrimaryButtonText = "Connect",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return null;
+        return box.Password;
     }
 }
