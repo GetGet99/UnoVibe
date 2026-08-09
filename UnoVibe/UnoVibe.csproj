@@ -10,9 +10,7 @@
     <ApplicationTitle>UnoVibe</ApplicationTitle>
     <!-- App Identifier -->
     <ApplicationId>com.companyname.unovibe</ApplicationId>
-    <!-- Versions -->
-    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
-    <ApplicationVersion>1</ApplicationVersion>
+
     <!-- Package Publisher -->
     <ApplicationPublisher>UnoVibe</ApplicationPublisher>
     <!-- Package Description -->
