@@ -1,6 +1,7 @@
 using System.IO;
 using UnoVibe.Services;
 using UnoVibe.Models;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace UnoVibe.Controls;
 
@@ -15,6 +16,7 @@ namespace UnoVibe.Controls;
     using Microsoft.UI;
     inject ChatStore Store;
     bool McpExpanded = false;
+    bool ShowPassword = false;
     <setup>
         var theme = ThemeBrushes.Global;
         var transparent = new SolidColorBrush(Colors.Transparent);
@@ -128,6 +130,7 @@ namespace UnoVibe.Controls;
                     <ColumnDefinition />
                     <ColumnDefinition Width=Auto />
                     <ColumnDefinition Width=Auto />
+                    <ColumnDefinition Width=Auto />
                 </>>
                     <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                     <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" Click+=`(sender, e) => OnOpenFolder(sender, e)`>
@@ -135,6 +138,50 @@ namespace UnoVibe.Controls;
                     </Button>
                     <Button Grid.Column=2 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" Click+=`(sender, e) => OnNewWindow(sender, e)`>
                         <AppSymbolIcon Symbol=NewWindow FontSize=11 />
+                    </Button>
+                    <Button Grid.Column=3 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Connection details" Flyout=connectionFlyout = <Flyout Placement=Top @Closed+=`ShowPassword = false`>
+                        <StackPanel Spacing=10 MinWidth=320 MaxWidth=400>
+                            <TextBlock Text="Connection" FontSize=13 FontWeight=`FontWeights.SemiBold` />
+                            <Grid ColumnSpacing=8 ColumnDefinitions=<>
+                                <ColumnDefinition Width=Auto />
+                                <ColumnDefinition />
+                                <ColumnDefinition Width=Auto />
+                            </>>
+                                <TextBlock Text="Directory" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                                <TextBlock Grid.Column=1 Text=`Store.ServerDirectory` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Store.ServerDirectory` />
+                                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` ToolTipService.ToolTip="Copy directory" @Click+=`CopyToClipboard("Directory", Store.ServerDirectory)`>
+                                    <AppSymbolIcon Symbol=Copy FontSize=11 />
+                                </Button>
+                            </Grid>
+                            <Grid ColumnSpacing=8 ColumnDefinitions=<>
+                                <ColumnDefinition Width=Auto />
+                                <ColumnDefinition />
+                                <ColumnDefinition Width=Auto />
+                            </>>
+                                <TextBlock Text="Server" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                                <TextBlock Grid.Column=1 Text=`Store.ConnectionUrl` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Store.ConnectionUrl` />
+                                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` ToolTipService.ToolTip="Copy URL" @Click+=`CopyToClipboard("URL", Store.ConnectionUrl)`>
+                                    <AppSymbolIcon Symbol=Copy FontSize=11 />
+                                </Button>
+                            </Grid>
+                            <Grid ColumnSpacing=8 ColumnDefinitions=<>
+                                <ColumnDefinition Width=Auto />
+                                <ColumnDefinition />
+                                <ColumnDefinition Width=Auto />
+                                <ColumnDefinition Width=Auto />
+                            </>>
+                                <TextBlock Text="Password" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                                <TextBlock Grid.Column=1 Text=`ShowPassword ? Store.ConnectionPassword : MaskPassword(Store.ConnectionPassword)` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`ShowPassword ? Store.ConnectionPassword : "Hidden — click the eye to reveal"` />
+                                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`Store.ConnectionPassword.Length > 0 ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip=`ShowPassword ? "Hide password" : "Show password"` @Click+=`ShowPassword = !ShowPassword`>
+                                    <AppSymbolIcon Symbol=View FontSize=11 />
+                                </Button>
+                                <Button Grid.Column=3 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`Store.ConnectionPassword.Length > 0 ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip="Copy password" @Click+=`CopyToClipboard("Password", Store.ConnectionPassword)`>
+                                    <AppSymbolIcon Symbol=Copy FontSize=11 />
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </Flyout>>
+                        <AppSymbolIcon Symbol=More FontSize=11 />
                     </Button>
                 </Grid>
             </Border>
@@ -204,6 +251,27 @@ public partial class SessionSidebar : IQuickMarkupComponent
     }
 
     private void OnNewWindow(object sender, RoutedEventArgs e) => UnoVibe.App.CreateWindow();
+
+    /// <summary>
+    /// Renders the connection password while hidden: a fixed-width bullet mask, or "None"
+    /// when the server has no password. The real value is never shown by default.
+    /// </summary>
+    private static string MaskPassword(string password) =>
+        password.Length == 0 ? "None" : "••••••••";
+
+    /// <summary>Copies a connection value to the system clipboard and confirms with a toast.</summary>
+    private void CopyToClipboard(string label, string text)
+    {
+        var data = new DataPackage();
+        data.SetText(text);
+        Clipboard.SetContent(data);
+        Store.ShowToast(new ToastItem
+        {
+            Title = "Copied",
+            Message = $"{label} copied to clipboard.",
+            Variant = "success",
+        });
+    }
 
     private void OnToggleMcp(object sender, RoutedEventArgs e)
     {

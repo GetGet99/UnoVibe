@@ -26,6 +26,11 @@ namespace UnoVibe.Services;
     // relative path display in the sidebar — so folders show relative to what the user
     // actually connected to, not the app's CWD.
     public string ServerDirectory = "";
+    // The current connection's base URL and effective password (Basic auth). Populated in
+    // Configure; shown in the sidebar's connection-details flyout. The password is masked in
+    // the UI and only revealed on demand (the effective value, incl. env-var fallback).
+    public string ConnectionUrl = "";
+    public string ConnectionPassword = "";
     public string ActiveSessionId = "";
     // Number of subagent sessions belonging to the active session (ParentId == active session id).
     // Drives the chat page's subagent strip and the flyout's "Tokens (excludes subagents)" label.
@@ -170,6 +175,8 @@ public sealed partial class ChatStore : IDisposable
         _baseUrl = baseUrl;
         _password = password;
         _username = username;
+        ConnectionUrl = baseUrl;
+        ConnectionPassword = (password ?? Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar)) ?? "";
         // Reset the display label unless a local serve process already set it (folder launch).
         if (ServeProcess is null) DisplayLabel = "";
         _client = new OpencodeClient(baseUrl, password, username);
