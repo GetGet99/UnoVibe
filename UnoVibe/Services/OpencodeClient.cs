@@ -11,8 +11,6 @@ namespace UnoVibe.Services;
 /// </summary>
 public sealed class OpencodeClient
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     /// <summary>Environment variable holding the server password (Basic auth).</summary>
     public const string PasswordEnvVar = "OPENCODE_SERVER_PASSWORD";
 
@@ -77,20 +75,20 @@ public sealed class OpencodeClient
         CancellationToken ct = default)
     {
         var url = string.IsNullOrEmpty(directory) ? "/session" : $"/session?directory={Uri.EscapeDataString(directory)}";
-        var body = new Dictionary<string, object?>();
-        if (!string.IsNullOrEmpty(title)) body["title"] = title;
-        if (!string.IsNullOrEmpty(agent)) body["agent"] = agent;
+        var body = new CreateSessionRequest();
+        if (!string.IsNullOrEmpty(title)) body.Title = title;
+        if (!string.IsNullOrEmpty(agent)) body.Agent = agent;
         if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
         {
-            var model = new Dictionary<string, object?>
+            var model = new CreateSessionModelRequest
             {
-                ["id"] = modelId,
-                ["providerID"] = providerId,
+                Id = modelId,
+                ProviderID = providerId,
             };
-            if (!string.IsNullOrEmpty(variant) && variant != "Default") model["variant"] = variant;
-            body["model"] = model;
+            if (!string.IsNullOrEmpty(variant) && variant != "Default") model.Variant = variant;
+            body.Model = model;
         }
-        using var response = await Http.PostAsJsonAsync(url, body, Json, ct);
+        using var response = await Http.PostAsJsonAsync(url, body, AppJsonContext.Default.CreateSessionRequest, ct);
         response.EnsureSuccessStatusCode();
         using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
         return doc.RootElement.TryGetProperty("id", out var id) ? id.GetString() : null;
@@ -103,20 +101,17 @@ public sealed class OpencodeClient
     {
         // Mirrors the opencode TUI/web clients: text + base64 data-URL file parts. The
         // text part is omitted when empty so an image-only prompt doesn't carry a blank one.
-        var parts = new List<object?>();
-        if (!string.IsNullOrWhiteSpace(text)) parts.Add(new { type = "text", text });
+        var parts = new List<PromptPart>();
+        if (!string.IsNullOrWhiteSpace(text)) parts.Add(new PromptPart { Type = "text", Text = text });
         if (images is not null)
             foreach (var image in images)
-                parts.Add(new { type = "file", mime = image.Mime, filename = image.FileName, url = image.DataUrl });
-        var body = new Dictionary<string, object?>
-        {
-            ["parts"] = parts,
-        };
-        if (!string.IsNullOrEmpty(agent)) body["agent"] = agent;
+                parts.Add(new PromptPart { Type = "file", Mime = image.Mime, Filename = image.FileName, Url = image.DataUrl });
+        var body = new SendPromptRequest { Parts = parts };
+        if (!string.IsNullOrEmpty(agent)) body.Agent = agent;
         if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
-            body["model"] = new { providerID = providerId, modelID = modelId };
-        if (!string.IsNullOrEmpty(variant) && variant != "Default") body["variant"] = variant;
-        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/prompt_async", body, Json, ct);
+            body.Model = new SendPromptModelRequest { ProviderID = providerId, ModelID = modelId };
+        if (!string.IsNullOrEmpty(variant) && variant != "Default") body.Variant = variant;
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/prompt_async", body, AppJsonContext.Default.SendPromptRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -126,7 +121,7 @@ public sealed class OpencodeClient
     /// </summary>
     public async Task UpdateSessionTitleAsync(string sessionId, string title, CancellationToken ct = default)
     {
-        using var response = await Http.PatchAsJsonAsync($"/session/{sessionId}", new { title }, Json, ct);
+        using var response = await Http.PatchAsJsonAsync($"/session/{sessionId}", new UpdateSessionTitleRequest { Title = title }, AppJsonContext.Default.UpdateSessionTitleRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -136,7 +131,7 @@ public sealed class OpencodeClient
     /// </summary>
     public async Task AbortAsync(string sessionId, CancellationToken ct = default)
     {
-        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/abort", new { }, Json, ct);
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/abort", new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -148,7 +143,7 @@ public sealed class OpencodeClient
     /// </summary>
     public async Task<JsonElement> RevertAsync(string sessionId, string messageId, CancellationToken ct = default)
     {
-        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/revert", new { messageID = messageId }, Json, ct);
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/revert", new RevertRequest { MessageID = messageId }, AppJsonContext.Default.RevertRequest, ct);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
@@ -161,7 +156,7 @@ public sealed class OpencodeClient
     /// </summary>
     public async Task UnrevertAsync(string sessionId, CancellationToken ct = default)
     {
-        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/unrevert", new { }, Json, ct);
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/unrevert", new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -175,8 +170,8 @@ public sealed class OpencodeClient
     public async Task<SessionInfo?> ForkSessionAsync(string sessionId, string? messageId = null,
         CancellationToken ct = default)
     {
-        object body = string.IsNullOrEmpty(messageId) ? new { } : new { messageID = messageId };
-        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/fork", body, Json, ct);
+        var body = new ForkSessionRequest { MessageID = messageId };
+        using var response = await Http.PostAsJsonAsync($"/session/{sessionId}/fork", body, AppJsonContext.Default.ForkSessionRequest, ct);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
@@ -186,14 +181,14 @@ public sealed class OpencodeClient
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers,
         CancellationToken ct = default)
     {
-        var body = new { answers };
-        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reply", body, Json, ct);
+        var body = new ReplyQuestionRequest { Answers = answers };
+        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reply", body, AppJsonContext.Default.ReplyQuestionRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RejectQuestionAsync(string requestId, CancellationToken ct = default)
     {
-        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reject", new { }, Json, ct);
+        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reject", new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -391,12 +386,9 @@ public sealed class OpencodeClient
     public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null,
         CancellationToken ct = default)
     {
-        var body = new Dictionary<string, object?>
-        {
-            ["reply"] = reply,
-        };
-        if (!string.IsNullOrEmpty(message)) body["message"] = message;
-        using var response = await Http.PostAsJsonAsync($"/permission/{requestId}/reply", body, Json, ct);
+        var body = new ReplyPermissionRequest { Reply = reply };
+        if (!string.IsNullOrEmpty(message)) body.Message = message;
+        using var response = await Http.PostAsJsonAsync($"/permission/{requestId}/reply", body, AppJsonContext.Default.ReplyPermissionRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -429,7 +421,7 @@ public sealed class OpencodeClient
     public async Task McpConnectAsync(string name, string? directory = null, CancellationToken ct = default)
     {
         using var response = await Http.PostAsJsonAsync(
-            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/connect", directory), new { }, Json, ct);
+            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/connect", directory), new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -437,7 +429,7 @@ public sealed class OpencodeClient
     public async Task McpDisconnectAsync(string name, string? directory = null, CancellationToken ct = default)
     {
         using var response = await Http.PostAsJsonAsync(
-            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/disconnect", directory), new { }, Json, ct);
+            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/disconnect", directory), new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 

@@ -23,6 +23,7 @@ namespace UnoVibe.Services;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Models;
+    using QuickMarkup.Infra.Collections;
     public int HiddenMessages;
     public bool IsBusy;
     public int PendingPrompts;
@@ -58,6 +59,10 @@ namespace UnoVibe.Services;
     public string ProviderId = "";
     public string Variant = "Default";
     public bool HasVariants;
+    // The ModelOption currently selected by the model combo. A computed derived from the
+    // ModelId/ProviderId refs + the router's model list, so it re-resolves automatically
+    // when the options are (re)populated (refresh rebuilds the option instances).
+    public ModelOption? SelectedModelOption => `Router.ModelOptions.Reactive.FirstOrDefault(m => m.Id == ModelId && m.ProviderId == ProviderId)`;
     // Undo marker for this session: the id of the user message the conversation is
     // reverted to (the server's session "revert" field). Empty = not reverted. Drives the
     // revert card + message filter (messages with id >= RevertMessageId are hidden).
@@ -68,8 +73,6 @@ namespace UnoVibe.Services;
     """)]
 public sealed partial class SessionStore
 {
-    private static readonly JsonSerializerOptions JsonDefaults = new() { WriteIndented = false };
-
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
 
@@ -272,13 +275,13 @@ public sealed partial class SessionStore
 
     private static async Task<byte[]> ReadAllBytes(IRandomAccessStream stream)
     {
+        // DataReader.LoadAsync is not implemented in Uno (Uno0001), so read the underlying
+        // stream instead: AsStreamForRead unwraps the MemoryStream-backed IRandomAccessStream
+        // that Uno's clipboard extensions produce (the same pattern Win32ClipboardExtension uses).
         stream.Seek(0);
-        using var reader = new DataReader(stream);
-        var size = (uint)stream.Size;
-        await reader.LoadAsync(size);
-        var bytes = new byte[size];
-        reader.ReadBytes(bytes);
-        return bytes;
+        using var ms = new MemoryStream();
+        await stream.AsStreamForRead().CopyToAsync(ms);
+        return ms.ToArray();
     }
 
     private void StageAttachment(ImageAttachment attachment)
@@ -1004,7 +1007,7 @@ public sealed partial class SessionStore
         part.QuestionRequestId = requestId;
         if (properties.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
         {
-            part.QuestionJson = JsonSerializer.Serialize(questions, JsonDefaults);
+            part.QuestionJson = JsonSerializer.Serialize(questions, AppJsonContext.Default.JsonElement);
             PopulateQuestionForm(part, questions);
         }
     }
@@ -1111,7 +1114,7 @@ public sealed partial class SessionStore
             var title = state.GetStringProperty("title");
             if (title.Length > 0) item.ToolTitle = title;            if (state.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
             {
-                var serialized = JsonSerializer.Serialize(input, JsonDefaults);
+                var serialized = JsonSerializer.Serialize(input, AppJsonContext.Default.JsonElement);
                 if (serialized != "{}") item.ToolInput = serialized;
                 if (input.TryGetProperty("command", out var command)) item.ToolCommand = command.GetString() ?? "";
                 if (input.TryGetProperty("filePath", out var filePath)) item.ToolFilePath = filePath.GetString() ?? "";
@@ -1123,10 +1126,10 @@ public sealed partial class SessionStore
                 if (input.TryGetProperty("name", out var skillName)) item.ToolSkillName = skillName.GetString() ?? "";
                 if (input.TryGetProperty("subagent_type", out var subType)) item.ToolSubagentType = subType.GetString() ?? "";
                 if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
-                    item.TodoJson = JsonSerializer.Serialize(todos, JsonDefaults);
+                    item.TodoJson = JsonSerializer.Serialize(todos, AppJsonContext.Default.JsonElement);
                 if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
                 {
-                    item.QuestionJson = JsonSerializer.Serialize(questions, JsonDefaults);
+                    item.QuestionJson = JsonSerializer.Serialize(questions, AppJsonContext.Default.JsonElement);
                     PopulateQuestionForm(item, questions);
                 }
             }
@@ -1149,9 +1152,9 @@ public sealed partial class SessionStore
                 if (meta.TryGetProperty("loaded", out var mLoaded) && mLoaded.ValueKind == JsonValueKind.Array)
                     item.LoadedFiles = string.Join("\n", mLoaded.EnumerateArray().Select(x => x.GetString() ?? "").Where(s => s.Length > 0));
                 if (meta.TryGetProperty("todos", out var mTodos) && mTodos.ValueKind == JsonValueKind.Array)
-                    item.TodoJson = JsonSerializer.Serialize(mTodos, JsonDefaults);
+                    item.TodoJson = JsonSerializer.Serialize(mTodos, AppJsonContext.Default.JsonElement);
                 if (meta.TryGetProperty("answers", out var mAnswers) && mAnswers.ValueKind == JsonValueKind.Array)
-                    item.AnswerJson = JsonSerializer.Serialize(mAnswers, JsonDefaults);
+                    item.AnswerJson = JsonSerializer.Serialize(mAnswers, AppJsonContext.Default.JsonElement);
                 // The task tool records the spawned subagent session here (see task.ts metadata).
                 if (meta.TryGetProperty("sessionId", out var mSession)) item.ToolSessionId = mSession.GetString() ?? "";
                 if (meta.TryGetProperty("parentSessionId", out var mParent)) item.ToolParentSessionId = mParent.GetString() ?? "";

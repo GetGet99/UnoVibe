@@ -15,8 +15,6 @@ public sealed record OpencodeEvent(string? Id, string Type, JsonElement Properti
 /// </summary>
 public static class EventStreamReader
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     public static async Task ReadAsync(HttpClient http, string eventUrl, ChannelWriter<OpencodeEvent> writer, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, eventUrl);
@@ -37,7 +35,7 @@ public static class EventStreamReader
 
             try
             {
-                var evt = JsonSerializer.Deserialize<OpencodeEvent>(payload, Json);
+                var evt = JsonSerializer.Deserialize(payload, AppJsonContext.Default.OpencodeEvent);
                 if (evt is not null) await writer.WriteAsync(evt, ct);
             }
             catch (JsonException)

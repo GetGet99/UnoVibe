@@ -44,8 +44,6 @@ namespace UnoVibe.Services;
     """)]
 public sealed partial class ChatStore : IDisposable
 {
-    private static readonly JsonSerializerOptions JsonDefaults = new() { WriteIndented = false };
-
     public ObservableCollection<string> ModeOptions { get; } = new();
     public ObservableCollection<ModelOption> ModelOptions { get; } = new();
     public ObservableCollection<string> VariantOptions { get; } = new();

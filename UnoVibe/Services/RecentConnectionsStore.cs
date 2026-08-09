@@ -18,7 +18,6 @@ public static class RecentConnectionsStore
 
     private static readonly string Dir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
     private static readonly string FilePath = Path.Combine(Dir, "recent.json");
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly object Gate = new();
 
     /// <summary>The recent connections, most recent first. Reactive in the markup.</summary>
@@ -48,7 +47,7 @@ public static class RecentConnectionsStore
                 List<RecentConnection>? list = null;
                 try
                 {
-                    var file = JsonSerializer.Deserialize<FileModel>(json, Json);
+                    var file = JsonSerializer.Deserialize(json, AppJsonContext.Default.FileModel);
                     if (file is not null)
                     {
                         UseGeneratedPassword = file.UseGeneratedPassword;
@@ -60,7 +59,7 @@ public static class RecentConnectionsStore
                 catch (JsonException)
                 {
                     // Legacy bare-array format — migrate on next save.
-                    try { list = JsonSerializer.Deserialize<List<RecentConnection>>(json, Json); }
+                    try { list = JsonSerializer.Deserialize(json, AppJsonContext.Default.ListRecentConnection); }
                     catch (JsonException) { list = null; }
                 }
 
@@ -174,7 +173,7 @@ public static class RecentConnectionsStore
                     CustomPassword = CustomPassword,
                     Items = Items.ToList(),
                 };
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(file, Json));
+                File.WriteAllText(FilePath, JsonSerializer.Serialize(file, AppJsonContext.Default.FileModel));
             }
         }
         catch
@@ -200,7 +199,7 @@ public static class RecentConnectionsStore
     }
 
     /// <summary>On-disk shape: the recent list plus the global folder-security settings.</summary>
-    private sealed class FileModel
+    internal sealed class FileModel
     {
         public bool UseGeneratedPassword { get; set; } = true;
         public bool SaveFolderPassword { get; set; } = false;
