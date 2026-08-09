@@ -185,6 +185,21 @@ public sealed partial class ChatStore : IDisposable
     private bool _started;
     private string _sessionId = "";
     private string? _pendingDirectory;
+    // Folders opened via the sidebar's "Open Folder" button (or a directory group's "+" button),
+    // keyed by normalized path with the last-opened time (unix ms). These appear in the sidebar
+    // even when the server reports no sessions for them yet (RebuildDirectoryGroups merges them in),
+    // so a freshly-picked folder is visible before the first message creates a session.
+    private readonly Dictionary<string, long> _openedFolders = new();
+    // Per-opened-folder /event stream cancellation. The app's main /event stream is scoped to the
+    // server's default instance, which filters out other directories' events — so sessions in a
+    // picked folder get a second stream via /event?directory=<path>. Keyed by normalized path.
+    private readonly Dictionary<string, CancellationTokenSource> _folderStreamCts = new();
+    // Bounded set of recently-seen SSE event ids, used to drop duplicates when an opened folder
+    // equals the server's default instance (both the default and the folder stream deliver the
+    // same events, and double-applying part deltas would corrupt message text).
+    private const int MaxSeenEventIds = 2000;
+    private readonly HashSet<string> _seenEventIds = new();
+    private readonly Queue<string> _seenEventIdOrder = new();
     private string _baseUrl = "";
     private string? _password;
     private string? _username;
@@ -228,6 +243,11 @@ public sealed partial class ChatStore : IDisposable
         _pendingQuestions.Clear();
         _pendingPermissions.Clear();
         _directoryExpanded.Clear();
+        _openedFolders.Clear();
+        foreach (var cts in _folderStreamCts.Values) cts.Cancel();
+        _folderStreamCts.Clear();
+        _seenEventIds.Clear();
+        _seenEventIdOrder.Clear();
         McpServers.Clear();
         _mcpDirectory = "";
         McpDirectory = "";
@@ -253,6 +273,8 @@ public sealed partial class ChatStore : IDisposable
     {
         _cts?.Cancel();
         _cts = null;
+        foreach (var cts in _folderStreamCts.Values) cts.Cancel();
+        _folderStreamCts.Clear();
         _toastCts?.Cancel();
         _toastCts = null;
         ServeProcess?.Dispose();
@@ -593,6 +615,35 @@ public sealed partial class ChatStore : IDisposable
 
     public async Task RefreshSessionsAsync(CancellationToken ct = default)
     {
+        // Coalesce concurrent refreshes (e.g. NewSessionAsync's background refresh racing
+        // EnsureSessionAsync's post-create refresh): if one is in flight, queue a follow-up
+        // so the newest session list still lands.
+        if (_refreshingSessions)
+        {
+            _refreshSessionsQueued = true;
+            return;
+        }
+        _refreshingSessions = true;
+        try
+        {
+            do
+            {
+                _refreshSessionsQueued = false;
+                await RefreshSessionsCoreAsync(ct);
+            }
+            while (_refreshSessionsQueued);
+        }
+        finally
+        {
+            _refreshingSessions = false;
+        }
+    }
+
+    private bool _refreshingSessions;
+    private bool _refreshSessionsQueued;
+
+    private async Task RefreshSessionsCoreAsync(CancellationToken ct)
+    {
         try
         {
             var list = await _client.ListSessionsAsync(ct);
@@ -601,6 +652,28 @@ public sealed partial class ChatStore : IDisposable
             {
                 ApplySessionFlags(session);
                 Sessions.Add(session);
+            }
+
+            // The default GET /session list is scoped to the server's default project
+            // (instance). Folders opened via the sidebar's Open Folder button live in their
+            // own instance, so their sessions must be fetched per-directory and merged in —
+            // otherwise a picked folder's chats never appear in the sidebar.
+            foreach (var dir in _openedFolders.Keys.ToList())
+            {
+                try
+                {
+                    var extra = await _client.ListSessionsAsync(ct, dir);
+                    foreach (var session in extra)
+                    {
+                        if (Sessions.Any(s => s.Id == session.Id)) continue;
+                        ApplySessionFlags(session);
+                        Sessions.Add(session);
+                    }
+                }
+                catch
+                {
+                    // One unreachable/unlisted folder must not break the whole refresh.
+                }
             }
 
             RebuildDirectoryGroups();
@@ -762,29 +835,83 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>. Subagent sessions
+    /// Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>, then merges in any
+    /// folders opened via the "Open Folder" button that have no sessions yet, so a picked folder
+    /// shows up immediately (even before the server has created a session in it). Subagent sessions
     /// (those spawned by a <c>task</c> tool call, identified by a non-empty ParentId) are kept in
     /// <see cref="Sessions"/> but filtered out of the sidebar — they're opened via their clickable
     /// task tool card instead, mirroring the TUI which hides them from session lists.
     /// </summary>
     private void RebuildDirectoryGroups()
     {
-        DirectoryGroups.Clear();
-        foreach (var group in Sessions
+        var groups = new List<DirectoryGroup>();
+        var sortKey = new Dictionary<string, long>();
+
+        foreach (var g in Sessions
             .Where(s => !s.IsSubagent)
-            .GroupBy(s => s.Directory)
-            .Select(g => new DirectoryGroup
+            .GroupBy(s => s.Directory))
+        {
+            var dir = g.Key.Length == 0 ? "(unknown)" : g.Key;
+            var sessions = g.OrderByDescending(s => s.Updated).ToList();
+            sortKey[dir] = sessions.Count > 0 ? sessions[0].Updated : 0;
+            groups.Add(new DirectoryGroup
             {
-                Directory = g.Key.Length == 0 ? "(unknown)" : g.Key,
-                Sessions = new ObservableCollection<SessionInfo>(g.OrderByDescending(s => s.Updated)),
-            })
-            .OrderByDescending(g => g.Sessions.Count > 0 ? g.Sessions[0].Updated : 0))
+                Directory = dir,
+                Sessions = new ObservableCollection<SessionInfo>(sessions),
+            });
+        }
+
+        // Folders opened via the sidebar's Open Folder button (or a group "+" button) appear even
+        // with zero sessions; sort them by when they were last opened.
+        foreach (var (dir, opened) in _openedFolders)
+        {
+            if (sortKey.ContainsKey(dir)) continue;
+            sortKey[dir] = opened;
+            groups.Add(new DirectoryGroup
+            {
+                Directory = dir,
+                Sessions = new ObservableCollection<SessionInfo>(),
+            });
+        }
+
+        DirectoryGroups.Clear();
+        foreach (var group in groups.OrderByDescending(g => sortKey[g.Directory]))
         {
             // Re-apply the user's show-more/show-less choice; the toggle mutates the item's
             // reactive IsExpanded in place, while a rebuild gets its value from the store map.
             group.IsExpanded = _directoryExpanded.GetValueOrDefault(group.Directory);
             DirectoryGroups.Add(group);
         }
+    }
+
+    /// <summary>
+    /// Records a folder as opened via the sidebar, so it shows up even with no sessions yet,
+    /// and opens an /event stream scoped to it.
+    /// </summary>
+    private void RegisterOpenedFolder(string directory)
+    {
+        var path = directory.Trim();
+        while (path.Length > 1 && path.EndsWith('/')) path = path[..^1];
+        if (path.Length == 0) return;
+        _openedFolders[path] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        StartFolderEventStream(path);
+    }
+
+    /// <summary>
+    /// Opens an /event stream scoped to <paramref name="directory"/> via ?directory= so the app
+    /// receives live events (message parts, status) for sessions in a picked folder. The app's
+    /// main /event stream is scoped to the server's default instance, which filters out events
+    /// from other directories — without this, a session created in an opened folder never updates
+    /// the chat until the user switches away and back. Tied to the connect lifetime and cancelled
+    /// on Configure/Dispose.
+    /// </summary>
+    private void StartFolderEventStream(string directory)
+    {
+        if (_client is null || _folderStreamCts.ContainsKey(directory)) return;
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_cts?.Token ?? CancellationToken.None);
+        _folderStreamCts[directory] = cts;
+        var url = $"{_client.BaseUrl}/event?directory={Uri.EscapeDataString(directory)}";
+        _ = Task.Run(() => EventStreamReader.ReadAsync(_client.Http, url, _events.Writer, cts.Token));
     }
 
     /// <summary>
@@ -1047,6 +1174,7 @@ public sealed partial class ChatStore : IDisposable
     /// </summary>
     public Task NewSessionAsync(string? directory = null)
     {
+        if (!string.IsNullOrEmpty(directory)) RegisterOpenedFolder(directory);
         _pendingDirectory = directory;
         _sessionId = "";
         ActiveSessionId = "";
@@ -1065,6 +1193,11 @@ public sealed partial class ChatStore : IDisposable
         _permissions.Clear();
         ActivePermission = null;
         DismissToast();
+        // Show the picked folder immediately (even with zero sessions — RebuildDirectoryGroups
+        // merges opened folders in), then background-refresh so any existing sessions in it are
+        // fetched from the server (the default GET /session list excludes other instances).
+        RebuildDirectoryGroups();
+        _ = RefreshSessionsAsync();
         _ = RefreshMcpStatusAsync();
         return Task.CompletedTask;
     }
@@ -1436,13 +1569,34 @@ public sealed partial class ChatStore : IDisposable
             }
 
             var batch = new List<OpencodeEvent>();
-            while (reader.TryRead(out var evt)) batch.Add(evt);
+            while (reader.TryRead(out var evt))
+            {
+                if (IsDuplicateEvent(evt)) continue;
+                batch.Add(evt);
+            }
 
             _dispatcher?.TryEnqueue(() =>
             {
                 foreach (var evt in batch) Apply(evt);
             });
         }
+    }
+
+    /// <summary>
+    /// Returns true when an SSE event id was already processed. Each stream instance generates
+    /// globally-unique ids, but an opened folder that equals the server's default instance is
+    /// delivered by both the default stream and its folder stream — the second copy is dropped.
+    /// Ids are globally unique so the bounded set never false-positives across reconnects.
+    /// </summary>
+    private bool IsDuplicateEvent(OpencodeEvent evt)
+    {
+        if (string.IsNullOrEmpty(evt.Id)) return false;
+        if (_seenEventIds.Contains(evt.Id)) return true;
+        _seenEventIds.Add(evt.Id);
+        _seenEventIdOrder.Enqueue(evt.Id);
+        while (_seenEventIdOrder.Count > MaxSeenEventIds)
+            _seenEventIds.Remove(_seenEventIdOrder.Dequeue());
+        return false;
     }
 
     private void Apply(OpencodeEvent evt)

@@ -20,20 +20,11 @@ namespace UnoVibe.Controls;
     </setup>
     <root>
         <Grid Background=`theme.CardBackground` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 0, 1, 0)` RowDefinitions=<>
-            <RowDefinition Height=Auto />
             <RowDefinition />
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
         </>>
-            <StackPanel Padding=`new Thickness(12, 12, 12, 8)` Spacing=8>
-                <Button Click+=`(sender, e) => OnOpenFolder(sender, e)` HorizontalAlignment=Stretch>
-                    <StackPanel Orientation=Horizontal Spacing=6>
-                        <AppSymbolIcon Symbol=Folder FontSize=13 VerticalAlignment=Center />
-                        <TextBlock Text="Open Folder" VerticalAlignment=Center />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-            <ScrollViewer Grid.Row=1>
+            <ScrollViewer Grid.Row=0>
                 <StackPanel Padding=`new Thickness(12, 0, 12, 12)`>
                     foreach (var group in `Store.DirectoryGroups`; `group.Directory`)
                     {
@@ -55,6 +46,10 @@ namespace UnoVibe.Controls;
                                     <AppSymbolIcon Symbol=Add FontSize=11 />
                                 </Button>
                             </Grid>
+                            if (`group.Sessions.Reactive.Count == 0`)
+                            {
+                                <TextBlock Text="No sessions yet" FontSize=11 Foreground=`theme.TertiaryText` Margin=`new Thickness(0, 6, 0, 0)` />
+                            }
                             foreach (var s in `group.IsExpanded ? group.Sessions.Reactive : group.Sessions.Reactive.Take(MaxVisibleSessions)`; `s.Id`)
                             {
                                 <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
@@ -85,7 +80,7 @@ namespace UnoVibe.Controls;
                     }
                 </StackPanel>
             </ScrollViewer>
-            <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 8)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
+            <Border Grid.Row=1 Padding=`new Thickness(12, 8, 12, 8)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
                 <StackPanel Spacing=6>
                     <Grid ColumnDefinitions=<>
                         <ColumnDefinition />
@@ -127,13 +122,17 @@ namespace UnoVibe.Controls;
                     }
                 </StackPanel>
             </Border>
-            <Border Grid.Row=3 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
+            <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
                 <Grid ColumnDefinitions=<>
                     <ColumnDefinition />
                     <ColumnDefinition Width=Auto />
+                    <ColumnDefinition Width=Auto />
                 </>>
                     <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                    <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" Click+=`(sender, e) => OnNewWindow(sender, e)`>
+                    <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" Click+=`(sender, e) => OnOpenFolder(sender, e)`>
+                        <AppSymbolIcon Symbol=Folder FontSize=11 />
+                    </Button>
+                    <Button Grid.Column=2 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" Click+=`(sender, e) => OnNewWindow(sender, e)`>
                         <AppSymbolIcon Symbol=NewWindow FontSize=11 />
                     </Button>
                 </Grid>

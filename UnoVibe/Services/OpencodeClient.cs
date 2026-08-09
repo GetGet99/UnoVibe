@@ -247,9 +247,15 @@ public sealed class OpencodeClient
         return list;
     }
 
-    public async Task<List<SessionInfo>> ListSessionsAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Get /session — lists sessions. Without a directory the list is scoped to the server's
+    /// default project (instance); passing <paramref name="directory"/> (query param) lists the
+    /// sessions for that specific workspace directory instead, which the default list excludes.
+    /// </summary>
+    public async Task<List<SessionInfo>> ListSessionsAsync(CancellationToken ct = default, string? directory = null)
     {
-        using var response = await Http.GetAsync("/session", ct);
+        var url = string.IsNullOrEmpty(directory) ? "/session" : $"/session?directory={Uri.EscapeDataString(directory)}";
+        using var response = await Http.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
