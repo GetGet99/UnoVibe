@@ -25,12 +25,6 @@ public sealed class RecentConnection
     /// <summary>Unix-seconds of last successful open; drives ordering (most recent first).</summary>
     public long LastOpenedUnix { get; set; }
 
-    /// <summary>For folders: whether to generate a strong password vs use <see cref="CustomPassword"/>.</summary>
-    public bool UseGeneratedPassword { get; set; } = true;
-
-    /// <summary>For folders with <see cref="UseGeneratedPassword"/> false: the saved custom password.</summary>
-    public string CustomPassword { get; set; } = "";
-
     /// <summary>For servers: the saved password (empty if the server is unsecured).</summary>
     public string ServerPassword { get; set; } = "";
 

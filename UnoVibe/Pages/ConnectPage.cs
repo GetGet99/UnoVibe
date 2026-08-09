@@ -8,7 +8,8 @@ namespace UnoVibe.Pages;
 /// Shown at startup when no OPENCODE_BASE_URL was provided. Lets the user either
 /// connect to an existing opencode server or launch a local `opencode serve` from
 /// a picked folder, then navigates to the main chat page. Recent folders and server
-/// URLs are listed VSCode-style; folder password settings are remembered per entry.
+/// URLs are listed VSCode-style; the folder-security toggle on the right is the
+/// single source of truth for folder passwords (recent or new).
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
@@ -18,14 +19,15 @@ namespace UnoVibe.Pages;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
+    using Windows.UI.Text;
     string Url = "";
     string Status = "Choose a server to connect to.";
-    string Folder = "";
     bool Connecting = false;
     string ServerPassword = "";
     bool UseGeneratedPassword = true;
     string CustomPassword = "";
     string ConfirmPassword = "";
+    bool SaveFolderPassword = false;
     bool ShowConnectForm = false;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -33,15 +35,16 @@ namespace UnoVibe.Pages;
     </setup>
     <root>
         <Grid RowDefinitions=<>
-            <RowDefinition Height=Auto />
             <RowDefinition />
             <RowDefinition Height=Auto />
         </>>
-            <TextBlock Grid.Row=0 Text="UnoVibe" FontSize=28 FontWeight=`FontWeights.SemiBold` Padding=`new Thickness(28, 24, 28, 0)` />
-            <ScrollViewer Grid.Row=1>
-                <StackPanel Padding=`new Thickness(28, 16, 28, 24)` Spacing=16 MaxWidth=860 HorizontalAlignment=Left>
-                    <TextBlock Text="Connect to OpenCode" FontSize=18 FontWeight=`FontWeights.SemiBold` />
-                    <StackPanel Orientation=Horizontal Spacing=8>
+            scrollHost = <ScrollViewer Grid.Row=0 VerticalScrollBarVisibility=Auto>
+                content = <StackPanel MaxWidth=880 Padding=`new Thickness(28, 40, 28, 32)` Spacing=16 HorizontalAlignment=Center VerticalAlignment=Center>
+                    <StackPanel Spacing=4 HorizontalAlignment=Center>
+                        <TextBlock Text="UnoVibe" FontSize=28 FontWeight=`FontWeights.SemiBold` HorizontalAlignment=Center />
+                        <TextBlock Text="Connect to OpenCode" FontSize=18 FontWeight=`FontWeights.SemiBold` HorizontalAlignment=Center />
+                    </StackPanel>
+                    <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Center>
                         <ProgressRing Width=14 Height=14 IsActive=`Connecting` Visibility=`Connecting ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
                         <TextBlock Text=`Status` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
                     </StackPanel>
@@ -59,13 +62,16 @@ namespace UnoVibe.Pages;
                                     <TextBlock Text="Recent" FontSize=14 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
                                     <Button Grid.Column=1 Content="Clear all" FontSize=11 Padding=`new Thickness(6, 3, 6, 3)` Background=`transparent` BorderThickness=0 Visibility=`RecentConnectionsStore.Items.Reactive.Count > 0 ? Visibility.Visible : Visibility.Collapsed` @Click+=`RecentConnectionsStore.ClearAll()` ToolTipService.ToolTip="Remove all recent entries" />
                                 </Grid>
-                                if (`RecentConnectionsStore.Items.Reactive.Count == 0`)
-                                {
-                                    <TextBlock Text="No recent connections yet. Open a folder or connect to a URL to get started." FontSize=12 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
-                                }
-                                else
-                                {
-                                    <ScrollViewer MaxHeight=320>
+                                <ScrollViewer Height=300 VerticalScrollBarVisibility=Auto>
+                                    if (`RecentConnectionsStore.Items.Reactive.Count == 0`)
+                                    {
+                                        <StackPanel Spacing=6 Padding=`new Thickness(0, 12, 0, 0)`>
+                                            <TextBlock Text="No recent connections yet." FontSize=13 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
+                                            <TextBlock Text="Folders and servers you open will appear here." FontSize=12 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
+                                        </StackPanel>
+                                    }
+                                    else
+                                    {
                                         <StackPanel Spacing=2>
                                             foreach (var item in `RecentConnectionsStore.Items`; `item.Key`)
                                             {
@@ -78,7 +84,7 @@ namespace UnoVibe.Pages;
                                                     <Button Grid.Column=1 HorizontalAlignment=Stretch HorizontalContentAlignment=Left Background=`transparent` BorderThickness=0 Padding=`new Thickness(0, 6, 0, 6)` CommandParameter=`item` Click+=`(sender, e) => OnOpenRecent(sender, e)` ToolTipService.ToolTip=`RecentTooltip(item)` IsEnabled=`!Connecting`>
                                                         <StackPanel Spacing=1>
                                                             <TextBlock Text=`item.Display` FontSize=13 FontWeight=`FontWeights.SemiBold` TextTrimming=`TextTrimming.CharacterEllipsis` />
-                                                            <TextBlock Text=`RecentDetail(item)` FontSize=11 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                                            <TextBlock Text=`item.Detail` FontSize=11 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
                                                         </StackPanel>
                                                     </Button>
                                                     <Button Grid.Column=2 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center Background=`transparent` BorderThickness=0 CommandParameter=`item.Key` Click+=`(sender, e) => OnRemoveRecent(sender, e)` ToolTipService.ToolTip="Remove from recent" IsEnabled=`!Connecting`>
@@ -87,8 +93,8 @@ namespace UnoVibe.Pages;
                                                 </Grid>
                                             }
                                         </StackPanel>
-                                    </ScrollViewer>
-                                }
+                                    }
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
 
@@ -96,7 +102,7 @@ namespace UnoVibe.Pages;
                             <Border Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1 CornerRadius=8 Padding=`new Thickness(16, 14, 16, 14)`>
                                 <StackPanel Spacing=10>
                                     <TextBlock Text="Start a session" FontSize=14 FontWeight=`FontWeights.SemiBold` />
-                                    <Button HorizontalAlignment=Stretch HorizontalContentAlignment=Left @Click+=`await PickFolderAsync()` IsEnabled=`!Connecting` ToolTipService.ToolTip="Run opencode serve in a project folder">
+                                    <Button HorizontalAlignment=Stretch HorizontalContentAlignment=Left @Click+=`await PickFolderAsync()` IsEnabled=`!Connecting` ToolTipService.ToolTip="Pick a folder to run opencode serve in; it starts with the security settings below">
                                         <StackPanel Orientation=Horizontal Spacing=8>
                                             <AppSymbolIcon Symbol=Folder FontSize=14 />
                                             <TextBlock Text="Open Folder" VerticalAlignment=Center />
@@ -118,28 +124,49 @@ namespace UnoVibe.Pages;
                                         </StackPanel>
                                     }
                                     <Border BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)` Margin=`new Thickness(0, 6, 0, 0)` />
-                                    <TextBlock Text="New folder security" FontSize=13 FontWeight=`FontWeights.SemiBold` />
-                                    <TextBlock Text="Applies when you start a folder. Saved with that folder so re-opening it later uses the same settings." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
+                                    <TextBlock Text="Folder security" FontSize=13 FontWeight=`FontWeights.SemiBold` />
+                                    <TextBlock Text="Used when you open any folder — from this list or with Open Folder." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                                     <ToggleSwitch Header="Server security" OnContent="Use a generated strong password" OffContent="Set my own password" IsOn<=>`UseGeneratedPassword` IsEnabled=`!Connecting` />
                                     if (`!UseGeneratedPassword`)
                                     {
                                         <PasswordBox Password<=>`CustomPassword` PlaceholderText="Set a password" IsEnabled=`!Connecting` />
                                         <PasswordBox Password<=>`ConfirmPassword` PlaceholderText="Confirm password" IsEnabled=`!Connecting` />
+                                        <StackPanel Orientation=Horizontal Spacing=8>
+                                            <TextBlock Text=`SaveFolderPassword ? "Password saved on this device." : "Save this password on this device?"` FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap VerticalAlignment=Center />
+                                            <Button Content=`SaveFolderPassword ? "Forget" : "Save"` FontSize=11 Padding=`new Thickness(8, 4)` VerticalAlignment=Center IsEnabled=`!Connecting` Flyout=passwordFlyout = <Flyout Placement=BottomEdgeAlignedRight>
+                                                if (`SaveFolderPassword`)
+                                                {
+                                                    <StackPanel Spacing=8 MaxWidth=260 Padding=4>
+                                                        <TextBlock Text="Stop saving this password?" FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap />
+                                                        <TextBlock Text="The password will no longer be stored on this device. You will type it again when you open a folder." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                                                        <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
+                                                            <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                                                            <Button Content="Forget it" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`SetSavePassword(false)` />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                }
+                                                else
+                                                {
+                                                    <StackPanel Spacing=8 MaxWidth=280 Padding=4>
+                                                        <TextBlock Text="Store this password in plain text?" FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap />
+                                                        <TextBlock Text="If saved, the password is stored unencrypted on this computer and could be read by anyone with access to your files. Only save it if you understand this risk." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                                                        <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
+                                                            <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                                                            <Button Content="I understand the risk" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`SetSavePassword(true)` />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                }
+                                            </Flyout> />
+                                        </StackPanel>
                                     }
-                                    <Grid ColumnDefinitions=<>
-                                        <ColumnDefinition />
-                                        <ColumnDefinition Width=Auto />
-                                    </> ColumnSpacing=8>
-                                        <TextBlock Text=`Folder.Length > 0 ? Folder : "(no folder selected)"` FontSize=12 Foreground=`Folder.Length > 0 ? theme.PrimaryText : theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Folder.Length > 0 ? Folder : ""` />
-                                        <Button Grid.Column=1 Content="Start & connect" @Click+=`await StartServeAsync()` IsEnabled=`!Connecting && Folder.Length > 0` />
-                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
                     </Grid>
+
+                    <TextBlock Text="Tip: set the OPENCODE_BASE_URL environment variable to skip this screen." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
                 </StackPanel>
             </ScrollViewer>
-            <TextBlock Grid.Row=2 Text="Tip: set the OPENCODE_BASE_URL environment variable to skip this screen." FontSize=11 Foreground=`theme.TertiaryText` Padding=`new Thickness(28, 0, 28, 16)` />
         </Grid>
     </root>
     """)]
@@ -153,6 +180,26 @@ public partial class ConnectPage : Page
     {
         RecentConnectionsStore.Load();
         Init();
+
+        // Restore the persisted folder-security settings (the source of truth for folder passwords).
+        // A previously-confirmed custom password also pre-fills the confirm box so the stored value
+        // passes the match check when opening a folder without retyping it.
+        UseGeneratedPassword = RecentConnectionsStore.UseGeneratedPassword;
+        SaveFolderPassword = RecentConnectionsStore.SaveFolderPassword;
+        CustomPassword = RecentConnectionsStore.CustomPassword;
+        if (SaveFolderPassword && CustomPassword.Length > 0)
+            ConfirmPassword = CustomPassword;
+
+        // Keep the centered content tall enough to fill the viewport so it stays vertically centered
+        // while still scrolling when the window is small.
+        void UpdateContentMinHeight()
+        {
+            var h = scrollHost.ViewportHeight;
+            if (Math.Abs(content.MinHeight - h) > 0.5) content.MinHeight = h;
+        }
+        scrollHost.ViewChanged += (_, _) => UpdateContentMinHeight();
+        scrollHost.SizeChanged += (_, _) => UpdateContentMinHeight();
+
         var configured = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL");
         if (!string.IsNullOrWhiteSpace(configured)) Url = configured;
         ServerPassword = Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar) ?? "";
@@ -188,13 +235,18 @@ public partial class ConnectPage : Page
         }
     }
 
+    /// <summary>
+    /// Picks a folder and immediately launches `opencode serve` there using the current
+    /// folder-security settings (the source of truth), saving a click.
+    /// </summary>
     private async Task PickFolderAsync()
     {
         var picker = new Windows.Storage.Pickers.FolderPicker();
         try
         {
             var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null) Folder = folder.Path;
+            if (folder is not null)
+                await StartServeCoreAsync(folder.Path, UseGeneratedPassword, CustomPassword);
         }
         catch (Exception ex)
         {
@@ -202,16 +254,9 @@ public partial class ConnectPage : Page
         }
     }
 
-    /// <summary>Starts `opencode serve` for a newly picked folder using the security card settings.</summary>
-    private async Task StartServeAsync()
-    {
-        if (Folder.Length == 0) return;
-        await StartServeCoreAsync(Folder, UseGeneratedPassword, CustomPassword);
-    }
-
     /// <summary>
     /// Launches a local `opencode serve` in <paramref name="folder"/> and connects. On success the
-    /// folder (with its password settings) is recorded in the recent list.
+    /// folder is recorded in the recent list and the security settings used are persisted.
     /// </summary>
     private async Task StartServeCoreAsync(string folder, bool useGenerated, string customPassword)
     {
@@ -221,6 +266,11 @@ public partial class ConnectPage : Page
             if (customPassword.Length == 0)
             {
                 Status = "Please set a password.";
+                return;
+            }
+            if (customPassword != ConfirmPassword)
+            {
+                Status = "Passwords do not match.";
                 return;
             }
             password = customPassword;
@@ -248,7 +298,8 @@ public partial class ConnectPage : Page
 
         if (store.ConnectionStatus == "Connected")
         {
-            RecentConnectionsStore.UpsertFolder(folder, useGenerated, customPassword);
+            RecentConnectionsStore.UpsertFolder(folder);
+            RecentConnectionsStore.SaveSecurity(useGenerated, SaveFolderPassword, customPassword);
             Controller.ShowMain();
         }
         else
@@ -257,12 +308,14 @@ public partial class ConnectPage : Page
         }
     }
 
-    /// <summary>Re-opens a recent entry: folder → serve with its saved password settings; server → direct connect.</summary>
+    /// <summary>
+    /// Re-opens a recent entry: folder → serve using the current folder-security settings; server → direct connect.
+    /// </summary>
     private async Task OnOpenRecent(object sender, RoutedEventArgs e)
     {
         if (Connecting || (sender as Button)?.CommandParameter is not RecentConnection item) return;
         if (item.IsFolder)
-            await StartServeCoreAsync(item.Detail, item.UseGeneratedPassword, item.CustomPassword);
+            await StartServeCoreAsync(item.Detail, UseGeneratedPassword, CustomPassword);
         else
             await ConnectCoreAsync(item.Detail, item.ServerPassword);
     }
@@ -273,16 +326,19 @@ public partial class ConnectPage : Page
         RecentConnectionsStore.Remove(key);
     }
 
-    /// <summary>Detail line for a recent row; folder rows note when a custom password is saved.</summary>
-    private static string RecentDetail(RecentConnection item) =>
-        item.IsFolder && !item.UseGeneratedPassword
-            ? $"{item.Detail} · custom password"
-            : item.Detail;
+    /// <summary>
+    /// Opt-in/out of persisting the custom folder password. Enabling requires confirming the
+    /// plain-text-storage risk in the flyout; the choice is saved immediately either way.
+    /// </summary>
+    private void SetSavePassword(bool save)
+    {
+        if (passwordFlyout is { IsOpen: true }) passwordFlyout.Hide();
+        SaveFolderPassword = save;
+        RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, save, CustomPassword);
+    }
 
     private static string RecentTooltip(RecentConnection item) =>
         item.IsFolder
-            ? item.UseGeneratedPassword
-                ? "Open this folder with a generated password"
-                : "Open this folder with the saved custom password"
+            ? "Open this folder using the security settings above"
             : "Connect to this server";
 }

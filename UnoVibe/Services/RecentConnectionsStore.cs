@@ -6,10 +6,11 @@ namespace UnoVibe.Services;
 
 /// <summary>
 /// Persists the ConnectPage "Recent" list (folders launched via `opencode serve`
-/// and server URLs connected to) to a small JSON file under the user's app-data
-/// directory. Each folder entry remembers its password settings so re-opening a
-/// recent folder uses the same security configuration. Call <see cref="Load"/> once
-/// at startup; every mutation saves back automatically.
+/// and server URLs connected to) plus the global folder-security settings to a
+/// small JSON file under the app's local-data directory. The folder-security
+/// settings (`UseGeneratedPassword`/`CustomPassword`) are the single source of
+/// truth for opening folders — both from history and from the Open Folder button.
+/// Call <see cref="Load"/> once at startup; every mutation saves back automatically.
 /// </summary>
 public static class RecentConnectionsStore
 {
@@ -23,6 +24,18 @@ public static class RecentConnectionsStore
     /// <summary>The recent connections, most recent first. Reactive in the markup.</summary>
     public static ObservableCollection<RecentConnection> Items { get; } = new();
 
+    /// <summary>Global folder security: generate a strong password vs use <see cref="CustomPassword"/>.</summary>
+    public static bool UseGeneratedPassword { get; set; } = true;
+
+    /// <summary>
+    /// Whether the custom folder password is persisted (opt-in, with a plain-text-risk warning in the UI).
+    /// When false, <see cref="CustomPassword"/> is never written to disk.
+    /// </summary>
+    public static bool SaveFolderPassword { get; set; } = false;
+
+    /// <summary>Global folder security: the custom password, only persisted when <see cref="SaveFolderPassword"/> is true.</summary>
+    public static string CustomPassword { get; set; } = "";
+
     public static void Load()
     {
         try
@@ -30,7 +43,27 @@ public static class RecentConnectionsStore
             lock (Gate)
             {
                 if (!File.Exists(FilePath)) return;
-                var list = JsonSerializer.Deserialize<List<RecentConnection>>(File.ReadAllText(FilePath), Json);
+                var json = File.ReadAllText(FilePath);
+
+                List<RecentConnection>? list = null;
+                try
+                {
+                    var file = JsonSerializer.Deserialize<FileModel>(json, Json);
+                    if (file is not null)
+                    {
+                        UseGeneratedPassword = file.UseGeneratedPassword;
+                        SaveFolderPassword = file.SaveFolderPassword;
+                        CustomPassword = file.CustomPassword;
+                        list = file.Items;
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Legacy bare-array format — migrate on next save.
+                    try { list = JsonSerializer.Deserialize<List<RecentConnection>>(json, Json); }
+                    catch (JsonException) { list = null; }
+                }
+
                 if (list is null) return;
                 Items.Clear();
                 foreach (var item in list)
@@ -46,8 +79,18 @@ public static class RecentConnectionsStore
         }
     }
 
+    /// <summary>Persists the global folder-security settings (the ConnectPage source of truth).
+    /// The raw <paramref name="customPassword"/> is only written when <paramref name="savePassword"/> is true.</summary>
+    public static void SaveSecurity(bool useGenerated, bool savePassword, string customPassword)
+    {
+        UseGeneratedPassword = useGenerated;
+        SaveFolderPassword = savePassword;
+        CustomPassword = savePassword ? customPassword : "";
+        Save();
+    }
+
     /// <summary>Records a successful local-folder launch (or refreshes an existing entry).</summary>
-    public static void UpsertFolder(string folder, bool useGeneratedPassword, string customPassword)
+    public static void UpsertFolder(string folder)
     {
         var key = NormalizeFolder(folder);
         var item = Items.FirstOrDefault(x => x.IsFolder && x.Key == key);
@@ -67,8 +110,6 @@ public static class RecentConnectionsStore
             Items.Move(Items.IndexOf(item), 0);
         }
 
-        item.UseGeneratedPassword = useGeneratedPassword;
-        item.CustomPassword = customPassword;
         item.LastOpenedUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         TrimAndSave();
     }
@@ -127,7 +168,13 @@ public static class RecentConnectionsStore
             Directory.CreateDirectory(Dir);
             lock (Gate)
             {
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(Items.ToList(), Json));
+                var file = new FileModel
+                {
+                    UseGeneratedPassword = UseGeneratedPassword,
+                    CustomPassword = CustomPassword,
+                    Items = Items.ToList(),
+                };
+                File.WriteAllText(FilePath, JsonSerializer.Serialize(file, Json));
             }
         }
         catch
@@ -150,5 +197,14 @@ public static class RecentConnectionsStore
         var trimmed = path;
         var slash = trimmed.LastIndexOfAny(new[] { '/', '\\' });
         return slash >= 0 && slash < trimmed.Length - 1 ? trimmed[(slash + 1)..] : trimmed;
+    }
+
+    /// <summary>On-disk shape: the recent list plus the global folder-security settings.</summary>
+    private sealed class FileModel
+    {
+        public bool UseGeneratedPassword { get; set; } = true;
+        public bool SaveFolderPassword { get; set; } = false;
+        public string CustomPassword { get; set; } = "";
+        public List<RecentConnection>? Items { get; set; }
     }
 }
