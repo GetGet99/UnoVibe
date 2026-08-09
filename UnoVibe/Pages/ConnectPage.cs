@@ -82,7 +82,7 @@ namespace UnoVibe.Pages;
                                                     <ColumnDefinition Width=Auto />
                                                 </> ColumnSpacing=10>
                                                     <AppSymbolIcon Symbol=`item.IsFolder ? Symbol.Folder : Symbol.Globe` FontSize=14 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                                                    <Button Grid.Column=1 HorizontalAlignment=Stretch HorizontalContentAlignment=Left Background=`transparent` BorderThickness=0 Padding=`new Thickness(0, 6, 0, 6)` CommandParameter=`item` Click+=`(sender, e) => OnOpenRecent(sender, e)` ToolTipService.ToolTip=`RecentTooltip(item)` IsEnabled=`!Connecting`>
+                                                    <Button Grid.Column=1 HorizontalAlignment=Stretch HorizontalContentAlignment=Left Background=`transparent` BorderThickness=0 Padding=`new Thickness(0, 6, 0, 6)` CommandParameter=`item` Click+=`(sender, e) => OnOpenRecent(sender, e)` IsEnabled=`!Connecting`>
                                                         <StackPanel Spacing=1>
                                                             <TextBlock Text=`item.Display` FontSize=13 FontWeight=`FontWeights.SemiBold` TextTrimming=`TextTrimming.CharacterEllipsis` />
                                                             <TextBlock Text=`item.Detail` FontSize=11 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
@@ -396,9 +396,4 @@ public partial class ConnectPage : Page
         SaveFolderPassword = save;
         RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, save, CustomPassword);
     }
-
-    private static string RecentTooltip(RecentConnection item) =>
-        item.IsFolder
-            ? "Open this folder using the security settings above"
-            : "Connect to this server";
 }
