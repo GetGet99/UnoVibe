@@ -16,6 +16,7 @@
     <ApplicationPublisher>UnoVibe</ApplicationPublisher>
     <!-- Package Description -->
     <Description>UnoVibe powered by Uno Platform.</Description>
+    <UnoIconForegroundFile>Assets/Icons/UnoVibe.png</UnoIconForegroundFile>
 
     <!--
       UnoFeatures are used to quickly add and manage features enabled for your app.
