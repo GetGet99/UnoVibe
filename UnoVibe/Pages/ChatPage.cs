@@ -329,7 +329,8 @@ namespace UnoVibe.Pages;
                 </StackPanel>
                 <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                     <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                    modelCombo = <ComboBox ItemsSource=`Store.ModelOptions` SelectedItem=`Store.Active.SelectedModelOption` ItemTemplate=template (ModelOption? value) { <TextBlock Text=`value?.Name` /> } SelectionChanged+=`(sender, e) => OnModelChanged(sender, e)` MinWidth=200 MaxWidth=300 Height=28 FontSize=12 />
+                    <ModelPicker ItemsSource=`Store.ModelOptions` SelectedItem=`Store.Active.SelectedModelOption`
+                                 ModelSelected+=`OnModelSelected` />
                 </StackPanel>
                 <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                     <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
@@ -515,10 +516,7 @@ public partial class ChatPage : Page
         if ((sender as ComboBox)?.SelectedItem is string mode) Store.Active.SetMode(mode);
     }
 
-    private void OnModelChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if ((sender as ComboBox)?.SelectedItem is ModelOption model) Store.Active.SetModel(model.Id);
-    }
+    private void OnModelSelected(ModelOption model) => Store.Active.SetModel(model.Id);
 
     private void OnVariantChanged(object? sender, SelectionChangedEventArgs e)
     {
