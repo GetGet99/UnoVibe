@@ -6,5 +6,7 @@ static class SymbolExtension {
     extension(Symbol)
     {
         public static Symbol PrivateCall => (Symbol)0xea3d;
+        // Code icon `{ }` used for "open in editor" actions.
+        public static Symbol Code => (Symbol)0xe943;
     }
 }
