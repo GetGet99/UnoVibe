@@ -15,7 +15,12 @@ public sealed class WindowController
 
     public ChatStore Store { get; } = new();
 
-    public void ShowConnect() => Window.Child = new ConnectPage(x => x.Controller = this);
+    public void ShowConnect(StartupArgs? startup = null) =>
+        Window.Child = new ConnectPage(x =>
+        {
+            x.Controller = this;
+            x.Startup = startup;
+        });
 
     public void ShowMain() => Window.Child = new MainPage(x => x.ProvideStore(Store));
 }

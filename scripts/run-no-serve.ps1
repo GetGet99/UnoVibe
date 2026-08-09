@@ -4,7 +4,8 @@
     Launch the UnoVibe desktop app in the background without managing a server.
 .DESCRIPTION
     Equivalent of scripts/run-no-serve.sh: runs `dotnet run` detached, discarding
-    console output. Without OPENCODE_BASE_URL set the app shows ConnectPage.
+    console output. With no launch-target argument the app shows ConnectPage.
+    Pass a folder path or server URL as the first argument to open it directly.
 #>
 
 $ErrorActionPreference = 'Stop'

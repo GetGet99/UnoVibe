@@ -5,8 +5,9 @@ using UnoVibe.Models;
 namespace UnoVibe.Pages;
 
 /// <summary>
-/// Shown at startup when no OPENCODE_BASE_URL was provided. Lets the user either
-/// connect to an existing opencode server or launch a local `opencode serve` from
+/// Shown at startup when no launch-target argument was given, and used as the host for a
+/// command-line launch target (folder path or server URL) while it connects. Lets the user
+/// either connect to an existing opencode server or launch a local `opencode serve` from
 /// a picked folder, then navigates to the main chat page. Recent folders and server
 /// URLs are listed VSCode-style; the folder-security toggle on the right is the
 /// single source of truth for folder passwords (recent or new).
@@ -164,7 +165,7 @@ namespace UnoVibe.Pages;
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Tip: set the OPENCODE_BASE_URL environment variable to skip this screen." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
+                    <TextBlock Text="Tip: launch with a folder path or server URL to open it directly, e.g. `UnoVibe ~/project` or `UnoVibe http://localhost:4096`." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
                 </StackPanel>
             </ScrollViewer>
         </Grid>
@@ -174,6 +175,13 @@ public partial class ConnectPage : Page
 {
     /// <summary>Owning window; set by the consumer before Init so it's ready for use.</summary>
     public WindowController Controller { get; set; } = null!;
+
+    /// <summary>
+    /// Command-line launch target (set by the consumer before the constructor method runs).
+    /// When present, the page immediately runs the folder/serve or server connect flow and
+    /// navigates to the main chat page on success — the VSCode-style `UnoVibe /path` open.
+    /// </summary>
+    public StartupArgs? Startup { get; set; }
 
     [QuickMarkupConstructor]
     private void Ctor()
@@ -200,15 +208,28 @@ public partial class ConnectPage : Page
         scrollHost.ViewChanged += (_, _) => UpdateContentMinHeight();
         scrollHost.SizeChanged += (_, _) => UpdateContentMinHeight();
 
-        var configured = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL");
-        if (!string.IsNullOrWhiteSpace(configured)) Url = configured;
+        // Pre-fill the server password box from the standard environment variable.
         ServerPassword = Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar) ?? "";
+
+        if (Startup is { Kind: not LaunchKind.None })
+        {
+            var startup = Startup;
+            Startup = null;
+            _ = RunStartupAsync(startup);
+        }
     }
 
-    /// <summary>Connects to an existing server URL and records it in the recent list.</summary>
-    private async Task ConnectToUrlAsync() => await ConnectCoreAsync(Url, ServerPassword);
+    /// <summary>Connects to an existing server URL and records it in the recent list.
+    /// A blank password falls back to the OPENCODE_SERVER_PASSWORD environment variable.</summary>
+    private async Task ConnectToUrlAsync() =>
+        await ConnectCoreAsync(Url, ServerPassword.Trim() is { Length: > 0 } p ? p : null);
 
-    private async Task ConnectCoreAsync(string url, string password)
+    /// <summary>
+    /// Connects to an existing server URL and records it in the recent list on success.
+    /// <paramref name="password"/> null → the client falls back to OPENCODE_SERVER_PASSWORD;
+    /// "" → connect without a password; non-empty → use it.
+    /// </summary>
+    private async Task ConnectCoreAsync(string url, string? password)
     {
         var clean = url.Trim();
         if (clean.Length == 0) clean = "http://localhost:4096";
@@ -219,20 +240,40 @@ public partial class ConnectPage : Page
         Connecting = true;
         Status = $"Connecting to {clean}...";
         var store = Controller.Store;
-        var pwd = password.Trim();
-        store.Configure(clean, pwd.Length > 0 ? pwd : null);
+        store.Configure(clean, password);
         await store.ConnectAsync();
         Connecting = false;
 
         if (store.ConnectionStatus == "Connected")
         {
-            RecentConnectionsStore.UpsertServer(clean, pwd);
+            RecentConnectionsStore.UpsertServer(clean, password ?? "");
             Controller.ShowMain();
         }
         else
         {
             Status = store.ConnectionStatus;
         }
+    }
+
+    /// <summary>
+    /// Resolves the folder password from the UI security settings (the source of truth):
+    /// generated strong password, or a validated custom password. Returns Ok=false (with a
+    /// status message) when a custom password is missing or doesn't match its confirmation.
+    /// </summary>
+    private (bool Ok, string? Password) ResolveUiFolderPassword()
+    {
+        if (UseGeneratedPassword) return (true, null);
+        if (CustomPassword.Length == 0)
+        {
+            Status = "Please set a password.";
+            return (false, null);
+        }
+        if (CustomPassword != ConfirmPassword)
+        {
+            Status = "Passwords do not match.";
+            return (false, null);
+        }
+        return (true, CustomPassword);
     }
 
     /// <summary>
@@ -245,8 +286,14 @@ public partial class ConnectPage : Page
         try
         {
             var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null)
-                await StartServeCoreAsync(folder.Path, UseGeneratedPassword, CustomPassword);
+            if (folder is null) return;
+            var (ok, password) = ResolveUiFolderPassword();
+            if (!ok) return;
+            if (await StartServeCoreAsync(folder.Path, password))
+            {
+                RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, SaveFolderPassword, CustomPassword);
+                Controller.ShowMain();
+            }
         }
         catch (Exception ex)
         {
@@ -255,27 +302,13 @@ public partial class ConnectPage : Page
     }
 
     /// <summary>
-    /// Launches a local `opencode serve` in <paramref name="folder"/> and connects. On success the
-    /// folder is recorded in the recent list and the security settings used are persisted.
+    /// Launches a local `opencode serve` in <paramref name="folder"/> and connects.
+    /// <paramref name="password"/> null → generate a strong password; "" → no password;
+    /// non-empty → use it. On success the folder is recorded in the recent list.
+    /// Returns true when connected.
     /// </summary>
-    private async Task StartServeCoreAsync(string folder, bool useGenerated, string customPassword)
+    private async Task<bool> StartServeCoreAsync(string folder, string? password)
     {
-        string? password = null;
-        if (!useGenerated)
-        {
-            if (customPassword.Length == 0)
-            {
-                Status = "Please set a password.";
-                return;
-            }
-            if (customPassword != ConfirmPassword)
-            {
-                Status = "Passwords do not match.";
-                return;
-            }
-            password = customPassword;
-        }
-
         Connecting = true;
         Status = "Starting opencode serve...";
 
@@ -286,7 +319,7 @@ public partial class ConnectPage : Page
             serve.Dispose();
             Status = result;
             Connecting = false;
-            return;
+            return false;
         }
 
         Status = $"Server ready at {result}";
@@ -296,15 +329,32 @@ public partial class ConnectPage : Page
         await store.ConnectAsync();
         Connecting = false;
 
-        if (store.ConnectionStatus == "Connected")
-        {
-            RecentConnectionsStore.UpsertFolder(folder);
-            RecentConnectionsStore.SaveSecurity(useGenerated, SaveFolderPassword, customPassword);
-            Controller.ShowMain();
-        }
-        else
+        if (store.ConnectionStatus != "Connected")
         {
             Status = store.ConnectionStatus;
+            return false;
+        }
+
+        RecentConnectionsStore.UpsertFolder(folder);
+        return true;
+    }
+
+    /// <summary>
+    /// Runs a command-line launch target: a folder starts `opencode serve` there (the folder
+    /// is created if missing) and a server URL connects directly. On success the main chat
+    /// page is shown; on failure the ConnectPage stays with the error in its status line.
+    /// </summary>
+    private async Task RunStartupAsync(StartupArgs startup)
+    {
+        switch (startup.Kind)
+        {
+            case LaunchKind.Folder:
+                if (await StartServeCoreAsync(startup.Value, startup.ResolveFolderPassword()))
+                    Controller.ShowMain();
+                break;
+            case LaunchKind.Server:
+                await ConnectCoreAsync(startup.Value, startup.ResolveServerPassword());
+                break;
         }
     }
 
@@ -315,9 +365,19 @@ public partial class ConnectPage : Page
     {
         if (Connecting || (sender as Button)?.CommandParameter is not RecentConnection item) return;
         if (item.IsFolder)
-            await StartServeCoreAsync(item.Detail, UseGeneratedPassword, CustomPassword);
+        {
+            var (ok, password) = ResolveUiFolderPassword();
+            if (!ok) return;
+            if (await StartServeCoreAsync(item.Detail, password))
+            {
+                RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, SaveFolderPassword, CustomPassword);
+                Controller.ShowMain();
+            }
+        }
         else
-            await ConnectCoreAsync(item.Detail, item.ServerPassword);
+        {
+            await ConnectCoreAsync(item.Detail, item.ServerPassword.Length > 0 ? item.ServerPassword : null);
+        }
     }
 
     private void OnRemoveRecent(object sender, RoutedEventArgs e)

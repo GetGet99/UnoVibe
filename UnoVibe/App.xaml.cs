@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using Uno.Resizetizer;
 using UnoVibe.Pages;
@@ -30,24 +31,21 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Creates a new window wired to its own chat store, choosing the connect
-    /// page or the main chat page based on the OPENCODE_BASE_URL environment variable.
+    /// Creates a new window wired to its own chat store. The connect page or the main
+    /// chat page is chosen from the command-line launch target: a folder runs a local
+    /// `opencode serve` there, an http(s) URL connects to an existing server, and no
+    /// argument shows the interactive ConnectPage.
     /// </summary>
     public static WindowController CreateWindow()
     {
         var controller = new WindowController();
         Windows.Add(controller);
 
-        var baseUrl = Environment.GetEnvironmentVariable("OPENCODE_BASE_URL");
-        if (string.IsNullOrWhiteSpace(baseUrl))
-        {
+        var startup = ValidateFolderTarget(StartupArgs.Parse());
+        if (startup.Kind == LaunchKind.None)
             controller.ShowConnect();
-        }
         else
-        {
-            controller.Store.Configure(baseUrl);
-            controller.ShowMain();
-        }
+            controller.ShowConnect(startup);
 
 #if DEBUG
         controller.Window.UseStudio();
@@ -62,6 +60,31 @@ public partial class App : Application
 
         controller.Window.Activate();
         return controller;
+    }
+
+    /// <summary>
+    /// Validates a folder launch target before the window is built: a path that resolves
+    /// to a file fails the launch (a folder is required), and a missing folder is created
+    /// so `opencode serve` has somewhere to run (VSCode-style open). Server/None targets
+    /// pass through unchanged.
+    /// </summary>
+    private static StartupArgs ValidateFolderTarget(StartupArgs startup)
+    {
+        if (startup.Kind != LaunchKind.Folder) return startup;
+
+        var full = Path.GetFullPath(startup.Value);
+        if (File.Exists(full))
+            FailLaunch($"'{startup.Value}' is a file, not a folder.");
+        if (!Directory.Exists(full)) Directory.CreateDirectory(full);
+        return startup with { Value = full };
+    }
+
+    /// <summary>Terminates the app with a console error, mirroring a CLI launch failure.</summary>
+    private static void FailLaunch(string message)
+    {
+        Console.Error.WriteLine($"UnoVibe: {message}");
+        Console.Error.WriteLine("Usage: UnoVibe [folder-or-http-url] [--password [password]]");
+        Environment.Exit(1);
     }
 
     private static void TryDispose(ChatStore store)
