@@ -42,7 +42,7 @@ namespace UnoVibe.Controls;
     </setup>
     <root>
         <Grid MinWidth=200 MaxWidth=300 Height=28>
-            triggerButton = <Button HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(10, 0)` CornerRadius=4
+            triggerButton = <Button HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(12, 0)` CornerRadius=4
                     HorizontalContentAlignment=Stretch VerticalContentAlignment=Center
                     ToolTipService.ToolTip=`SelectedItem?.Name ?? "Select model"`
                     Flyout=modelFlyout = <Flyout Placement=Bottom Opened+=`OnFlyoutOpened` Closed+=`OnFlyoutClosed`>
@@ -92,7 +92,7 @@ namespace UnoVibe.Controls;
                     <ColumnDefinition Width=Auto />
                 </>>
                     <TextBlock Text=`SelectedItem?.Name ?? "Select model"` FontSize=`FontSize` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                    <FontIcon Glyph=`((char)0xE70D).ToString()` FontSize=12 Grid.Column=1 VerticalAlignment=Center Margin=`new Thickness(8, 0, 0, 0)` Foreground=`theme.SecondaryText` />
+                    <FontIcon Glyph=`((char)0xE70D).ToString()` FontSize=12 Grid.Column=1 VerticalAlignment=Center Margin=`new Thickness(12, 0, 2, 0)` Foreground=`theme.SecondaryText` />
                 </Grid>
             </Button>
         </Grid>
