@@ -1314,9 +1314,27 @@ public sealed partial class ChatStore : IDisposable
     public void AddPermissionRequest(PermissionRequestItem request)
     {
         if (_permissions.Any(p => p.Id == request.Id)) return;
-        if (request.SessionId != Active.SessionId) return;
+        if (request.SessionId.Length > 0 && !IsActiveOrDescendant(request.SessionId)) return;
         _permissions.Add(request);
         UpdateActivePermission();
+    }
+
+    /// <summary>
+    /// True when <paramref name="sessionId"/> is the active session or a descendant of it
+    /// (a subagent reached via the parent chain), so a pending permission for a task child
+    /// surfaces in the parent's dialog instead of being dropped.
+    /// </summary>
+    private bool IsActiveOrDescendant(string sessionId)
+    {
+        var current = sessionId;
+        var guard = 0;
+        while (current.Length > 0 && guard++ < 64)
+        {
+            if (current == Active.SessionId) return true;
+            var info = Sessions.FirstOrDefault(s => s.Id == current);
+            current = info?.ParentId ?? "";
+        }
+        return false;
     }
 
     public void RemovePermissionRequest(string requestId)
