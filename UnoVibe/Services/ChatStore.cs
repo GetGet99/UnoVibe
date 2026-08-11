@@ -1301,6 +1301,7 @@ public sealed partial class ChatStore : IDisposable
     public void AddPermissionRequest(PermissionRequestItem request)
     {
         if (_permissions.Any(p => p.Id == request.Id)) return;
+        if (request.SessionId != Active.SessionId) return;
         _permissions.Add(request);
         UpdateActivePermission();
     }

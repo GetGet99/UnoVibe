@@ -79,10 +79,20 @@ public partial class PermissionRequestItem
             }
             case "bash":
             case "shell":
-            case "external_directory":
             {
                 var cmd = S("command", meta);
                 return ("Shell command", cmd.Length > 0 ? "$ " + cmd : "");
+            }
+            case "external_directory":
+            {
+                var parent = S("parentDir", meta);
+                var filepath = S("filepath", meta);
+                var firstPattern = patterns.FirstOrDefault(p => p.Length > 0) ?? "";
+                var derived = firstPattern.Length > 0 && firstPattern.Contains('*')
+                    ? System.IO.Path.GetDirectoryName(firstPattern) ?? firstPattern
+                    : firstPattern;
+                var dir = parent.Length > 0 ? parent : filepath.Length > 0 ? filepath : derived;
+                return ("Access external directory " + dir, "");
             }
             case "glob":
                 return ("Glob " + S("pattern", meta), "");
