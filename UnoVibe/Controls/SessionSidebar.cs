@@ -37,6 +37,7 @@ namespace UnoVibe.Controls;
                                 <ColumnDefinition Width=Auto />
                                 <ColumnDefinition Width=Auto />
                                 <ColumnDefinition Width=Auto />
+                                <ColumnDefinition Width=Auto />
                             </> ColumnSpacing=4>
                                 <TextBlock Text=`DisplayPath(group.Directory)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                 <Button Grid.Column=1 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in VS Code" Click+=`(sender, e) => OnOpenInVSCode(sender, e)`>
@@ -45,7 +46,10 @@ namespace UnoVibe.Controls;
                                 <Button Grid.Column=2 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in file manager" Click+=`(sender, e) => OnOpenInFileManager(sender, e)`>
                                     <AppSymbolIcon Symbol=OpenLocal FontSize=11 />
                                 </Button>
-                                <Button Grid.Column=3 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)`>
+                                <Button Grid.Column=3 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in terminal" Click+=`(sender, e) => OnOpenInTerminal(sender, e)`>
+                                    <AppSymbolIcon Symbol=`Symbol.Terminal` FontSize=11 />
+                                </Button>
+                                <Button Grid.Column=4 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)`>
                                     <AppSymbolIcon Symbol=Add FontSize=11 />
                                 </Button>
                             </Grid>
@@ -215,6 +219,8 @@ public partial class SessionSidebar : IQuickMarkupComponent
     private void OnOpenInVSCode(object sender, RoutedEventArgs e) => RunFolderAction(sender, FolderLauncher.OpenInVSCode);
 
     private void OnOpenInFileManager(object sender, RoutedEventArgs e) => RunFolderAction(sender, FolderLauncher.OpenInFileManager);
+
+    private void OnOpenInTerminal(object sender, RoutedEventArgs e) => RunFolderAction(sender, FolderLauncher.OpenInTerminal);
 
     /// <summary>Runs a folder-launch action for the clicked group's directory, surfacing failures as a toast.</summary>
     private void RunFolderAction(object sender, Func<string, string?> action)
