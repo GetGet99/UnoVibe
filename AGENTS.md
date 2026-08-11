@@ -43,7 +43,7 @@ nohup opencode serve --port 4196 > /mnt/LinuxProgramData/tmp/opencode/serve_dev.
 dotnet build UnoVibe/UnoVibe.csproj -f net10.0-desktop
 
 # Run (this is the dev-workflow launch; app forks and stays in background)
-cd /mnt/Data/Codes/UnoVibe
+cd /mnt/Data/Codes/UnoVibe/wt-develop # or current worktree
 nohup dotnet run --project UnoVibe/UnoVibe.csproj -f net10.0-desktop --no-build -- http://localhost:4196 \
   > /mnt/LinuxProgramData/tmp/opencode/app_run.log 2>&1 & disown
 
