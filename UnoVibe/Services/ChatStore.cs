@@ -1319,15 +1319,40 @@ public sealed partial class ChatStore : IDisposable
     /// <summary>Replies to a pending permission request and surfaces the next pending one, if any.</summary>
     public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null)
     {
+        var directory = PermissionDirectory(requestId);
         try
         {
-            await _client.ReplyPermissionAsync(requestId, reply, message);
+            await _client.ReplyPermissionAsync(requestId, reply, message, directory);
             RemovePermissionRequest(requestId);
+        }
+        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // The request is gone server-side without a permission.replied event (answered
+            // elsewhere, or its turn/instance was aborted/disposed) — drop the stale card so the
+            // next pending request can surface instead of a dead 404 dialog.
+            RemovePermissionRequest(requestId);
+            ConnectionStatus = $"Permission no longer pending ({requestId})";
         }
         catch (Exception ex)
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Resolves the workspace directory that owns a pending request, so a reply reaches the
+    /// instance holding it (folder-opened sessions live in a non-default instance). Falls back to
+    /// the active directory when the request is unknown or its session has no directory.
+    /// </summary>
+    private string PermissionDirectory(string requestId)
+    {
+        var request = _permissions.FirstOrDefault(p => p.Id == requestId);
+        if (request is not null && request.SessionId.Length > 0)
+        {
+            var session = Sessions.FirstOrDefault(s => s.Id == request.SessionId);
+            if (session is not null && session.Directory.Length > 0) return session.Directory;
+        }
+        return ActiveDirectory();
     }
 
     /// <summary>
@@ -1363,28 +1388,31 @@ public sealed partial class ChatStore : IDisposable
 
     /// <summary>
     /// Re-syncs pending permission requests from the server: rebuilds the per-session pending
-    /// counts (drives the sidebar attention indicator) and re-queues requests for the active
-    /// view after a reload. When no session is active yet (e.g. right after connect), only the
-    /// counts are seeded — the active-view approval dialog is not shown until a session is open.
+    /// counts (drives the sidebar attention indicator) and rebuilds the active-view approval queue
+    /// from the authoritative server list. The server is the source of truth — requests that were
+    /// answered, or removed because their turn/instance was aborted or disposed, disappear with no
+    /// <c>permission.replied</c> event, so any queue entries no longer listed must not linger as
+    /// stale approval cards (replying to one would 404). Queries the active session's instance
+    /// (a picked folder, or the server's default when no directory applies).
     /// </summary>
     public async Task SyncPendingPermissionsAsync()
     {
         try
         {
-            var root = await _client.GetPendingPermissionsAsync();
-            if (root.ValueKind != JsonValueKind.Array) return;
+            var requests = await _client.GetPendingPermissionsAsync(ActiveDirectory());
 
             _pendingPermissions.Clear();
-            foreach (var request in root.EnumerateArray())
+            foreach (var request in requests)
             {
-                var id = request.GetStringProperty("id");
-                if (id.Length == 0) continue;
-                var sessionId = request.GetStringProperty("sessionID");
-                if (sessionId.Length > 0)
-                    _pendingPermissions[sessionId] = _pendingPermissions.GetValueOrDefault(sessionId) + 1;
-                if (Active.SessionId.Length == 0) continue;
-                AddPermissionRequest(PermissionRequestItem.FromJson(request));
+                if (request.Id.Length == 0) continue;
+                if (request.SessionId.Length > 0)
+                    _pendingPermissions[request.SessionId] = _pendingPermissions.GetValueOrDefault(request.SessionId) + 1;
             }
+
+            _permissions.Clear();
+            ActivePermission = null;
+            foreach (var request in requests)
+                AddPermissionRequest(request);
             RefreshSessionFlags();
         }
         catch (Exception ex)

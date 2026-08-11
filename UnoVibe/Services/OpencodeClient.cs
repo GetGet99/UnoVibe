@@ -369,26 +369,39 @@ public sealed class OpencodeClient
         return doc.RootElement.Clone();
     }
 
-    public async Task<JsonElement> GetPendingPermissionsAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Get /permission?directory= — lists pending permission requests for the workspace directory
+    /// (or the server's default instance when null). Pending requests are per-instance, so the
+    /// directory must match the one that owns the request or the reply will 404. Returns an empty
+    /// list for a non-array body.
+    /// </summary>
+    public async Task<List<PermissionRequestItem>> GetPendingPermissionsAsync(string? directory = null,
+        CancellationToken ct = default)
     {
-        using var response = await Http.GetAsync("/permission", ct);
+        var list = new List<PermissionRequestItem>();
+        using var response = await Http.GetAsync(DirectoryUrl("/permission", directory), ct);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-        return doc.RootElement.Clone();
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+        foreach (var request in doc.RootElement.EnumerateArray())
+            list.Add(PermissionRequestItem.FromJson(request));
+        return list;
     }
 
     /// <summary>
-    /// Post /permission/{requestID}/reply — answers a pending permission request.
-    /// <c>reply</c> is "once", "always", or "reject"; an optional message may be sent
-    /// with a rejection.
+    /// Post /permission/{requestID}/reply — answers a pending permission request in the given
+    /// workspace directory (or the server's default instance when null). <c>reply</c> is "once",
+    /// "always", or "reject"; an optional message may be sent with a rejection.
     /// </summary>
     public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null,
-        CancellationToken ct = default)
+        string? directory = null, CancellationToken ct = default)
     {
         var body = new ReplyPermissionRequest { Reply = reply };
         if (!string.IsNullOrEmpty(message)) body.Message = message;
-        using var response = await Http.PostAsJsonAsync($"/permission/{requestId}/reply", body, AppJsonContext.Default.ReplyPermissionRequest, ct);
+        using var response = await Http.PostAsJsonAsync(
+            DirectoryUrl($"/permission/{requestId}/reply", directory),
+            body, AppJsonContext.Default.ReplyPermissionRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
