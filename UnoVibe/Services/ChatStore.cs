@@ -403,6 +403,19 @@ public sealed partial class ChatStore : IDisposable
                 }
             }
 
+            // Open a directory-scoped /event stream for every directory that contributes
+            // sessions to the sidebar, not just explicitly-opened folders. Git worktrees of the
+            // same project share a project ID, so the server's default GET /session list can
+            // include sessions from OTHER worktree directories — but their events are tagged
+            // with that directory and delivered only on a directory-scoped stream. Without a
+            // stream per listed directory, such a session would send messages "into the void":
+            // the turn runs server-side, yet no event ever reaches the app.
+            foreach (var dir in Sessions.Select(s => s.Directory).Where(d => d.Length > 0).Distinct().ToList())
+            {
+                if (dir == ServerDirectory) continue; // covered by the main /event stream
+                StartFolderEventStream(dir);
+            }
+
             RebuildDirectoryGroups();
             RebuildActiveSubagents();
         }
