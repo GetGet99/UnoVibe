@@ -42,7 +42,7 @@ namespace UnoVibe.Controls;
     </setup>
     <root>
         <Grid MinWidth=200 MaxWidth=300 Height=28>
-            triggerButton = <Button HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(12, 0)` CornerRadius=4
+            triggerButton = <Button HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(12,  0, 12,  0)` CornerRadius=4
                     HorizontalContentAlignment=Stretch VerticalContentAlignment=Center
                     ToolTipService.ToolTip=`SelectedItem?.Name ?? "Select model"`
                     Flyout=modelFlyout = <Flyout Placement=Bottom Opened+=`OnFlyoutOpened` Closed+=`OnFlyoutClosed`>
@@ -60,7 +60,7 @@ namespace UnoVibe.Controls;
                             <StackPanel HorizontalAlignment=Stretch>
                                 foreach (index; var m in `FilteredModels`; `$"{m.ProviderId}/{m.Id}"`)
                                 {
-                                    <Button Height=34 HorizontalAlignment=Stretch Padding=`new Thickness(10, 0)` HorizontalContentAlignment=Stretch
+                                    <Button Height=34 HorizontalAlignment=Stretch Padding=`new Thickness(10,  0, 10,  0)` HorizontalContentAlignment=Stretch
                                             Background=`RowBackground(m, index)` BorderThickness=0 CornerRadius=6
                                             ToolTipService.ToolTip=`m.Name`
                                             @Click+=`SelectModel(m)`>
@@ -79,7 +79,7 @@ namespace UnoVibe.Controls;
                                     </Button>
                                 }
                                 if (`EmptyHint.Length > 0`)
-                                    <Border Padding=`new Thickness(10, 14)` HorizontalAlignment=Stretch>
+                                    <Border Padding=`new Thickness(10,  14, 10,  14)` HorizontalAlignment=Stretch>
                                         <TextBlock Text=`EmptyHint` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap HorizontalAlignment=Center />
                                     </Border>
                             </StackPanel>

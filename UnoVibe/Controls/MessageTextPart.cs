@@ -49,7 +49,7 @@ namespace UnoVibe.Controls;
                         <TextBlock Text="The conversation rewinds to this message and its prompt is restored to the input box." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                         <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
                             <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
-                            <Button Content="Undo" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`await RevertToHereAsync()` />
+                            <Button Content="Undo" CornerRadius=6 Padding=`new Thickness(10,  4, 10,  4)` @Click+=`await RevertToHereAsync()` />
                         </StackPanel>
                     </StackPanel>
                 </Flyout>>

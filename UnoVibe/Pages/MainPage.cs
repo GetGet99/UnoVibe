@@ -16,6 +16,7 @@ namespace UnoVibe.Pages;
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
     provide ChatStore Store = null;
+    provide Window HostWindow = null;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -56,6 +57,9 @@ namespace UnoVibe.Pages;
 public partial class MainPage : Page
 {
     public void ProvideStore(ChatStore store) => Store = store;
+
+    /// <summary>Host window of this page, used to init WinRT pickers/dialogs with an HWND.</summary>
+    public void ProvideWindow(Window window) => HostWindow = window;
 
     private static Brush? ToastAccent(ToastItem? toast) => toast?.Variant switch
     {

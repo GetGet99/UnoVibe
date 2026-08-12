@@ -135,7 +135,7 @@ namespace UnoVibe.Pages;
                                         <PasswordBox Password<=>`ConfirmPassword` PlaceholderText="Confirm password" IsEnabled=`!Connecting` />
                                         <StackPanel Orientation=Horizontal Spacing=8>
                                             <TextBlock Text=`SaveFolderPassword ? "Password saved on this device." : "Save this password on this device?"` FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap VerticalAlignment=Center />
-                                            <Button Content=`SaveFolderPassword ? "Forget" : "Save"` FontSize=11 Padding=`new Thickness(8, 4)` VerticalAlignment=Center IsEnabled=`!Connecting` Flyout=passwordFlyout = <Flyout Placement=BottomEdgeAlignedRight>
+                                            <Button Content=`SaveFolderPassword ? "Forget" : "Save"` FontSize=11 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center IsEnabled=`!Connecting` Flyout=passwordFlyout = <Flyout Placement=BottomEdgeAlignedRight>
                                                 if (`SaveFolderPassword`)
                                                 {
                                                     <StackPanel Spacing=8 MaxWidth=260 Padding=4>
@@ -143,7 +143,7 @@ namespace UnoVibe.Pages;
                                                         <TextBlock Text="The password will no longer be stored on this device. You will type it again when you open a folder." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                                                         <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
                                                             <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
-                                                            <Button Content="Forget it" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`SetSavePassword(false)` />
+                                                            <Button Content="Forget it" CornerRadius=6 Padding=`new Thickness(10,  4, 10,  4)` @Click+=`SetSavePassword(false)` />
                                                         </StackPanel>
                                                     </StackPanel>
                                                 }
@@ -154,7 +154,7 @@ namespace UnoVibe.Pages;
                                                         <TextBlock Text="If saved, the password is stored unencrypted on this computer and could be read by anyone with access to your files. Only save it if you understand this risk." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                                                         <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Right>
                                                             <TextBlock Text="Click outside to cancel" FontSize=11 FontStyle=`FontStyle.Italic` Foreground=`theme.TertiaryText` VerticalAlignment=Center />
-                                                            <Button Content="I understand the risk" CornerRadius=6 Padding=`new Thickness(10, 4)` @Click+=`SetSavePassword(true)` />
+                                                            <Button Content="I understand the risk" CornerRadius=6 Padding=`new Thickness(10,  4, 10,  4)` @Click+=`SetSavePassword(true)` />
                                                         </StackPanel>
                                                     </StackPanel>
                                                 }
@@ -287,6 +287,7 @@ public partial class ConnectPage : Page
     private async Task PickFolderAsync()
     {
         var picker = new Windows.Storage.Pickers.FolderPicker();
+        WindowsHelper.InitializeWithWindow(picker, Controller.Window);
         try
         {
             var folder = await picker.PickSingleFolderAsync();

@@ -17,3 +17,4 @@ global using System.Threading;
 global using System.Threading.Tasks;
 
 [assembly: QuickMarkupNewLifecycle]
+[assembly: QuickMarkupFramework(typeof(WinUIFramework))]

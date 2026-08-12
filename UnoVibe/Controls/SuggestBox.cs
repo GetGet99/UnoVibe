@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Microsoft.UI;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 
@@ -42,8 +43,8 @@ namespace UnoVibe.Controls;
                     <StackPanel>
                         foreach (index; var item in `_items`; `item.Key`)
                         {
-                            <Button Padding=`new Thickness(10, 6)` HorizontalContentAlignment=Left
-                                    Background=`index == SelectedIndex ? theme.SubtleFill : Colors.Transparent`
+                            <Button Padding=`new Thickness(10,  6, 10,  6)` HorizontalContentAlignment=Left
+                                    Background=`index == SelectedIndex ? theme.SubtleFill : new SolidColorBrush(Colors.Transparent)`
                                     BorderThickness=0 CornerRadius=6
                                     @Click+=`await CommitSuggestionAsync(item)`
                                     HorizontalAlignment=Stretch

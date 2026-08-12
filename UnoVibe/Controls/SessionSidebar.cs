@@ -15,6 +15,7 @@ namespace UnoVibe.Controls;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     inject ChatStore Store;
+    inject Window HostWindow;
     bool McpExpanded = false;
     bool ShowPassword = false;
     <setup>
@@ -245,6 +246,7 @@ public partial class SessionSidebar : IQuickMarkupComponent
     private async Task OpenFolderAndStartSessionAsync()
     {
         var picker = new Windows.Storage.Pickers.FolderPicker();
+        WindowsHelper.InitializeWithWindow(picker, HostWindow);
         try
         {
             var folder = await picker.PickSingleFolderAsync();

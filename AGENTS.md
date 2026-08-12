@@ -28,18 +28,24 @@ High-level goals/design:
 - App should be **self-contained**: it can launch its own local `opencode serve` from a user-picked folder,
   or connect to an existing server.
 - Uses **QuickMarkup** (declarative reactive UI DSL, Vue-inspired) instead of XAML.
-- Targets the **desktop** Skia renderer only (`net10.0-desktop`).
-  Android/iOS/WebAssembly targets are commented out in the csproj.
+- Desktop-only: the **Skia** renderer target (`net10.0-desktop`) everywhere, and on Windows
+  additionally a **WinUI** target (`net10.0-windows10.0.26100.0`). Android/iOS/WebAssembly
+  targets are commented out in the csproj.
 
 ## Tech Stack
 
-- **Uno Platform** via `Uno.Sdk` (see `global.json`, currently `6.6.29`).
+- **Uno Platform** via `Uno.Sdk` (see `global.json`, currently `6.6.42`).
   Do **not** bump individual Uno package versions — update the SDK version in `global.json` instead.
-- **.NET 10** (`dotnet --version` → `10.0.110`, `net10.0-desktop`).
-- **QuickMarkup** `0.1.22` (`QuickMarkup.Uno` package; versions pinned in `Directory.Packages.props`,
-  currently a locally-packed build of the upstream `wt-master` repo). Uses central package management.
-- Only external package references: `QuickMarkup.Uno` and `Markdig`.
-  Everything else comes from the Uno.Sdk implicit packages.
+- **.NET 10** (`dotnet --version` → `10.0.110`). Targets: `net10.0-desktop` (Skia) and, on Windows
+  only, `net10.0-windows10.0.26100.0` (WinUI) — the csproj gates the second TFM behind
+  `$(OS) == 'Windows_NT'`.
+- **QuickMarkup** `0.1.23` (versions pinned in `Directory.Packages.props`, currently a
+  locally-packed build of the upstream `wt-master` repo): `QuickMarkup.Uno` for non-Windows
+  targets, **`QuickMarkup.WinUI`** + **`Microsoft.WindowsAppSDK`** for `net10.0-windows`.
+  Uses central package management.
+- Only external package references: `QuickMarkup.Uno` and `Markdig` (plus `QuickMarkup.WinUI` and
+  `Microsoft.WindowsAppSDK` on the Windows target). Everything else comes from the Uno.Sdk
+  implicit packages.
 - Build uses `Uno.SingleProject`; `EmitCompilerGeneratedFiles=true` so generated source lands under
   `UnoVibe/obj/<tfm>/generated/...`.
 
@@ -66,6 +72,15 @@ All JSON (de)serialization must go through the source-generated **`Services/AppJ
   Use `ItemTemplate` + an object-based `SelectedItem` binding instead
   (the model combo binds `SelectedItem` to the reactive computed `SessionStore.SelectedModelOption`,
   resolved from `Router.ModelOptions` via `.Reactive.FirstOrDefault(...)`).
+
+## Windows Build (WinUI) Conventions
+
+The Windows **WinUI** target is supported and should be kept compilable, so follow these conventions when writing cross-target code. On a Linux dev environment you **cannot** build `net10.0-windows` — there's no way to compile/verify the Windows target here — so write code that follows the portable forms below to avoid breaking Windows later. (On Windows the dev machine also lacks the reference clones listed in "Referenced / Cloned Projects" — those are Linux-only paths.)
+
+- **Windows has no `Thickness` two-value constructor.** `new Thickness(1, 2)` (horizontal/vertical) compiles under Uno but not under the real WinUI/WinRT `Thickness` — always write all four values: `new Thickness(1, 2, 1, 2)`.
+- **Windows has no implicit `Brush` conversion.** `Brush b = Colors.Transparent;` compiles under Uno (implicit conversion) but not WinUI — construct the brush explicitly, e.g. `new SolidColorBrush(Colors.Transparent)`.
+- **Windows APIs that need an HWND to appear.** Dialogs/pickers (e.g. `FolderPicker`, `FileOpenPicker`) and similar WinRT APIs must be associated with a window handle on Windows — calling `PickSingleFolderAsync`/`PickSingleFileAsync` **without** `InitializeWithWindow.Initialize` crashes the app on the Windows target. Uno's Skia target does this internally, so use the `UnoVibe.WindowsHelper` wrapper instead of `WinRT.Interop` directly: `WindowsHelper.InitializeWithWindow(picker, window)` — it takes the app `Window` (resolving the `hwnd` via `window.AppWindow.Id` internally) and no-ops on non-Windows targets via an internal `#if WINDOWS` guard. The `Window` is **always non-null** at call sites (never pass null — it must be set or the Windows target crashes). **Getting the `Window` at a picker call site**: the window flows through the QuickMarkup provide/inject context — `MainPage` declares `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and pass it to `WindowsHelper.InitializeWithWindow`. Callers like `SessionStore.PickImageAsync(Window)` take it as a parameter. `ConnectPage` reaches it through its own `Controller.Window` instead.
+- Since the Windows target is planned/supported, prefer these portable forms whenever convenient; on Linux just write the forms above — the goal is code that compiles on both targets.
 
 ## How to Build & Run
 
@@ -212,6 +227,9 @@ Key gotchas learned the hard way:
   The upstream source is at `/mnt/Data/Codes/QuickMarkup/wt-master/`.
 
 ## Referenced / Cloned Projects
+
+These source checkouts exist only on the Linux dev machine — a Windows dev environment does **not**
+have them cloned, so don't assume these paths (or the answers they give) are available there.
 
 - **QuickMarkup source**: `/mnt/Data/Codes/QuickMarkup/wt-master/`
   — read this to understand markup syntax, the source generator, and what binds compile.

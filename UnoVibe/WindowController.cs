@@ -28,7 +28,11 @@ public sealed class WindowController
     public void ShowMain()
     {
         var label = Store.DisplayLabel;
-        Window.Child = new MainPage(x => x.ProvideStore(Store));
+        Window.Child = new MainPage(x =>
+        {
+            x.ProvideStore(Store);
+            x.ProvideWindow(Window);
+        });
         Window.Title = string.IsNullOrEmpty(label) ? "UnoVibe" : $"UnoVibe - {label}";
     }
 }

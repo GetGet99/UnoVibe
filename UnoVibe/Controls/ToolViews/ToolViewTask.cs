@@ -20,7 +20,7 @@ namespace UnoVibe.Controls.ToolViews;
         var theme = ThemeBrushes.Global;
     </setup>
     <Button Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1 CornerRadius=8
-            Padding=`new Thickness(10, 8)` HorizontalAlignment=Left MaxWidth=680 Margin=`new Thickness(0, 2, 0, 2)`
+            Padding=`new Thickness(10,  8, 10,  8)` HorizontalAlignment=Left MaxWidth=680 Margin=`new Thickness(0, 2, 0, 2)`
             IsEnabled=`Part.ToolSessionId.Length > 0`
             ToolTipService.ToolTip=`Part.ToolSessionId.Length > 0 ? "Open the subagent session" : "Waiting for the subagent session…"`
             @Click+=`await OpenAsync()`>

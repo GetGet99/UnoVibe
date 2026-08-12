@@ -1,13 +1,4 @@
 <Solution>
-  <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="ARM" />
-    <Platform Name="ARM64" />
-    <Platform Name="iPhone" />
-    <Platform Name="iPhoneSimulator" />
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
@@ -18,6 +9,8 @@
     <File Path="global.json" />
   </Folder>
   <Project Path="UnoVibe/UnoVibe.csproj">
+    <Platform Solution="Debug|x64" Project="x64" />
+    <Platform Solution="Debug|x86" Project="x86" />
     <Deploy />
   </Project>
 </Solution>

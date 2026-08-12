@@ -170,8 +170,10 @@ public sealed partial class SessionStore
 
     /// <summary>
     /// Opens the native file picker and stages the chosen image as a pending attachment.
+    /// <paramref name="window"/> is the hosting window used to initialize the picker (WinRT
+    /// pickers need an HWND on Windows).
     /// </summary>
-    public async Task PickImageAsync()
+    public async Task PickImageAsync(Window window)
     {
         var picker = new Windows.Storage.Pickers.FileOpenPicker
         {
@@ -179,6 +181,7 @@ public sealed partial class SessionStore
         };
         foreach (var ext in ImageExtensions)
             picker.FileTypeFilter.Add(ext);
+        WindowsHelper.InitializeWithWindow(picker, window);
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
         await AddPendingImageAsync(file.Path);

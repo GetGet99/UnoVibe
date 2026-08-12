@@ -15,6 +15,7 @@ namespace UnoVibe.Pages;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject ChatStore Store;
+    inject Window HostWindow;
     string Input = "";
     string PermissionStage = "choose";
     string RejectText = "";
@@ -42,21 +43,21 @@ namespace UnoVibe.Pages;
                     {
                         <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                             titleEdit = <TextBox Text<=>`TitleEdit` MinWidth=220 FontSize=14 VerticalContentAlignment=Center KeyDown+=`OnTitleKeyDown` />
-                            <Button Content="Save" @Click+=`await SaveTitleAsync()` Padding=`new Thickness(10, 4)` CornerRadius=6 />
-                            <Button Content="Cancel" @Click+=`CancelTitleEdit()` Padding=`new Thickness(10, 4)` CornerRadius=6 />
+                            <Button Content="Save" @Click+=`await SaveTitleAsync()` Padding=`new Thickness(10,  4, 10,  4)` CornerRadius=6 />
+                            <Button Content="Cancel" @Click+=`CancelTitleEdit()` Padding=`new Thickness(10,  4, 10,  4)` CornerRadius=6 />
                         </StackPanel>
                     }
                     else
                     {
                         <StackPanel Orientation=Horizontal Spacing=8>
                             if (`Store.Active.ParentSessionId.Length > 0`)
-                                <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6, 2)` CornerRadius=6
+                                <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)` CornerRadius=6
                                         Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`await Store.GoToParentAsync()`
                                         ToolTipService.ToolTip="Back to parent session">
                                     <AppSymbolIcon Symbol=Back FontSize=14 />
                                 </Button>
                             <TextBlock Text=`Store.Active.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
-                            <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6, 2)` Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`StartTitleEdit()`>
+                            <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)` Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`StartTitleEdit()`>
                                 <AppSymbolIcon Symbol=Edit FontSize=13 />
                             </Button>
                             <ProgressRing Width=16 Height=16 IsActive=`Store.Active.IsBusy`
@@ -65,12 +66,12 @@ namespace UnoVibe.Pages;
                     }
                 </StackPanel>
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=4 VerticalAlignment=Center>
-                    <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8, 2)` CornerRadius=6 VerticalAlignment=Center
+                    <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8,  2, 8,  2)` CornerRadius=6 VerticalAlignment=Center
                             ToolTipService.ToolTip="Fork full session"
                             IsEnabled=`Store.ActiveSessionId.Length > 0` @Click+=`await Store.ForkFullSessionAsync()`>
                         <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=14 />
                     </Button>
-                <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8, 2)` CornerRadius=6 VerticalAlignment=Center
+                <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8,  2, 8,  2)` CornerRadius=6 VerticalAlignment=Center
                         ToolTipService.ToolTip="Session stats"
                         Flyout=<Flyout Placement=Bottom>
                             <StackPanel Spacing=8 MinWidth=260>
@@ -163,7 +164,7 @@ namespace UnoVibe.Pages;
             </Grid>
             <StackPanel Grid.Row=1 Padding=`new Thickness(16, 0, 16, 4)` Spacing=6>
                 if (`Store.Active.StatusMessage.Length > 0`)
-                    <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(10, 6)`
+                    <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(10,  6, 10,  6)`
                             BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` HorizontalAlignment=Stretch>
                         <StackPanel Orientation=Horizontal Spacing=8>
                             <ProgressRing Width=14 Height=14 IsActive=true VerticalAlignment=Center />
@@ -178,7 +179,7 @@ namespace UnoVibe.Pages;
                             <StackPanel Orientation=Horizontal Spacing=6>
                                 foreach (var s in `Store.ActiveSubagents`; `s.Id`)
                                 {
-                                    <Button Padding=`new Thickness(10, 6)` CornerRadius=6 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1
+                                    <Button Padding=`new Thickness(10,  6, 10,  6)` CornerRadius=6 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1
                                             @Click+=`await Store.SwitchSessionAsync(s.Id)`
                                             ToolTipService.ToolTip=`s.Title`>
                                         <StackPanel Orientation=Horizontal Spacing=6>
@@ -200,7 +201,7 @@ namespace UnoVibe.Pages;
                 scrollHost = <ScrollViewer>
                     messagePanel = <StackPanel Padding=16>
                         if (`Store.Active.HiddenMessages > 0`)
-                            <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10, 8)` Margin=`new Thickness(0, 0, 0, 8)`>
+                            <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10,  8, 10,  8)` Margin=`new Thickness(0, 0, 0, 8)`>
                                 <TextBlock Text=`$"History truncated: {Store.Active.HiddenMessages} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                             </Border>
                         // Keyed by message id so QuickMarkup reuses MessageView blocks across
@@ -215,7 +216,7 @@ namespace UnoVibe.Pages;
                         }
                         if (`Store.Active.RevertMessageId.Length > 0`)
                         {
-                            <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
+                            <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                     BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                                 <StackPanel Spacing=6>
                                     <StackPanel Orientation=Horizontal Spacing=8>
@@ -223,14 +224,14 @@ namespace UnoVibe.Pages;
                                         <TextBlock Text=`Store.Active.RevertCountLabel` FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
                                     </StackPanel>
                                     <StackPanel Orientation=Horizontal Spacing=8>
-                                        <Button Content="Redo" @Click+=`await RedoLastMessageAsync()` CornerRadius=6 Padding=`new Thickness(10, 4)` />
+                                        <Button Content="Redo" @Click+=`await RedoLastMessageAsync()` CornerRadius=6 Padding=`new Thickness(10,  4, 10,  4)` />
                                         <TextBlock Text="Click redo to restore the reverted messages and continue from here." FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap VerticalAlignment=Center />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
                         }
                         if (`Store.Active.IsRetrying`)
-                            <Border Background=`theme.SystemCautionBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
+                            <Border Background=`theme.SystemCautionBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                     BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                                 <StackPanel Spacing=6>
                                     <StackPanel Orientation=Horizontal Spacing=8>
@@ -248,7 +249,7 @@ namespace UnoVibe.Pages;
                                     @Click+=`await ContinueAsync()` />
                         if (`Store.ActivePermission is not null`)
                         {
-                            <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12, 10)` Margin=`new Thickness(0, 8, 0, 0)`
+                            <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                     BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                                 <StackPanel Spacing=8>
                                     <StackPanel Spacing=2>
@@ -308,7 +309,7 @@ namespace UnoVibe.Pages;
                     PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
-                            @Click+=`await Store.Active.PickImageAsync()`>
+                            @Click+=`await Store.Active.PickImageAsync(HostWindow)`>
                         <SymbolIcon Symbol=Camera VerticalAlignment=Center />
                     </Button>
                     if (`Store.Active.PendingPrompts > 0`)
