@@ -5,12 +5,12 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
     <TargetFrameworks>net10.0-desktop</TargetFrameworks>
+    <PublishAot>true</PublishAot>
     <!-- net10.0-android;net10.0-ios;net10.0-browserwasm; -->
   </PropertyGroup>
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UnoSingleProject>true</UnoSingleProject>
-    <PublishAot>true</PublishAot>
 
     <!-- Display name -->
     <ApplicationTitle>UnoVibe</ApplicationTitle>

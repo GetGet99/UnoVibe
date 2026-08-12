@@ -100,9 +100,9 @@
       "request": "launch",
       "preLaunchTask": "build-windows-packaged",
       "debuggerType": "coreclr",
-      "inputFolder": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-windows10.0.26100",
-      "manifest": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-windows10.0.26100/AppxManifest.xml",
-      "workingDirectory": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-windows10.0.26100"
+      "inputFolder": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-windows10.0.26100.0",
+      "manifest": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-windows10.0.26100.0/AppxManifest.xml",
+      "workingDirectory": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-windows10.0.26100.0"
     },
   ]
 }

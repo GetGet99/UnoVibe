@@ -117,7 +117,13 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
         Init();
         modelFlyout.FlyoutPresenterStyle = new()
         {
-            BasedOn = (Style)App.Current.Resources["DefaultFlyoutPresenter"],
+            BasedOn = (Style)
+#if WINDOWS
+            App.Current.Resources["DefaultFlyoutPresenterStyle"]
+#else
+            App.Current.Resources["DefaultFlyoutPresenter"]
+#endif
+            ,
             Setters =
             {
                 new Setter { Property = Control.PaddingProperty, Value = new Thickness() },

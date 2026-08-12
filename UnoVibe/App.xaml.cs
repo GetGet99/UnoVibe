@@ -16,6 +16,10 @@ public partial class App : Application
     public App()
     {
         this.InitializeComponent();
+#if WINDOWS
+        // read once to initialize it
+        // _ = DataTemplateDelegator.IdProperty;
+#endif
     }
 
     /// <summary>All open windows. Each window scopes to its own <see cref="ChatStore"/>.</summary>

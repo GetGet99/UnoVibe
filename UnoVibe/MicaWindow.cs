@@ -46,6 +46,7 @@ public class MicaWindow : Window
         {
             try
             {
+                // DataTemplateDelegator
                 SystemBackdrop = new MicaBackdrop();
                 return; // keep the root transparent so Mica shows through
             }
