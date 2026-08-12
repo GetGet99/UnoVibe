@@ -18,6 +18,7 @@ public static class ToolViewShared
             ["read"] = "Reading",
             ["edit"] = "Editing",
             ["write"] = "Writing",
+            ["apply_patch"] = "Preparing patch...",
             ["todowrite"] = "Writing todos...",
             ["question"] = "Asking question...",
             ["task"] = "Delegating...",
@@ -212,6 +213,11 @@ public static class ToolViewShared
             ? prop.GetString() ?? ""
             : "";
 
+    private static int GetInt(JsonElement el, string name) =>
+        el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var prop)
+            ? prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value) ? value : 0
+            : 0;
+
     public static string WebFetch(PartItem p) =>
         "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Fetching");
 
@@ -263,6 +269,68 @@ public static class ToolViewShared
         var title = Write(p);
         var lineCount = CountLines(p.ToolOutput.Length > 0 ? p.ToolOutput : p.ToolInput);
         return lineCount > 0 ? $"{title}  ({lineCount} lines)" : title;
+    }
+
+    public static List<PatchFileItem> ParsePatchFiles(PartItem p) => ParsePatchFiles(p.PatchJson);
+
+    public static List<PatchFileItem> ParsePatchFiles(string json)
+    {
+        var list = new List<PatchFileItem>();
+        if (string.IsNullOrEmpty(json)) return list;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var file = new PatchFileItem
+                {
+                    Type = GetString(el, "type"),
+                    RelativePath = GetString(el, "relativePath"),
+                    FilePath = GetString(el, "filePath"),
+                    Patch = GetString(el, "patch"),
+                    MovePath = GetString(el, "movePath"),
+                    Additions = GetInt(el, "additions"),
+                    Deletions = GetInt(el, "deletions"),
+                };
+                if (file.Type.Length > 0 && file.RelativePath.Length > 0) list.Add(file);
+            }
+        }
+        catch (JsonException) { }
+        return list;
+    }
+
+    /// <summary>
+    /// Header for an <c>apply_patch</c> card: the touched file for a single-file patch,
+    /// "N files" otherwise, "Preparing patch..." while in flight. Mirrors the web client's
+    /// "Patch" card title/subtitle and the TUI's pending label.
+    /// </summary>
+    public static string Patch(PartItem p)
+    {
+        var files = ParsePatchFiles(p);
+        if (files.Count == 1) return "← Patch " + files[0].RelativePath;
+        if (files.Count > 1) return $"← Patch {files.Count} files";
+        if (Busy(p)) return "Preparing patch...";
+        // Server without per-file metadata: fall back to the first line of the tool title
+        // (the "Success. Updated the following files:..." summary).
+        var title = (p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Patch").Split('\n')[0].Trim();
+        return title.Length > 0 ? title : "Patch";
+    }
+
+    /// <summary>Per-file label mirroring the TUI's "Created/Deleted/Moved/Patched" block titles.</summary>
+    public static string PatchFileLine(PatchFileItem f)
+    {
+        var label = f.Type switch
+        {
+            "add" => "# Created ",
+            "delete" => "# Deleted ",
+            "move" => "# Moved " + (f.FilePath.Length > 0 ? f.FilePath + " → " : ""),
+            _ => "← Patched ",
+        };
+        var text = label + f.RelativePath;
+        if (f.Additions + f.Deletions > 0)
+            text += $"  ({f.Additions}+ {f.Deletions}-)";
+        return text;
     }
 
     public static int CountLines(string value)

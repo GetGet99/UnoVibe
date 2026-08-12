@@ -41,6 +41,7 @@ public struct ReasoningTime
     public string TodoJson = "";
     public string QuestionJson = "";
     public string AnswerJson = "";
+    public string PatchJson = "";
     public string QuestionRequestId = "";
     // Subagent (task tool) link: the child session spawned by a task tool call, its parent
     // session, and the subagent type (e.g. "explore"). Used by ToolViewTask to open the

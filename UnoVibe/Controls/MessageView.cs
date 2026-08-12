@@ -91,6 +91,8 @@ namespace UnoVibe.Controls;
                                 <ToolViewQuestion Part=`p` />
                             else if (`p.ToolName == "task"`)
                                 <ToolViewTask Part=`p` />
+                            else if (`p.ToolName == "apply_patch"`)
+                                <ToolViewPatch Part=`p` />
                             else
                                 <ToolViewGeneric Part=`p` />
                         else if (`p.Type == "error"`)

@@ -1184,6 +1184,10 @@ public sealed partial class SessionStore
                     item.TodoJson = JsonSerializer.Serialize(mTodos, AppJsonContext.Default.JsonElement);
                 if (meta.TryGetProperty("answers", out var mAnswers) && mAnswers.ValueKind == JsonValueKind.Array)
                     item.AnswerJson = JsonSerializer.Serialize(mAnswers, AppJsonContext.Default.JsonElement);
+                // apply_patch records a per-file list here (see apply_patch.ts metadata):
+                // { filePath, relativePath, type, patch, additions, deletions, movePath }.
+                if (meta.TryGetProperty("files", out var mFiles) && mFiles.ValueKind == JsonValueKind.Array)
+                    item.PatchJson = JsonSerializer.Serialize(mFiles, AppJsonContext.Default.JsonElement);
                 // The task tool records the spawned subagent session here (see task.ts metadata).
                 if (meta.TryGetProperty("sessionId", out var mSession)) item.ToolSessionId = mSession.GetString() ?? "";
                 if (meta.TryGetProperty("parentSessionId", out var mParent)) item.ToolParentSessionId = mParent.GetString() ?? "";
