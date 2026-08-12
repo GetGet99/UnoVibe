@@ -1,12 +1,2 @@
 ﻿<Project>
-  <!--
-    WARNING: scripts/release.sh parses this file with grep/sed to bump
-    ApplicationDisplayVersion and ApplicationVersion. If you add or move properties
-    here, read the script first to make sure your changes won't break the version
-    bump logic.
-  -->
-  <PropertyGroup>
-    <ApplicationDisplayVersion>0.1.1</ApplicationDisplayVersion>
-    <ApplicationVersion>2</ApplicationVersion>
-  </PropertyGroup>
 </Project>

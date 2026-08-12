@@ -3,14 +3,9 @@
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
     <File Path=".vsconfig" />
-    <File Path="Directory.Build.props" />
-    <File Path="Directory.Build.targets" />
-    <File Path="Directory.Packages.props" />
     <File Path="global.json" />
   </Folder>
   <Project Path="UnoVibe/UnoVibe.csproj">
-    <Platform Solution="Debug|x64" Project="x64" />
-    <Platform Solution="Debug|x86" Project="x86" />
     <Deploy />
   </Project>
 </Solution>
