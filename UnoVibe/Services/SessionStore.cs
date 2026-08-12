@@ -52,8 +52,9 @@ namespace UnoVibe.Services;
     public long RetryNextMs;
     // Live countdown text recomputed each second by the chat page timer ("Attempt #2 · retrying in 3s").
     public string RetryCountdown = "";
-    // True when the active turn stopped because of a non-interrupt error; drives the "Continue" button.
-    public bool TurnStoppedWithError;
+    // True when the stopped turn warrants the end-of-chat "Continue" button: the last assistant
+    // message carried a non-interrupt error, or the chat ends on a Thinking (reasoning) part.
+    public bool ShowContinue;
     public string Mode = "build";
     public string ModelId = "";
     public string ProviderId = "";
@@ -707,7 +708,7 @@ public sealed partial class SessionStore
             if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
             // The server emits status idle before the final message.updated carrying the
             // error, so surface the Continue button here when the turn is already stopped.
-            if (!IsBusy && LastAssistantMessageErrored()) TurnStoppedWithError = true;
+            if (!IsBusy && ShouldShowContinue()) ShowContinue = true;
             UpdateSessionStats();
             return;
         }
@@ -722,7 +723,7 @@ public sealed partial class SessionStore
         MarkInterrupted(message, info);
         ApplyMessageError(message, info);
         if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
-        if (!IsBusy && LastAssistantMessageErrored()) TurnStoppedWithError = true;
+        if (!IsBusy && ShouldShowContinue()) ShowContinue = true;
         _messagesById[id] = message;
         AppendMessage(message);
         UpdateSessionStats();
@@ -777,6 +778,33 @@ public sealed partial class SessionStore
     }
 
     /// <summary>
+    /// True when this session's most recent assistant message ends on a "reasoning" (thinking)
+    /// part — the visible chat ends on a Thinking block. A turn that stops while the model is
+    /// still thinking (stream failure mid-reasoning, or a reasoning-only finish) often leaves
+    /// no error part to latch onto, so this catches the case <see cref="LastAssistantMessageErrored"/>
+    /// misses.
+    /// </summary>
+    private bool LastAssistantMessageEndsOnThinking()
+    {
+        for (var i = Messages.Count - 1; i >= 0; i--)
+        {
+            var m = Messages[i];
+            if (m.Role != "assistant") continue;
+            if (m.Parts.Count == 0) return false;
+            return m.Parts[^1].Type == "reasoning";
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when the stopped turn warrants the end-of-chat "Continue" button: the last assistant
+    /// message carries an error part, or the chat ends on a Thinking (reasoning) part. Aborted
+    /// turns never qualify (interrupt → "aborted" part, not an error part or a trailing Thinking).
+    /// </summary>
+    private bool ShouldShowContinue() =>
+        LastAssistantMessageErrored() || LastAssistantMessageEndsOnThinking();
+
+    /// <summary>
     /// Adds a reactive "error" part when the message carries a non-abort error (e.g. a
     /// streaming failure like <c>"Streaming response failed: [503] The request queue is full."</c>).
     /// Aborts are rendered via the interrupted path instead.
@@ -828,7 +856,7 @@ public sealed partial class SessionStore
     /// </summary>
     private void ResetTurnFlags()
     {
-        TurnStoppedWithError = false;
+        ShowContinue = false;
         IsRetrying = false;
         RetryMessage = "";
         RetryAttempt = 0;
@@ -957,9 +985,10 @@ public sealed partial class SessionStore
             RetryNextMs = 0;
             RetryCountdown = "";
 
-            // The turn finished. If it stopped because of a non-interrupt error, surface the
-            // "Continue" button. (Interrupts are MessageAbortedError → aborted part instead.)
-            if (type == "idle") TurnStoppedWithError = LastAssistantMessageErrored();
+            // The turn finished. If it stopped because of a non-interrupt error, or with the
+            // chat left ending on a Thinking part, surface the "Continue" button. (Interrupts
+            // are MessageAbortedError → aborted part instead.)
+            if (type == "idle") ShowContinue = ShouldShowContinue();
         }
 
         if (!IsBusy) _ = DrainPendingPromptsAsync();

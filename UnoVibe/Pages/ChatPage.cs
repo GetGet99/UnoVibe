@@ -242,7 +242,7 @@ namespace UnoVibe.Pages;
                                     <TextBlock Text=`Store.Active.RetryCountdown` FontSize=11 Foreground=`theme.SystemCaution` TextWrapping=Wrap />
                                 </StackPanel>
                             </Border>
-                        if (`Store.Active.TurnStoppedWithError`)
+                        if (`Store.Active.ShowContinue`)
                             <Button Content="⟳ Continue" CornerRadius=6 HorizontalAlignment=Left Margin=`new Thickness(0, 8, 0, 0)`
                                     ToolTipService.ToolTip=`"Sends a message with content \"continue\" to resume the work from the last incomplete step."`
                                     @Click+=`await ContinueAsync()` />
