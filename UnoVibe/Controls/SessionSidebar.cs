@@ -34,6 +34,8 @@ namespace UnoVibe.Controls;
                     {
                         <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
                             <Grid ColumnDefinitions=<>
+                                <ColumnDefinition Width=Auto />
+                                <ColumnDefinition Width=Auto />
                                 <ColumnDefinition />
                                 <ColumnDefinition Width=Auto />
                                 <ColumnDefinition Width=Auto />
@@ -41,16 +43,20 @@ namespace UnoVibe.Controls;
                                 <ColumnDefinition Width=Auto />
                             </> ColumnSpacing=4>
                                 <TextBlock Text=`DisplayPath(group.Directory)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                <Button Grid.Column=1 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in VS Code" Click+=`(sender, e) => OnOpenInVSCode(sender, e)`>
+                                if (`group.Branch.Length > 0`)
+                                {
+                                    <TextBlock Grid.Column=1 Text=`$"⎇ {group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                                }
+                                <Button Grid.Column=3 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in VS Code" Click+=`(sender, e) => OnOpenInVSCode(sender, e)`>
                                     <AppSymbolIcon Symbol=`Symbol.Code` FontSize=11 />
                                 </Button>
-                                <Button Grid.Column=2 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in file manager" Click+=`(sender, e) => OnOpenInFileManager(sender, e)`>
+                                <Button Grid.Column=4 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in file manager" Click+=`(sender, e) => OnOpenInFileManager(sender, e)`>
                                     <AppSymbolIcon Symbol=OpenLocal FontSize=11 />
                                 </Button>
-                                <Button Grid.Column=3 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in terminal" Click+=`(sender, e) => OnOpenInTerminal(sender, e)`>
+                                <Button Grid.Column=5 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in terminal" Click+=`(sender, e) => OnOpenInTerminal(sender, e)`>
                                     <AppSymbolIcon Symbol=`Symbol.Terminal` FontSize=11 />
                                 </Button>
-                                <Button Grid.Column=4 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)`>
+                                <Button Grid.Column=6 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)`>
                                     <AppSymbolIcon Symbol=Add FontSize=11 />
                                 </Button>
                             </Grid>

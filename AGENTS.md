@@ -468,12 +468,22 @@ API def: `server/routes/instance/httpapi/groups/mcp.ts`.
 `ChatStore.Apply` has `// TODO:` placeholder `case`s (with `break;`) for every other event the
 server's `/event` stream emits:
 `session.deleted/error/diff/idle/compacted`, `file.edited`, `file.watcher.updated`,
-`vcs.branch.updated`, `todo.updated`, `lsp.updated`, `command.executed`,
+`todo.updated`, `lsp.updated`, `command.executed`,
 `mcp.browser.open.failed`, `server.connected/heartbeat/instance.disposed`, `tui.toast.show`.
 
 Handled: `session.created`/`session.updated`, `session.status`, `message.removed`,
-`question.replied`/`question.rejected` (pending-attention counters), and
-`mcp.tools.changed` (→ `RefreshMcpStatusAsync`).
+`question.replied`/`question.rejected` (pending-attention counters),
+`mcp.tools.changed` (→ `RefreshMcpStatusAsync`),
+and `vcs.branch.updated` (→ `ChatStore.RefreshBranches`).
+
+### Git branch in the sidebar
+
+Each sidebar directory group shows its git branch (`⎇ <branch>`) after the folder name, from
+`GET /vcs?directory=<path>` (`OpencodeClient.GetBranchAsync`, returns `{ branch, default_branch }`).
+`ChatStore` caches per-directory branches in `_directoryBranches` and re-seeds `DirectoryGroup.Branch`
+(a reactive QuickMarkup field) on sidebar rebuilds; `RefreshBranches()` re-fetches every sidebar
+directory group's branch in place (no rebuild) and is called after session refreshes and on the
+`vcs.branch.updated` SSE event.
 
 The `session.next.*` streaming events exist in the schema but are not published by the current CLI
 server. Implement a case and remove its TODO marker when adopting it.

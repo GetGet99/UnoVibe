@@ -65,6 +65,25 @@ public sealed class OpencodeClient
     }
 
     /// <summary>
+    /// Get /vcs — VCS info for the workspace directory (or the server's default instance when
+    /// null). Returns the current git branch, or null when the request fails / the route is
+    /// missing. The <c>default_branch</c> field is not exposed to callers.
+    /// </summary>
+    public async Task<string?> GetBranchAsync(string? directory = null, CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await Http.GetAsync(DirectoryUrl("/vcs", directory), ct);
+            if (!response.IsSuccessStatusCode) return null;
+            using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var branch = doc.RootElement.GetStringProperty("branch");
+            return branch.Length > 0 ? branch : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
     /// Post /session — creates a session. When <paramref name="title"/> is null/empty the server
     /// assigns a timestamped default title ("New session - &lt;ISO&gt;"), which its title agent
     /// later replaces with a generated name on the first prompt. Passing an explicit title skips

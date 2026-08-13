@@ -94,6 +94,9 @@ public sealed partial class ChatStore : IDisposable
     // Per-directory sidebar "show all sessions" state (keyed by directory), preserved across
     // sidebar group rebuilds so the show-more/show-less toggle survives session list refreshes.
     private readonly Dictionary<string, bool> _directoryExpanded = new();
+    // Per-directory git branch (keyed by directory), from GET /vcs. Used to re-seed group
+    // Branch fields after sidebar rebuilds; "" means not a git repo / not yet loaded.
+    private readonly Dictionary<string, string> _directoryBranches = new();
     private readonly List<PermissionRequestItem> _permissions = new();
     private CancellationTokenSource? _cts;
     private DispatcherQueue? _dispatcher;
@@ -198,6 +201,7 @@ public sealed partial class ChatStore : IDisposable
         _pendingQuestions.Clear();
         _pendingPermissions.Clear();
         _directoryExpanded.Clear();
+        _directoryBranches.Clear();
         _openedFolders.Clear();
         foreach (var cts in _folderStreamCts.Values) cts.Cancel();
         _folderStreamCts.Clear();
@@ -418,6 +422,7 @@ public sealed partial class ChatStore : IDisposable
 
             RebuildDirectoryGroups();
             RebuildActiveSubagents();
+            RefreshBranches();
         }
         catch (Exception ex)
         {
@@ -628,7 +633,43 @@ public sealed partial class ChatStore : IDisposable
             // Re-apply the user's show-more/show-less choice; the toggle mutates the item's
             // reactive IsExpanded in place, while a rebuild gets its value from the store map.
             group.IsExpanded = _directoryExpanded.GetValueOrDefault(group.Directory);
+            group.Branch = _directoryBranches.GetValueOrDefault(group.Directory) ?? "";
             DirectoryGroups.Add(group);
+        }
+    }
+
+    /// <summary>
+    /// Fetches the git branch (<c>GET /vcs</c>) for every sidebar directory group and updates
+    /// the group's reactive <c>Branch</c> in place (no group rebuild needed). Called on connect
+    /// and on <c>vcs.branch.updated</c> events; failures keep the previously-known branch.
+    /// </summary>
+    public void RefreshBranches()
+    {
+        if (_client is null) return;
+        var directories = DirectoryGroups
+            .Select(g => g.Directory)
+            .Where(d => d.Length > 0 && d != "(unknown)")
+            .Distinct()
+            .ToList();
+        if (directories.Count == 0) return;
+        _ = RefreshBranchesCoreAsync(directories);
+    }
+
+    private async Task RefreshBranchesCoreAsync(List<string> directories)
+    {
+        foreach (var directory in directories)
+        {
+            try
+            {
+                var branch = await _client.GetBranchAsync(directory);
+                _directoryBranches[directory] = branch ?? "";
+                var group = DirectoryGroups.FirstOrDefault(g => g.Directory == directory);
+                if (group is not null) group.Branch = branch ?? "";
+            }
+            catch (Exception ex)
+            {
+                ConnectionStatus = $"Error: {ex.Message}";
+            }
         }
     }
 
@@ -756,6 +797,7 @@ public sealed partial class ChatStore : IDisposable
         Sessions.Remove(removed);
         RebuildDirectoryGroups();
         RebuildActiveSubagents();
+        RefreshBranches();
         _sessionStatus.Remove(id);
         _unread.Remove(id);
         _sessionOutcome.Remove(id);
@@ -1114,7 +1156,9 @@ public sealed partial class ChatStore : IDisposable
                 // TODO: properties { file, event: "add"|"change"|"unlink" }.
                 break;
             case "vcs.branch.updated":
-                // TODO: properties { branch }; the git branch changed in the workspace.
+                // The git branch changed in a workspace. The payload only carries { branch }
+                // (no directory), so refresh every sidebar directory group's branch label.
+                RefreshBranches();
                 break;
             case "todo.updated":
                 // TODO: the todo list changed; the TUI renders it inline.
