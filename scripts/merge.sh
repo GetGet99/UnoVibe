@@ -6,16 +6,20 @@ set -euo pipefail
 # Flow:
 #   1. Prechecks: must be on a feature branch (not main/develop) with a clean
 #      working tree.
-#   2. Fetch origin/develop; fast-forward local develop to it only when safe.
-#      Local develop is the base of truth (solo-dev: merge to your machine
-#      first), so any local commits beyond origin/develop are kept and pushed
-#      together with this merge.
+#   2. Locate the worktree where 'develop' is checked out — git refuses to
+#      check out a branch used by another worktree — and sync that worktree's
+#      local develop with origin/develop via a safe fast-forward (in a plain
+#      single-worktree repo a fetch does the sync instead). Local develop is the
+#      base of truth (solo-dev: merge to your machine first), so any local
+#      commits beyond origin/develop are kept and pushed together with this
+#      merge.
 #   3. Rebase the current branch onto local develop.
 #   4. If the rebase hits conflicts, the branch is left mid-rebase for the user
 #      to resolve (git rebase --continue / git rebase --abort). No merge happens.
 #   5. If the rebase is clean, squash all the branch's commits into one commit on
-#      develop and push it (a failed push is a warning, not an error; use
-#      --no-push to merge locally only).
+#      develop, doing the checkout/merge/commit/push in the worktree that owns
+#      'develop' (a failed push is a warning, not an error; use --no-push to
+#      merge locally only).
 
 DEVELOP="develop"
 
@@ -46,19 +50,49 @@ if ! git rev-parse --verify --quiet "$DEVELOP" >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- Sync local develop with origin (safe fast-forward only) ---
-if git remote get-url origin >/dev/null 2>&1; then
-  if git fetch origin "$DEVELOP" 2>/dev/null; then
-    # Fast-forward local develop to origin/develop only when it is an ancestor,
-    # so remote-only commits are not missed. If local develop is ahead of origin
-    # (local merges done on this machine), it is kept — later merges build on it.
-    if ! git fetch origin "$DEVELOP:$DEVELOP" 2>/dev/null; then
-      if [[ "$(git rev-list --count "origin/$DEVELOP..$DEVELOP" 2>/dev/null || echo 0)" -gt 0 ]]; then
-        echo "Note: local '$DEVELOP' is ahead of origin/$DEVELOP — merging onto local '$DEVELOP'."
+# --- Locate the worktree that owns 'develop' ---
+dev_wt=""
+while IFS= read -r line; do
+  if [[ "$line" == worktree\ * ]]; then
+    entry_wt="${line#worktree }"
+  elif [[ "$line" == "branch refs/heads/$DEVELOP" ]]; then
+    dev_wt="$entry_wt"
+  fi
+done < <(git worktree list --porcelain)
+
+# --- Develop worktree sanity + sync ---
+if [[ -n "$dev_wt" ]]; then
+  if ! git -C "$dev_wt" diff --quiet || ! git -C "$dev_wt" diff --cached --quiet; then
+    echo "Error: '$DEVELOP' worktree ($dev_wt) has uncommitted changes" >&2
+    exit 1
+  fi
+  if [[ "$(git -C "$dev_wt" rev-parse HEAD 2>/dev/null)" != "$(git -C "$dev_wt" rev-parse "$DEVELOP" 2>/dev/null)" ]]; then
+    echo "Error: '$DEVELOP' worktree ($dev_wt) is detached or mid-rebase/merge — resolve it first" >&2
+    exit 1
+  fi
+
+  if git remote get-url origin >/dev/null 2>&1; then
+    if git -C "$dev_wt" fetch origin "$DEVELOP" 2>/dev/null; then
+      if ! git -C "$dev_wt" merge --ff-only "origin/$DEVELOP" >/dev/null 2>&1; then
+        if [[ "$(git rev-list --count "origin/$DEVELOP..$DEVELOP" 2>/dev/null || echo 0)" -gt 0 ]]; then
+          echo "Note: local '$DEVELOP' is ahead of origin/$DEVELOP — merging onto local '$DEVELOP'."
+        fi
       fi
+    else
+      echo "Warning: could not fetch origin/$DEVELOP — using local state." >&2
     fi
-  else
-    echo "Warning: could not fetch origin/$DEVELOP — using local state." >&2
+  fi
+else
+  if git remote get-url origin >/dev/null 2>&1; then
+    if git fetch origin "$DEVELOP" 2>/dev/null; then
+      if ! git fetch origin "$DEVELOP:$DEVELOP" 2>/dev/null; then
+        if [[ "$(git rev-list --count "origin/$DEVELOP..$DEVELOP" 2>/dev/null || echo 0)" -gt 0 ]]; then
+          echo "Note: local '$DEVELOP' is ahead of origin/$DEVELOP — merging onto local '$DEVELOP'."
+        fi
+      fi
+    else
+      echo "Warning: could not fetch origin/$DEVELOP — using local state." >&2
+    fi
   fi
 fi
 
@@ -77,12 +111,7 @@ if [[ "$to_merge" -eq 0 ]]; then
   exit 0
 fi
 
-# --- Squash-merge into develop ---
-echo "Rebase clean ($to_merge commit(s)). Squashing into $DEVELOP..."
-git checkout "$DEVELOP"
-
-git merge --squash "$current_branch"
-
+# --- Build squash commit message from the feature branch commits ---
 lines=$(git log --format='%s' --reverse "$DEVELOP..$current_branch")
 subject=$(echo "$lines" | head -1)
 rest=$(echo "$lines" | tail -n +2)
@@ -93,17 +122,46 @@ $rest"
 else
   msg="$subject"
 fi
-git commit -m "$msg"
+
+# --- Squash-merge into develop (in the worktree that owns it) ---
+echo "Rebase clean ($to_merge commit(s)). Squashing into $DEVELOP..."
+if [[ -n "$dev_wt" ]]; then
+  git -C "$dev_wt" checkout -q "$DEVELOP"
+  git -C "$dev_wt" merge --squash "$current_branch"
+else
+  git checkout -q "$DEVELOP"
+  git merge --squash "$current_branch"
+fi
+
+if [[ -n "$dev_wt" ]]; then
+  git -C "$dev_wt" commit -m "$msg"
+else
+  git commit -m "$msg"
+  git checkout -q "$current_branch"
+fi
 
 echo "Squashed $to_merge commit(s) onto $DEVELOP."
 if [[ "$PUSH" -eq 1 ]]; then
-  if git push origin "$DEVELOP"; then
-    echo "Pushed $DEVELOP to origin."
+  if [[ -n "$dev_wt" ]]; then
+    if git -C "$dev_wt" push origin "$DEVELOP"; then
+      echo "Pushed $DEVELOP to origin."
+    else
+      echo "Warning: push failed — the squash commit is local on $DEVELOP" >&2
+    fi
   else
-    echo "Warning: push failed — the squash commit is local on $DEVELOP" >&2
+    if git push origin "$DEVELOP"; then
+      echo "Pushed $DEVELOP to origin."
+    else
+      echo "Warning: push failed — the squash commit is local on $DEVELOP" >&2
+    fi
   fi
 else
   echo "Skipped push (--no-push) — $DEVELOP has local-only commits."
 fi
 
-echo "Done. On '$DEVELOP'; you can delete the feature branch with: git branch -D $current_branch"
+if [[ -n "$dev_wt" ]]; then
+  echo "Done. You are on '$current_branch' (the '$DEVELOP' worktree was updated: $dev_wt)."
+else
+  echo "Done. You are back on '$current_branch' (committed onto local '$DEVELOP')."
+fi
+echo "Delete the feature branch with: git branch -D $current_branch"
