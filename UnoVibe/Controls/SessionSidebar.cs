@@ -50,9 +50,9 @@ namespace UnoVibe.Controls;
                                 <Button Grid.Column=3 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in VS Code" Click+=`(sender, e) => OnOpenInVSCode(sender, e)`>
                                     <AppSymbolIcon Symbol=`Symbol.Code` FontSize=11 />
                                 </Button>
-                                <Button Grid.Column=4 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in file manager" Click+=`(sender, e) => OnOpenInFileManager(sender, e)`>
-                                    <AppSymbolIcon Symbol=OpenLocal FontSize=11 />
-                                </Button>
+                                // <Button Grid.Column=4 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in file manager" Click+=`(sender, e) => OnOpenInFileManager(sender, e)`>
+                                //     <AppSymbolIcon Symbol=OpenLocal FontSize=11 />
+                                // </Button>
                                 <Button Grid.Column=5 Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in terminal" Click+=`(sender, e) => OnOpenInTerminal(sender, e)`>
                                     <AppSymbolIcon Symbol=`Symbol.Terminal` FontSize=11 />
                                 </Button>
