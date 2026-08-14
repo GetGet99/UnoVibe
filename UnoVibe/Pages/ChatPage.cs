@@ -13,6 +13,7 @@ namespace UnoVibe.Pages;
     using UnoVibe.Services;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
+    using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     inject ChatStore Store;
     inject Window HostWindow;
@@ -279,6 +280,12 @@ namespace UnoVibe.Pages;
                         }
                     </StackPanel>
                 </ScrollViewer>
+                if (`Store.Active.Messages.Reactive.Count == 0`)
+                    <StackPanel HorizontalAlignment=Center VerticalAlignment=Center Padding=`new Thickness(16, 0, 16, 0)` Spacing=6 IsHitTestVisible=false>
+                        <AppSymbolIcon Symbol=Folder FontSize=22 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
+                        <TextBlock Text=`NewChatPath()` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
+                                   TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=520 ToolTipService.ToolTip=`Store.ActiveDirectory().Length > 0 ? Store.ActiveDirectory() : Store.ServerDirectory` />
+                    </StackPanel>
             </Grid>
             <ScrollViewer Grid.Row=3 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
                           HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled
@@ -527,6 +534,21 @@ public partial class ChatPage : Page
 
     private static string Capitalize(string? value) =>
         string.IsNullOrEmpty(value) ? "" : char.ToUpper(value[0]) + value.Substring(1);
+
+    /// <summary>
+    /// The active chat's folder, shown as a centered empty-state label in the chat body while
+    /// there are no messages so the user knows which directory the session belongs to. Resolves
+    /// the session's directory (or the pending folder for an unsaved draft), falling back to the
+    /// server's directory, then displays it relative to the server directory — the same
+    /// reference point the sidebar uses — via the shared <see cref="PathDisplay"/> helper.
+    /// </summary>
+    private string NewChatPath()
+    {
+        var dir = Store.ActiveDirectory();
+        if (dir.Length == 0) dir = Store.ServerDirectory;
+        if (dir.Length == 0) return "";
+        return PathDisplay.Relative(dir, Store.ServerDirectory);
+    }
 
     private void StartTitleEdit()
     {

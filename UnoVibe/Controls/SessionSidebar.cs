@@ -1,4 +1,3 @@
-using System.IO;
 using UnoVibe.Services;
 using UnoVibe.Models;
 using Windows.ApplicationModel.DataTransfer;
@@ -304,36 +303,7 @@ public partial class SessionSidebar : IQuickMarkupComponent
     private static Symbol AttentionSymbol(SessionInfo s) => s.AttentionKind == "permission" ? Symbol.Permissions : Symbol.Help;
 
     /// <summary>
-    /// Returns the shorter of the full path or a relative path from the connected server's
-    /// directory. This is the meaningful "home" for the user — not the app's CWD (which
-    /// depends on how the app was launched). Falls back to CWD if no server directory is known.
-    /// For parent directories (dot-only relative paths), shows "FolderName (../..)" so the
-    /// user can see at a glance how far up the path goes.
+    /// Path relative to the connected server's directory via <see cref="PathDisplay.Relative"/>.
     /// </summary>
-    private string DisplayPath(string fullPath)
-    {
-        if (string.IsNullOrEmpty(fullPath)) return fullPath;
-        try
-        {
-            var referenceDir = Store.ServerDirectory.Length > 0
-                ? Store.ServerDirectory
-                : Directory.GetCurrentDirectory();
-            var relative = Path.GetRelativePath(referenceDir, fullPath);
-            if (!Path.IsPathRooted(relative) && relative.Length < fullPath.Length)
-            {
-                var segments = relative.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-                var isDotOnly = segments.All(s => s is "." or "..");
-                if (isDotOnly)
-                {
-                    var folderName = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                                     ?? relative;
-                    // "." means same directory — just show the name. ".." and above — append the hint.
-                    return relative == "." ? folderName : $"{folderName} ({relative})";
-                }
-                return relative;
-            }
-        }
-        catch { }
-        return fullPath;
-    }
+    private string DisplayPath(string fullPath) => PathDisplay.Relative(fullPath, Store.ServerDirectory);
 }
