@@ -188,6 +188,7 @@ public partial class ConnectPage : Page
     private void Ctor()
     {
         RecentConnectionsStore.Load();
+        SettingsStore.Load();
         Init();
 
         // Restore the persisted folder-security settings (the source of truth for folder passwords).

@@ -15,6 +15,7 @@ namespace UnoVibe.Services;
 [JsonSerializable(typeof(OpencodeEvent))]
 [JsonSerializable(typeof(RecentConnectionsStore.FileModel))]
 [JsonSerializable(typeof(List<RecentConnection>))]
+[JsonSerializable(typeof(SettingsStore.SettingsFileModel))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(CreateSessionRequest))]
 [JsonSerializable(typeof(SendPromptRequest))]

@@ -4,8 +4,8 @@ using UnoVibe.Services;
 namespace UnoVibe.Controls;
 
 /// <summary>
-/// A row of small folder-action buttons for <paramref name="Directory"/>: open in VS Code,
-/// open in the file manager, open in a terminal, and (optionally) start a new session.
+/// A row of small folder-action buttons for <paramref name="Directory"/>: open in the configured
+/// editor/IDE, open in the file manager, open in a terminal, and (optionally) start a new session.
 /// All click handling lives here. Reused by the session sidebar and the chat header; the
 /// file-manager button and the new-session button can be disabled per site.
 /// </summary>
@@ -19,7 +19,7 @@ namespace UnoVibe.Controls;
     bool ShowFileManager = false;
     bool ShowNewSession = true;
     <StackPanel Orientation=Horizontal Spacing=4>
-        <Button Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open folder in VS Code" @Click+=`OnOpenInVSCode()`>
+        <Button Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open folder in editor" @Click+=`OnOpenInEditor()`>
             <AppSymbolIcon Symbol=`Symbol.Code` FontSize=11 />
         </Button>
         if (`ShowFileManager`)
@@ -41,7 +41,7 @@ namespace UnoVibe.Controls;
     """)]
 public partial class FolderActions : IQuickMarkupComponent
 {
-    private void OnOpenInVSCode() => RunFolderAction(FolderLauncher.OpenInVSCode);
+    private void OnOpenInEditor() => RunFolderAction(FolderLauncher.OpenInEditor);
 
     private void OnOpenInFileManager() => RunFolderAction(FolderLauncher.OpenInFileManager);
 

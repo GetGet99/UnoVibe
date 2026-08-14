@@ -6,8 +6,8 @@ namespace UnoVibe.Services;
 /// <summary>
 /// Launches external programs against a local folder: the default file manager
 /// (Explorer on Windows, the platform's <c>xdg-open</c>/<c>open</c> equivalent elsewhere),
-/// the default terminal, and VS Code's <c>code</c> CLI. Returns an error message on failure,
-/// or null on success.
+/// the default terminal, and the configured editor/IDE (the "Default IDE/Editor" setting,
+/// default VS Code's <c>code</c> CLI). Returns an error message on failure, or null on success.
 /// </summary>
 public static class FolderLauncher
 {
@@ -37,14 +37,25 @@ public static class FolderLauncher
         }
     }
 
-    /// <summary>Opens <paramref name="folder"/> in VS Code (the <c>code</c> CLI). Returns an error message or null.</summary>
-    public static string? OpenInVSCode(string folder)
+    /// <summary>
+    /// Opens <paramref name="folder"/> in the configured editor/IDE — the "Default IDE/Editor"
+    /// setting (<see cref="SettingsStore.EditorCommand"/>), run as <c>&lt;command&gt; &lt;folder&gt;</c>.
+    /// An empty/cleared setting falls back to VS Code's <c>code</c> CLI. Returns an error message or null.
+    /// </summary>
+    public static string? OpenInEditor(string folder)
     {
         if (!Directory.Exists(folder)) return $"Folder not found locally: {folder}";
+        var command = SettingsStore.EditorCommand.Trim();
+        if (command.Length == 0)
+        {
+            command = IsCommandAvailable("code") ? "code" : "";
+            if (command.Length == 0) return "No editor command configured — set one in Settings.";
+        }
+        if (!IsCommandAvailable(command)) return $"Editor command \"{command}\" not found on PATH.";
         try
         {
-            // On Windows `code` resolves via the shell (code.cmd); on Unix it execs the wrapper script.
-            var psi = new ProcessStartInfo("code") { UseShellExecute = OperatingSystem.IsWindows() };
+            // On Windows the command may resolve via the shell (e.g. code.cmd); on Unix it execs the wrapper script.
+            var psi = new ProcessStartInfo(command) { UseShellExecute = OperatingSystem.IsWindows() };
             psi.ArgumentList.Add(folder);
             Process.Start(psi);
             return null;
@@ -157,10 +168,22 @@ public static class FolderLauncher
         var path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(path)) return false;
 
+        // On Windows a bare name like "code" resolves through PATHEXT (code.cmd / code.exe).
+        var extensions = OperatingSystem.IsWindows()
+            ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : null;
+
         foreach (var directory in path.Split(Path.PathSeparator))
         {
             if (string.IsNullOrWhiteSpace(directory)) continue;
-            if (File.Exists(Path.Combine(directory, command))) return true;
+            string candidate = Path.Combine(directory, command);
+            if (File.Exists(candidate)) return true;
+            if (extensions is null) continue;
+            foreach (var extension in extensions)
+            {
+                if (File.Exists(candidate + extension)) return true;
+            }
         }
 
         return false;

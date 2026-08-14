@@ -15,6 +15,7 @@ namespace UnoVibe.Controls;
     using Microsoft.UI;
     inject ChatStore Store;
     inject Window HostWindow;
+    inject bool SettingsOpen;
     bool McpExpanded = false;
     bool ShowPassword = false;
     <setup>
@@ -130,6 +131,7 @@ namespace UnoVibe.Controls;
                     <ColumnDefinition Width=Auto />
                     <ColumnDefinition Width=Auto />
                     <ColumnDefinition Width=Auto />
+                    <ColumnDefinition Width=Auto />
                 </>>
                     <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                     <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" Click+=`(sender, e) => OnOpenFolder(sender, e)`>
@@ -138,7 +140,10 @@ namespace UnoVibe.Controls;
                     <Button Grid.Column=2 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" Click+=`(sender, e) => OnNewWindow(sender, e)`>
                         <AppSymbolIcon Symbol=NewWindow FontSize=11 />
                     </Button>
-                    <Button Grid.Column=3 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Connection details" Flyout=connectionFlyout = <Flyout Placement=Top @Closed+=`ShowPassword = false`>
+                    <Button Grid.Column=3 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Settings" @Click+=`SettingsOpen = true`>
+                        <AppSymbolIcon Symbol=Setting FontSize=11 />
+                    </Button>
+                    <Button Grid.Column=4 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Connection details" Flyout=connectionFlyout = <Flyout Placement=Top @Closed+=`ShowPassword = false`>
                         <StackPanel Spacing=10 MinWidth=320 MaxWidth=400>
                             <TextBlock Text="Connection" FontSize=13 FontWeight=`FontWeights.SemiBold` />
                             <Grid ColumnSpacing=8 ColumnDefinitions=<>

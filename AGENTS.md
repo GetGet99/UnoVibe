@@ -186,7 +186,11 @@ the user is talking to this opencode session **through the running UnoVibe app**
     the single positional folder-or-URL argument plus the `--password` flag;
     `ResolveFolderPassword`/`ResolveServerPassword` map to the per-mode defaults.
   - `SuggestionProviders.cs` — mock `ISuggestionProvider`s for `SuggestBox` (namespace `UnoVibe.Controls`).
-- `UnoVibe/Models/` — DTOs (`MessageItem`, `SessionInfo`, `ModelOption`, `ToolView*` item types, etc.).
+  - `SettingsStore.cs` — app settings (see "Settings"): typed static values, a `Specs` registry for the
+    data-driven settings page, `settings.json` persistence, and a cross-process file watcher.
+- `UnoVibe/Models/` — DTOs (`MessageItem`, `SessionInfo`, `ModelOption`, `ToolView*` item types, etc.),
+  plus the settings page's reactive row model (`SettingsEntry`).
+- `UnoVibe/Controls/SettingsPage.cs` — the settings panel (modal overlay), rendered from `SettingsStore.Specs`.
 - `App.xaml.cs` — startup routing: parses `StartupArgs` (`App.CreateWindow`), fails the launch on a file-target,
   hands folder/URL targets to `ConnectPage` via `WindowController.ShowConnect(startup)`,
   which runs the connect flow and swaps to `MainPage` on success.
@@ -505,14 +509,42 @@ message `error.name === "MessageAbortedError"`).
 
 ### Send while busy
 
-Fire `prompt_async` immediately even when a turn is running — the server serializes it itself.
-`createUserMessage` stores the prompt at once; the running session loop picks it up at the
-**next agent step** (after the in-flight tool call), not at full idle.
-This matches the TUI (`stream.transport.ts` `runPromptTurn` calls `promptAsync` regardless of busy;
-its `state.wait` gate only prevents a second concurrent UI submit).
-`ChatStore.SendAsync` always sends immediately and defers ordering to the server.
-A client-side queue (`PendingPrompts`/`EnqueuePrompt`/`DrainPendingPromptsAsync`) is kept dormant
-behind a `TODO(settings/queuing)` for a future "queue on client" mode.
+The **send-mode setting** (`SettingsStore.SendMode`, "Send message default" in Settings) decides what
+a send does while a turn is running:
+- **On next tool call** (default): fire `prompt_async` immediately — the server serializes it itself.
+  `createUserMessage` stores the prompt at once; the running session loop picks it up at the
+  **next agent step** (after the in-flight tool call), not at full idle. Matches the TUI
+  (`stream.transport.ts` `runPromptTurn` calls `promptAsync` regardless of busy; its `state.wait`
+  gate only prevents a second concurrent UI submit).
+- **Queue**: `SessionStore.SendAsync` holds the prompt in the client-side queue
+  (`EnqueuePrompt`/`DrainPendingPromptsAsync`, surfaced as the `⏳ N queued` badge) and flushes it
+  one at a time when the session goes idle (`OnTurnCompleted` / `ApplySessionStatus`). The queue is
+  per-`SessionStore` (so per cached session) and survives session switches; queued prompts drain in
+  the background when that session idles.
+
+A future "send immediately" mode is anticipated; `SendPromptMode` is an enum so a third value slots in.
+
+### Settings
+
+App settings live in a static `Services/SettingsStore.cs` — one source of truth for every window
+(static = shared in-process) and, via a `FileSystemWatcher` on `settings.json`, every process
+(reload on external write, debounced + loop-guarded by the last-written content; `Changed` notifies
+open settings pages to re-read on the UI thread).
+
+- Persisted to `settings.json` under the app's local-data directory (same place as `recent.json`),
+  loaded once at startup (`ConnectPage` ctor, like `RecentConnectionsStore`). Registered in
+  `AppJsonContext` (`SettingsFileModel`).
+- **Adding a setting** = add a `SettingSpec` to `SettingsStore.Specs` + a `GetValue`/`SetValue` case;
+  the data-driven settings page (`Controls/SettingsPage.cs`) renders the row automatically
+  (kinds: text / choice / toggle, `Models/SettingsEntry.cs` reactive row model).
+- **UI**: a ⚙ **Settings** button in the sidebar bottom status row opens a modal overlay on
+  `MainPage` (`SettingsOpen` + `<SettingsPage OnClose=...>`); Back/Done close it. Changes are applied
+  live (no Save button) via `SettingsStore.SetValue`.
+
+Settings in use today:
+- **Default IDE/Editor** (`editor.command`, default `code`) — `FolderLauncher.OpenInEditor` runs
+  `<command> <folder>`; errors surface as a toast.
+- **Send message default** (`send.mode`) — see "Send while busy".
 
 ### Revert / undo
 
@@ -731,12 +763,13 @@ use a backtick `new GridLength(1.4, GridUnitType.Star)` instead.
 ### Sidebar folder actions
 
 Each `SessionSidebar` directory-group header shows, left of the "+" (new session) button, two small
-icon buttons — `Symbol.Code` (VS Code, tooltip "Open folder in VS Code") and `Symbol.OpenLocal`
+icon buttons — `Symbol.Code` (editor, tooltip "Open folder in editor") and `Symbol.OpenLocal`
 (file manager, tooltip "Open folder in file manager").
 `SessionSidebar.RunFolderAction` delegates to `Services/FolderLauncher.cs`
-(`OpenInVSCode`/`OpenInFileManager`), which validates `Directory.Exists` then launches `code <dir>`
-(VS Code CLI) and, for the file manager, `explorer.exe <dir>` on Windows or `open`/`xdg-open <dir>`
-on macOS/Linux. Launch failures surface as an error toast via `Store.ShowToast`.
+(`OpenInEditor`/`OpenInFileManager`), which validates `Directory.Exists` then launches
+`<command> <dir>` where the command is the **Default IDE/Editor** setting (`SettingsStore.EditorCommand`,
+default `code` — see "Settings") and, for the file manager, `explorer.exe <dir>` on Windows or
+`open`/`xdg-open <dir>` on macOS/Linux. Launch failures surface as an error toast via `Store.ShowToast`.
 `Symbol.Code` is defined as `(Symbol)0xe943` in `SymbolExtemsion.cs`.
 
 **Open Folder button:**

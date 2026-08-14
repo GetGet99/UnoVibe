@@ -152,14 +152,18 @@ public sealed partial class SessionStore
         {
             if (!await Router.EnsureSessionAsync()) return;
 
-            // The server serializes `prompt_async` itself: if a turn is busy, the
-            // message is stored immediately and the running session loop processes it
-            // at the next agent step (after the in-flight tool call). So we always send
-            // right away and defer ordering to the server — this matches the opencode TUI
-            // (stream.transport.ts `runPromptTurn` fires promptAsync regardless of busy).
-            //
-            // TODO(settings/queuing): a future "queue on client" mode can route here
-            // through EnqueuePrompt/DrainPendingPromptsAsync instead of sending now.
+            // The send-mode setting decides what a send does while a turn is running:
+            //  - OnNextToolCall (default): send immediately and let the server serialize —
+            //    prompt_async stores the message at once and the running session loop picks it
+            //    up at the next agent step (after the in-flight tool call). Matches the opencode
+            //    TUI (stream.transport.ts `runPromptTurn` fires promptAsync regardless of busy).
+            //  - Queue: hold the prompt in the client-side queue (EnqueuePrompt) and flush it
+            //    one at a time when the session goes idle (DrainPendingPromptsAsync).
+            if (SettingsStore.SendMode == SendPromptMode.Queue && IsBusy)
+            {
+                EnqueuePrompt(text);
+                return;
+            }
             await SendPromptNowAsync(text);
         }
         catch (Exception ex)
@@ -338,11 +342,10 @@ public sealed partial class SessionStore
         }
     }
 
-    // TODO(settings/queuing): client-side prompt queue, kept dormant for a future
-    // "queue on client" mode. Currently unwired — SendAsync always sends immediately
-    // and lets the server serialize prompts (see SendAsync comment). To enable a
-    // client-owned queue, call EnqueuePrompt(text) from SendAsync when IsBusy, then
-    // flush via DrainPendingPromptsAsync when the session goes idle.
+    // Client-side prompt queue for the "Queue" send mode (SettingsStore.SendMode):
+    // SendAsync enqueues while a turn is busy, and DrainPendingPromptsAsync flushes the queue
+    // one prompt at a time when the session goes idle. The "OnNextToolCall" mode skips the
+    // queue entirely and sends immediately (the server serializes prompts itself).
     private void EnqueuePrompt(string text)
     {
         _pendingPrompts.Enqueue(text);

@@ -15,8 +15,10 @@ namespace UnoVibe.Pages;
     using UnoVibe.Pages;
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
+    using Microsoft.UI;
     provide ChatStore Store = null;
     provide Window HostWindow = null;
+    provide bool SettingsOpen = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -51,6 +53,16 @@ namespace UnoVibe.Pages;
                         </Grid>
                     </Border>
             </Grid>
+            if (`SettingsOpen`)
+            {
+                <Grid>
+                    <Border Background=`new SolidColorBrush(Colors.Black) { Opacity = 0.35 }` />
+                    <Border Width=600 MaxHeight=640 VerticalAlignment=Center HorizontalAlignment=Center CornerRadius=10
+                            Background=`theme.SolidBackground` BorderBrush=`theme.CardStroke` BorderThickness=1>
+                        <SettingsPage />
+                    </Border>
+                </Grid>
+            }
         </Grid>
     </root>
     """)]
