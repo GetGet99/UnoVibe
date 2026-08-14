@@ -69,6 +69,8 @@ User MyUser => async `Api.FetchUserAsync(Id)`; // creates AsyncComputed<User>, p
 
 References auto-notify the UI on change. Computed variables cache and re-evaluate when dependencies change. Computed variables are lazily initialized — not evaluated until first accessed.
 
+> **Note:** A reference declared as a reference type without a default value (e.g. `string Text;`) is initialized to `null`, which produces a QuickMarkup warning (`QM1014`). Assign a default value or declare the type as nullable (`string? Text;`) to avoid warning.
+
 References get a `*Prop` backing field and computed get a `*Comp` backing field on the partial class, accessible directly if needed. Async computed gets `*Async` backing field (`AsyncComputed<T>`), plus `*Status` (`AsyncComputedState`) and `*Failure` (`Exception?`) properties. The value property throws if not yet loaded — check `*Status` first.
 
 ### Generic types
@@ -86,6 +88,54 @@ Collection notes: do note that by putting collections inside here, would generat
 Depending on what you mean, you may either use:
 - Declare inside QuickMarkup if you expect parents to replace the collection or provide their own collection.
 - Declare inside C# as `ObservableCollection<MyType> Items { get; } = new()` if you want the class to own the collection.
+
+### References are shallow
+
+Type fields and properties are NOT reactive.
+
+```quickmarkup
+MyType MyValue = `new()`;
+```
+
+```csharp
+MyValue = new(); // reassigning value triggers reactivity
+MyValue.SomeProperty = 2; // this does NOT trigger reactivity
+```
+
+TO make them reactive, put them inside QuickMarkup or use `Reference<T>`/`Computed<T>`.
+
+```csharp
+[QuickMarkup("""
+    // QuickMarkup can be applied to non-UI class. There is no restriction that the class needs to be UI.
+    
+    // Declare reference markup creates reactive fields.
+    int IntegerValue; // reactive on change
+    """)]
+partial class MyClass {
+    // regular fields is NOT reactive
+    public string field; // not reactive
+    // Property that does not go through reference/computed are NOT reactive.
+    public double Property { get; set; } // not reactive
+
+    readonly Reference<int> someRef = new(0);
+    
+    // This is reactive because it is backed by reference
+    public string SomePublicWrapper {
+        get => someRef.ToString();
+        set => someRef = int.Parse(value);
+    }
+}
+```
+When used in markup,
+
+```quickmarkup
+MyClass MyValue = `new()`;
+```
+
+```csharp
+MyValue = new(); // reassigning value triggers reactivity as usual
+MyValue.SomePublicWrapper = 2; // triggers reactivity too
+```
 
 ## Required Properties
 
@@ -303,7 +353,7 @@ On the initial run `InputLabel` will be null, but after `InputLabel` is set, `` 
 
 ### Templates (DataTemplate)
 
-Support: Uno Platform only. WASDK and UWP target project are not supported.
+Support: Uno Platform, WASDK (WinUI 3), and UWP target projects.
 
 Assign a `template` value to a DataTemplate-typed property for controls that use the `ItemsSource` + `ItemTemplate` contract:
 
@@ -313,7 +363,7 @@ Assign a `template` value to a DataTemplate-typed property for controls that use
 <ItemsControl ItemTemplate=template (Person? person) <TextBlock Text=`person?.Name` /> />
 ```
 
-The direct body must resolve to **exactly one plain element** — nested fragments must still collapse to a single element. `if`, `foreach`, and `await` blocks are not allowed in the body, because a template must always return the same single element that the framework materializes once. The template parameter type must be **nullable or a value type**, and `template` is only accepted on template-like properties (name contains `Template`, or a `DataTemplate`/`FrameworkTemplate` type).
+The direct body must resolve to **exactly one plain element** — nested fragments must still collapse to a single element. `if`, `foreach`, and `await` blocks are not allowed in the body, because a template must always return the same single element that the framework materializes once. The template parameter type must be **nullable or a value type**, and `template` is only accepted on template-like properties (name contains `Template`, or a `DataTemplate`/`FrameworkTemplate` type). The template body element must not have constructor arguments — the framework creates the template root itself, so the body configures an already-created element.
 
 When the element is first created, the input value will be default value (ie. `null` for reference types or `default(YourValueType)` for value types) due to framework limitation. Ensure you guard null case properly.
 
@@ -399,7 +449,9 @@ foreach (var i in 1..4) { <TextBlock Text=/-$"Item {i}"-/ /> }
 foreach (var item in `items`) { <TextBlock Text=/-item-/ /> }
 
 // With key expression (for stable identity across collection changes), works for INotifyCollectionChanged
-// or reference-tracked collections; uses the key as identity across resets/refreshes
+// or reference-tracked collections; uses the key as identity across resets/refreshes. Keys must be
+// unique and non-null. Keyed reconciles are incremental: a single Add/Remove/Move only mounts/unmounts
+// the affected item, leaving the rest of the list mounted.
 foreach (var item in `animals`; `item.Id`) { <TextBlock Text=`item.Name` /> }
 
 // With index variable
@@ -516,7 +568,7 @@ sp = <StackPanel /* 1. */ First=1 /* 2. */ Second=2
 />
 ```
 
-9. Reactivity changes: properties are rerun whenever values change. No explicit order defined.
+9. Reactivity changes: properties are rerun whenever values change. Within the same block there is no guaranteed property re-evaluation order. Across blocks the order is deterministic by structural scope: a container block (`if`/`foreach`/`await`) reconciles before the property effects of the elements nested inside it, so a removed branch/item cannot leave stale nested effects mutating destroyed UI.
 
 *This behavior is only guaranteed from generated code. If user calls generated constructor themselves, just note that the evaluation step depends on user code.
 
