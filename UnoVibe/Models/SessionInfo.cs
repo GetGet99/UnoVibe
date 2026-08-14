@@ -1,11 +1,12 @@
 namespace UnoVibe.Models;
 
 /// <summary>
-/// A session list item. Mutable display fields are QuickMarkup reactive references so
-/// in-place updates (e.g. the server renames a session, or refreshes its cost/token
-/// totals via <c>session.updated</c>) propagate to the UI without replacing the item
-/// or rebuilding the sidebar groups. `Id`/`Directory` determine identity/grouping and
-/// stay plain (they never change for a live session).
+/// A session list item. Instances are persistent across session list refreshes (reconciled in
+/// place by <c>ChatStore</c>, never recreated), so mutable display fields are QuickMarkup
+/// reactive references — in-place updates (e.g. the server renames a session, or refreshes its
+/// cost/token totals via <c>session.updated</c>) propagate to the UI without replacing the item
+/// or rebuilding the sidebar groups. `Id` determines identity and stays plain; `Directory`
+/// determines grouping and only changes when a session genuinely moves.
 /// </summary>
 [QuickMarkup("""
     public string Title = "";

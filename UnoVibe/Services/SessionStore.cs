@@ -329,7 +329,7 @@ public sealed partial class SessionStore
         {
             await Router.Client.UpdateSessionTitleAsync(SessionId, title);
             SessionTitle = title;
-            var session = Router.Sessions.FirstOrDefault(s => s.Id == SessionId);
+            var session = Router.GetSession(SessionId);
             if (session is not null) session.Title = title;
         }
         catch (Exception ex)

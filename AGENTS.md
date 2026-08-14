@@ -312,7 +312,7 @@ short-circuits future auto-naming because the title no longer matches `isDefault
 The `task` tool spawns a child session whose `SessionInfo` carries a `parentID`
 (field `SessionInfo.ParentId`; `IsSubagent` = `ParentId` non-empty).
 `ChatStore` keeps subagent `SessionInfo`s in `Sessions` (needed for `SwitchSessionAsync` lookup +
-unread tracking) but **filters them out of `RebuildDirectoryGroups`**, so they never appear in the
+unread tracking) but **filters them out of `ReconcileDirectoryGroups`**, so they never appear in the
 sidebar — mirroring the TUI (`parentID === undefined` filter).
 
 Entry point is the tool call itself:
@@ -372,7 +372,7 @@ entry). A reply that comes back 404 (`HttpRequestException` with `StatusCode == 
 stale request from the queue so the next pending one surfaces instead of a dead card.
 
 `permission.asked/replied` are NOT session-filtered in `Apply` (subagents run in their own sessions) —
-the per-session `_pendingPermissions` counters still drive the sidebar attention indicator.
+the per-session `SessionFlags.PendingPermissions` counter still drives the sidebar attention indicator.
 The active-view queue (`AddPermissionRequest`) accepts a request when its session is the active session
 **or a descendant of it** (`IsActiveOrDescendant` walks the `SessionInfo.ParentId` chain), so a task
 child's pending permission surfaces in the parent's dialog and can be approved without navigating into
@@ -389,7 +389,7 @@ the TUI treats anything `!= "idle"` as busy and shows the retry message.
 `ChatStore.StatusMessage` surfaces the retry banner.
 
 `session.status`, `message.updated`, and the `question.*` events are intentionally **not**
-session-filtered in `Apply` — `ChatStore` tracks per-session busy state (`_sessionStatus` →
+session-filtered in `Apply` — `ChatStore` tracks per-session busy state (`SessionFlags.Status` →
 `SessionInfo.IsBusy`) to drive the sidebar spinner, and polls `GET /session/status` at connect to
 catch sessions already busy before the SSE stream attached (the server only emits status on
 transitions).
@@ -404,9 +404,9 @@ none → success; mirrors the web client's `rows.ts` logic) and drives the sideb
 
 Pending attention (`SessionInfo.NeedsAttention`/`AttentionKind`) is tracked per-session from
 `permission.asked/replied` and `question.asked/replied/rejected` counts
-(`_pendingPermissions`/`_pendingQuestions`, seeded at connect + switch via `SyncPending*Async` from
-`GET /permission` + `GET /question`) and shows a `Permissions`/`Help` glyph in `SystemAttention`
-that **overrides** the busy spinner (mirrors the web client's `needsAttention`).
+(`SessionFlags.PendingPermissions`/`PendingQuestions`, seeded at connect + switch via
+`SyncPending*Async` from `GET /permission` + `GET /question`) and shows a `Permissions`/`Help` glyph
+in `SystemAttention` that **overrides** the busy spinner (mirrors the web client's `needsAttention`).
 
 **Inline question form** (`ToolViewQuestion`/`ToolViewQuestionItem`):
 - Submits via `POST /question/:requestID/reply`
@@ -480,10 +480,11 @@ and `vcs.branch.updated` (→ `ChatStore.RefreshBranches`).
 
 Each sidebar directory group shows its git branch (`⎇ <branch>`) after the folder name, from
 `GET /vcs?directory=<path>` (`OpencodeClient.GetBranchAsync`, returns `{ branch, default_branch }`).
-`ChatStore` caches per-directory branches in `_directoryBranches` and re-seeds `DirectoryGroup.Branch`
-(a reactive QuickMarkup field) on sidebar rebuilds; `RefreshBranches()` re-fetches every sidebar
-directory group's branch in place (no rebuild) and is called after session refreshes and on the
-`vcs.branch.updated` SSE event.
+`ChatStore` keeps a `Dictionary<string, DirectoryGroup> _groupsByDirectory` index; `DirectoryGroup`
+instances are **reused** (never recreated) across `ReconcileDirectoryGroups`, so the reactive
+`Branch`/`IsExpanded` fields live on the object and survive refreshes with no re-seeding.
+`RefreshBranches()` re-fetches every sidebar directory group's branch in place (no rebuild) and is
+called after session refreshes and on the `vcs.branch.updated` SSE event.
 
 The `session.next.*` streaming events exist in the schema but are not published by the current CLI
 server. Implement a case and remove its TODO marker when adopting it.
@@ -656,6 +657,16 @@ non-intermediate `ViewChanged` and never falsely unpin.
 > from `ChatPage` code-behind). `ChatPage` re-hooks the active store's message list on the
 > router's `ActiveStoreChanged` event.
 
+> **No-rebuild sidebar model:** sidebar state lives on persistent instances — `SessionInfo`
+> items and `DirectoryGroup` groups are reused (never recreated). `RefreshSessionsCoreAsync`
+> reconciles `Sessions` in place (drop gone / update survivors via `ApplySessionUpdate` /
+> append new), `ReconcileDirectoryGroups` reconciles each group's `Session` list via
+> `ReconcileSessionCollection` (Remove/Insert/Move, reference-identity) and reorders groups
+> with `ObservableCollection.Move`, and `ReconcileActiveSubagents` does the same for the chat
+> page's subagent strip. Per-session sidebar flags (`_sessionFlags`, keyed by session id) stay
+> the authoritative store for busy/unread/outcome/attention because SSE can fire for sessions
+> not yet in the list (subagent permission races, background outcome before listing).
+
 - A dev `opencode serve` is normally left running on `http://localhost:4196` (manual instance);
   use it as the positional URL argument for day-to-day runs (`UnoVibe http://localhost:4196`).
 
@@ -736,13 +747,13 @@ connection-status row — not the top.
 
 Folders opened with it — or with a group's "+" button — are tracked in `ChatStore._openedFolders`
 and **shown in the sidebar even when the server returns no sessions for them**:
-`RebuildDirectoryGroups` merges an empty group per opened folder (keyed by normalized path, sorted by
+`ReconcileDirectoryGroups` merges an empty group per opened folder (keyed by normalized path, sorted by
 last-opened time, cleared on `Configure`), rendering the group header plus a muted "No sessions yet"
 line instead of a session list.
 Because the server's plain `GET /session` list is scoped to its default project/instance,
 `RefreshSessionsAsync` also fetches `GET /session?directory=<path>` for every opened folder and merges
 those sessions in (deduped by id), so a picked folder's existing chats show up too —
-`NewSessionAsync` fires that background refresh and calls `RebuildDirectoryGroups()` immediately so
+`NewSessionAsync` fires that background refresh and calls `ReconcileDirectoryGroups()` immediately so
 the folder appears right away (a re-entrancy guard on `RefreshSessionsAsync` coalesces a post-create
 refresh racing the background one).
 Opening a folder also starts a directory-scoped `/event` stream (`StartFolderEventStream`) so a

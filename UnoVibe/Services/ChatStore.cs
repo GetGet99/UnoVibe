@@ -56,7 +56,7 @@ public sealed partial class ChatStore : IDisposable
     public ObservableCollection<SessionInfo> Sessions { get; } = new();
     public ObservableCollection<DirectoryGroup> DirectoryGroups { get; } = new();
     // Subagent sessions (ParentId == active session id), in display order for the chat page
-    // subagent strip. Rebuilt via RebuildActiveSubagents whenever the session list or the
+    // subagent strip. Rebuilt via ReconcileActiveSubagents whenever the session list or the
     // active session changes.
     public ObservableCollection<SessionInfo> ActiveSubagents { get; } = new();
 
@@ -80,23 +80,20 @@ public sealed partial class ChatStore : IDisposable
 
     private OpencodeClient _client = null!;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
-    // Per-session busy state keyed by session id; survives sidebar list rebuilds (RefreshSessionsAsync).
-    private readonly Dictionary<string, string> _sessionStatus = new();
-    // Per-session "completed but not viewed yet" state keyed by session id.
-    private readonly Dictionary<string, bool> _unread = new();
-    // Per-session last-turn outcome (""/success/error/interrupted), derived from the final
-    // assistant message's info.error; drives the sidebar icon for unread sessions.
-    private readonly Dictionary<string, string> _sessionOutcome = new();
-    // Per-session counts of pending questions (question.asked not yet replied/rejected).
-    private readonly Dictionary<string, int> _pendingQuestions = new();
-    // Per-session counts of pending permission approvals (permission.asked not yet replied).
-    private readonly Dictionary<string, int> _pendingPermissions = new();
-    // Per-directory sidebar "show all sessions" state (keyed by directory), preserved across
-    // sidebar group rebuilds so the show-more/show-less toggle survives session list refreshes.
-    private readonly Dictionary<string, bool> _directoryExpanded = new();
-    // Per-directory git branch (keyed by directory), from GET /vcs. Used to re-seed group
-    // Branch fields after sidebar rebuilds; "" means not a git repo / not yet loaded.
-    private readonly Dictionary<string, string> _directoryBranches = new();
+    // Per-session sidebar state (busy status, unread, last-turn outcome, pending question/approval
+    // counts) keyed by session id. Survives session list refreshes — ApplySessionFlags seeds each
+    // SessionInfo from the owning entry. One map of SessionFlags instead of five parallel dicts.
+    private readonly Dictionary<string, SessionFlags> _sessionFlags = new();
+    // Sidebar directory groups keyed by directory. Groups are reused (never recreated) across
+    // session refreshes, so per-group state — IsExpanded (show more/less) and Branch (git branch)
+    // — lives on the DirectoryGroup instance itself instead of separate per-directory maps.
+    private readonly Dictionary<string, DirectoryGroup> _groupsByDirectory = new();
+    // O(1) lookup index for Sessions by id, kept in sync with the ObservableCollection so
+    // SSE handlers and helpers never scan the list linearly (GetSession).
+    private readonly Dictionary<string, SessionInfo> _sessionsById = new();
+    // O(1) lookup index for McpServers by name, kept in sync with the ObservableCollection
+    // so ApplyMcpStatus can reconcile in place instead of a Clear+re-Add rebuild.
+    private readonly Dictionary<string, McpServerItem> _mcpServersByName = new();
     private readonly List<PermissionRequestItem> _permissions = new();
     private CancellationTokenSource? _cts;
     private DispatcherQueue? _dispatcher;
@@ -104,7 +101,7 @@ public sealed partial class ChatStore : IDisposable
     private string? _pendingDirectory;
     // Folders opened via the sidebar's "Open Folder" button (or a directory group's "+" button),
     // keyed by normalized path with the last-opened time (unix ms). These appear in the sidebar
-    // even when the server reports no sessions for them yet (RebuildDirectoryGroups merges them in),
+    // even when the server reports no sessions for them yet (ReconcileDirectoryGroups merges them in),
     // so a freshly-picked folder is visible before the first message creates a session.
     private readonly Dictionary<string, long> _openedFolders = new();
     // Per-opened-folder /event stream cancellation. The app's main /event stream is scoped to the
@@ -167,6 +164,16 @@ public sealed partial class ChatStore : IDisposable
     private SessionStore? GetStore(string sessionId) =>
         sessionId.Length == 0 ? null : _sessionStores.GetValueOrDefault(sessionId);
 
+    /// <summary>The sidebar session with the given id, or null when not listed.</summary>
+    public SessionInfo? GetSession(string sessionId) =>
+        sessionId.Length == 0 ? null : _sessionsById.GetValueOrDefault(sessionId);
+
+    /// <summary>Gets or creates the per-session sidebar state entry for <paramref name="sessionId"/> (non-empty).</summary>
+    private SessionFlags Flags(string sessionId) =>
+        _sessionFlags.TryGetValue(sessionId, out var flags)
+            ? flags
+            : _sessionFlags[sessionId] = new SessionFlags();
+
     /// <summary>
     /// Configures the server to connect to. Must be called before <see cref="ConnectAsync"/>.
     /// </summary>
@@ -194,20 +201,17 @@ public sealed partial class ChatStore : IDisposable
         _permissions.Clear();
         ActivePermission = null;
         Sessions.Clear();
+        _sessionsById.Clear();
         DirectoryGroups.Clear();
-        _sessionStatus.Clear();
-        _unread.Clear();
-        _sessionOutcome.Clear();
-        _pendingQuestions.Clear();
-        _pendingPermissions.Clear();
-        _directoryExpanded.Clear();
-        _directoryBranches.Clear();
+        _groupsByDirectory.Clear();
+        _sessionFlags.Clear();
         _openedFolders.Clear();
         foreach (var cts in _folderStreamCts.Values) cts.Cancel();
         _folderStreamCts.Clear();
         _seenEventIds.Clear();
         _seenEventIdOrder.Clear();
         McpServers.Clear();
+        _mcpServersByName.Clear();
         _mcpDirectory = "";
         McpDirectory = "";
         McpSummary = "";
@@ -377,18 +381,15 @@ public sealed partial class ChatStore : IDisposable
     {
         try
         {
-            var list = await _client.ListSessionsAsync(ct);
-            Sessions.Clear();
-            foreach (var session in list)
+            // Merge the default list with each opened folder's sessions (they live in separate
+            // server instances), deduped by id.
+            var merged = new List<SessionInfo>();
+            var seen = new HashSet<string>();
+            foreach (var session in await _client.ListSessionsAsync(ct))
             {
-                ApplySessionFlags(session);
-                Sessions.Add(session);
+                seen.Add(session.Id);
+                merged.Add(session);
             }
-
-            // The default GET /session list is scoped to the server's default project
-            // (instance). Folders opened via the sidebar's Open Folder button live in their
-            // own instance, so their sessions must be fetched per-directory and merged in —
-            // otherwise a picked folder's chats never appear in the sidebar.
             foreach (var dir in _openedFolders.Keys.ToList())
             {
                 try
@@ -396,14 +397,36 @@ public sealed partial class ChatStore : IDisposable
                     var extra = await _client.ListSessionsAsync(ct, dir);
                     foreach (var session in extra)
                     {
-                        if (Sessions.Any(s => s.Id == session.Id)) continue;
-                        ApplySessionFlags(session);
-                        Sessions.Add(session);
+                        if (seen.Add(session.Id)) merged.Add(session);
                     }
                 }
                 catch
                 {
                     // One unreachable/unlisted folder must not break the whole refresh.
+                }
+            }
+
+            // Reconcile the sidebar list in place: drop sessions the server no longer reports,
+            // update survivors in place (they keep their live reactive state), and append new
+            // ones. Order doesn't matter here — the sidebar reads the sorted per-directory groups.
+            for (var i = Sessions.Count - 1; i >= 0; i--)
+            {
+                if (seen.Contains(Sessions[i].Id)) continue;
+                _sessionsById.Remove(Sessions[i].Id);
+                Sessions.RemoveAt(i);
+            }
+            foreach (var session in merged)
+            {
+                if (_sessionsById.TryGetValue(session.Id, out var existing))
+                {
+                    ApplySessionUpdate(existing, session);
+                    ApplySessionFlags(existing);
+                }
+                else
+                {
+                    ApplySessionFlags(session);
+                    _sessionsById[session.Id] = session;
+                    Sessions.Add(session);
                 }
             }
 
@@ -420,8 +443,8 @@ public sealed partial class ChatStore : IDisposable
                 StartFolderEventStream(dir);
             }
 
-            RebuildDirectoryGroups();
-            RebuildActiveSubagents();
+            ReconcileDirectoryGroups();
+            ReconcileActiveSubagents();
             RefreshBranches();
         }
         catch (Exception ex)
@@ -439,8 +462,10 @@ public sealed partial class ChatStore : IDisposable
     {
         try
         {
-            _sessionStatus.Clear();
-            foreach (var kv in await _client.GetSessionStatusAsync(ct)) _sessionStatus[kv.Key] = kv.Value;
+            // Reset every session's Status first, then re-apply the server's poll — the other
+            // flag fields (unread/outcome/counters) must survive this refresh.
+            foreach (var flags in _sessionFlags.Values) flags.Status = null;
+            foreach (var kv in await _client.GetSessionStatusAsync(ct)) Flags(kv.Key).Status = kv.Value;
             foreach (var s in Sessions) ApplySessionFlags(s);
         }
         catch (Exception ex)
@@ -461,16 +486,7 @@ public sealed partial class ChatStore : IDisposable
         try
         {
             var status = await _client.GetMcpStatusAsync(directory, ct);
-            McpServers.Clear();
-            foreach (var (name, info) in status.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
-            {
-                McpServers.Add(new McpServerItem
-                {
-                    Name = name,
-                    Status = info.Status,
-                    Error = info.Error,
-                });
-            }
+            ApplyMcpStatus(status);
             _mcpDirectory = directory;
             McpDirectory = directory.Length > 0 ? directory : "(default)";
             var connected = status.Values.Count(s => s.Status == "connected");
@@ -489,14 +505,45 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
+    /// Reconciles <see cref="McpServers"/> against the server's GET /mcp report in place
+    /// (the sidebar poll runs every few seconds while the MCP section is expanded):
+    /// servers the server no longer reports are removed, existing ones keep their item
+    /// (and any in-flight toggle state) with Status/Error updated, and new ones are
+    /// inserted in name order — no Clear+re-Add rebuild.
+    /// </summary>
+    private void ApplyMcpStatus(Dictionary<string, McpServerInfo> status)
+    {
+        for (var i = McpServers.Count - 1; i >= 0; i--)
+        {
+            if (status.ContainsKey(McpServers[i].Name)) continue;
+            _mcpServersByName.Remove(McpServers[i].Name);
+            McpServers.RemoveAt(i);
+        }
+
+        foreach (var kv in status.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            if (_mcpServersByName.TryGetValue(kv.Key, out var existing))
+            {
+                existing.Status = kv.Value.Status;
+                existing.Error = kv.Value.Error;
+                continue;
+            }
+            var item = new McpServerItem { Name = kv.Key, Status = kv.Value.Status, Error = kv.Value.Error };
+            _mcpServersByName[kv.Key] = item;
+            var index = 0;
+            while (index < McpServers.Count && StringComparer.OrdinalIgnoreCase.Compare(McpServers[index].Name, kv.Key) < 0) index++;
+            McpServers.Insert(index, item);
+        }
+    }
+
+    /// <summary>
     /// Connects or disconnects an MCP server based on its current status, then refreshes
     /// the list. Mirrors the TUI: connected → disconnect, anything else → connect.
     /// </summary>
     public async Task ToggleMcpAsync(string name)
     {
         if (_mcpBusy) return;
-        var server = McpServers.FirstOrDefault(s => s.Name == name);
-        if (server is null) return;
+        if (!_mcpServersByName.TryGetValue(name, out var server)) return;
         _mcpBusy = true;
         server.Connecting = true;
         var directory = _mcpDirectory;
@@ -553,33 +600,37 @@ public sealed partial class ChatStore : IDisposable
         var sessionId = Active.SessionId;
         if (sessionId.Length > 0)
         {
-            var session = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            var session = GetSession(sessionId);
             if (session is not null && session.Directory.Length > 0) return session.Directory;
         }
         return _pendingDirectory ?? "";
     }
 
-    /// <summary>True when a session is mid-turn: its cached store says busy, or the router's status map says so.</summary>
+    /// <summary>True when a session is mid-turn: its cached store says busy, or the router's status flags say so.</summary>
     public bool IsSessionBusy(string sessionId)
     {
         if (GetStore(sessionId) is { } store && store.IsBusy) return true;
-        return _sessionStatus.GetValueOrDefault(sessionId) is not (null or "idle");
+        return _sessionFlags.GetValueOrDefault(sessionId)?.Status is not (null or "idle");
     }
 
-    /// <summary>Copies the reactive busy/unread/outcome/attention flags from the store's per-session maps onto a session item.</summary>
+    /// <summary>Copies the reactive busy/unread/outcome/attention flags from the session's state entry onto a session item.</summary>
     private void ApplySessionFlags(SessionInfo session)
     {
-        session.IsBusy = _sessionStatus.GetValueOrDefault(session.Id) is not (null or "idle");
-        session.IsUnread = _unread.GetValueOrDefault(session.Id);
-        session.Outcome = _sessionOutcome.GetValueOrDefault(session.Id) ?? "";
+        var flags = _sessionFlags.GetValueOrDefault(session.Id);
+        session.IsBusy = flags?.Status is not (null or "idle");
+        session.IsUnread = flags?.Unread ?? false;
+        session.Outcome = flags?.Outcome ?? "";
         session.NeedsAttention = SessionNeedsAttention(session.Id);
-        session.AttentionKind = _pendingPermissions.GetValueOrDefault(session.Id) > 0 ? "permission"
-            : _pendingQuestions.GetValueOrDefault(session.Id) > 0 ? "question"
+        session.AttentionKind = flags?.PendingPermissions > 0 ? "permission"
+            : flags?.PendingQuestions > 0 ? "question"
             : "";
     }
 
-    private bool SessionNeedsAttention(string sessionId) =>
-        _pendingQuestions.GetValueOrDefault(sessionId) > 0 || _pendingPermissions.GetValueOrDefault(sessionId) > 0;
+    private bool SessionNeedsAttention(string sessionId)
+    {
+        var flags = _sessionFlags.GetValueOrDefault(sessionId);
+        return flags is not null && (flags.PendingQuestions > 0 || flags.PendingPermissions > 0);
+    }
 
     /// <summary>Re-applies the reactive per-session flags to every sidebar item (after counters change).</summary>
     private void RefreshSessionFlags()
@@ -588,18 +639,50 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds the sidebar's directory grouping from <see cref="Sessions"/>, then merges in any
-    /// folders opened via the "Open Folder" button that have no sessions yet, so a picked folder
-    /// shows up immediately (even before the server has created a session in it). Subagent sessions
-    /// (those spawned by a <c>task</c> tool call, identified by a non-empty ParentId) are kept in
-    /// <see cref="Sessions"/> but filtered out of the sidebar — they're opened via their clickable
-    /// task tool card instead, mirroring the TUI which hides them from session lists.
+    /// Copies the server-reported mutable fields of <paramref name="fresh"/> onto the persistent
+    /// sidebar item <paramref name="existing"/>, so a list refresh or <c>session.updated</c>
+    /// updates it in place (the item keeps its reactive state and is never recreated).
+    /// Identity-ish fields (ParentId/Path/ProjectId) and the client-side flag fields are not
+    /// touched. Directory is only replaced when non-empty (events for known sessions always
+    /// carry it).
     /// </summary>
-    private void RebuildDirectoryGroups()
+    private static void ApplySessionUpdate(SessionInfo existing, SessionInfo fresh)
     {
-        var groups = new List<DirectoryGroup>();
-        var sortKey = new Dictionary<string, long>();
+        existing.Title = fresh.Title;
+        existing.Updated = fresh.Updated;
+        existing.Agent = fresh.Agent;
+        if (fresh.Directory.Length > 0) existing.Directory = fresh.Directory;
+        if (fresh.ModelId.Length > 0)
+        {
+            existing.ModelId = fresh.ModelId;
+            existing.ModelProviderId = fresh.ModelProviderId;
+            existing.ModelVariant = fresh.ModelVariant;
+        }
+        existing.Cost = fresh.Cost;
+        existing.TokensInput = fresh.TokensInput;
+        existing.TokensOutput = fresh.TokensOutput;
+        existing.TokensReasoning = fresh.TokensReasoning;
+        existing.TokensCacheRead = fresh.TokensCacheRead;
+        existing.TokensCacheWrite = fresh.TokensCacheWrite;
+    }
 
+    /// <summary>
+    /// Reconciles the sidebar's directory grouping in place from <see cref="Sessions"/>, then
+    /// merges in any folders opened via the "Open Folder" button that have no sessions yet, so a
+    /// picked folder shows up immediately (even before the server has created a session in it).
+    /// Subagent sessions (those spawned by a <c>task</c> tool call, identified by a non-empty
+    /// ParentId) are kept in <see cref="Sessions"/> but filtered out of the sidebar — they're
+    /// opened via their clickable task tool card instead, mirroring the TUI which hides them from
+    /// session lists.
+    /// DirectoryGroup instances are reused (never recreated), so per-group state like
+    /// <c>IsExpanded</c> and <c>Branch</c> survives the reconcile; only the groups' session lists
+    /// and ordering are updated. Group ordering follows each directory's top-session <c>Updated</c>
+    /// (or the folder's last-opened time when empty).
+    /// </summary>
+    private void ReconcileDirectoryGroups()
+    {
+        // Desired directories with their sort key (top session's Updated, else last-opened time).
+        var sortKey = new Dictionary<string, long>();
         foreach (var g in Sessions
             .Where(s => !s.IsSubagent)
             .GroupBy(s => s.Directory))
@@ -607,11 +690,11 @@ public sealed partial class ChatStore : IDisposable
             var dir = g.Key.Length == 0 ? "(unknown)" : g.Key;
             var sessions = g.OrderByDescending(s => s.Updated).ToList();
             sortKey[dir] = sessions.Count > 0 ? sessions[0].Updated : 0;
-            groups.Add(new DirectoryGroup
-            {
-                Directory = dir,
-                Sessions = new ObservableCollection<SessionInfo>(sessions),
-            });
+            var group = _groupsByDirectory.TryGetValue(dir, out var existing)
+                ? existing
+                : _groupsByDirectory[dir] = new DirectoryGroup { Directory = dir };
+            if (!DirectoryGroups.Contains(group)) DirectoryGroups.Add(group);
+            ReconcileSessionCollection(group.Sessions, sessions);
         }
 
         // Folders opened via the sidebar's Open Folder button (or a group "+" button) appear even
@@ -620,21 +703,31 @@ public sealed partial class ChatStore : IDisposable
         {
             if (sortKey.ContainsKey(dir)) continue;
             sortKey[dir] = opened;
-            groups.Add(new DirectoryGroup
-            {
-                Directory = dir,
-                Sessions = new ObservableCollection<SessionInfo>(),
-            });
+            var group = _groupsByDirectory.TryGetValue(dir, out var existing)
+                ? existing
+                : _groupsByDirectory[dir] = new DirectoryGroup { Directory = dir };
+            if (!DirectoryGroups.Contains(group)) DirectoryGroups.Add(group);
+            ReconcileSessionCollection(group.Sessions, new List<SessionInfo>());
         }
 
-        DirectoryGroups.Clear();
-        foreach (var group in groups.OrderByDescending(g => sortKey[g.Directory]))
+        // Drop groups whose directory no longer contributes sessions and is no longer opened.
+        foreach (var dir in _groupsByDirectory.Keys.ToList())
         {
-            // Re-apply the user's show-more/show-less choice; the toggle mutates the item's
-            // reactive IsExpanded in place, while a rebuild gets its value from the store map.
-            group.IsExpanded = _directoryExpanded.GetValueOrDefault(group.Directory);
-            group.Branch = _directoryBranches.GetValueOrDefault(group.Directory) ?? "";
-            DirectoryGroups.Add(group);
+            if (sortKey.ContainsKey(dir)) continue;
+            if (_groupsByDirectory.Remove(dir, out var gone))
+                DirectoryGroups.Remove(gone);
+        }
+
+        // Order the groups by sort key descending. The group set is already exact, so this only
+        // moves out-of-place blocks (the sidebar foreach is keyed by group.Directory).
+        var sorted = sortKey.OrderByDescending(kv => kv.Value).Select(kv => kv.Key).ToList();
+        var target = 0;
+        foreach (var dir in sorted)
+        {
+            var group = _groupsByDirectory[dir];
+            var current = DirectoryGroups.IndexOf(group);
+            if (current != target) DirectoryGroups.Move(current, target);
+            target++;
         }
     }
 
@@ -646,10 +739,8 @@ public sealed partial class ChatStore : IDisposable
     public void RefreshBranches()
     {
         if (_client is null) return;
-        var directories = DirectoryGroups
-            .Select(g => g.Directory)
+        var directories = _groupsByDirectory.Keys
             .Where(d => d.Length > 0 && d != "(unknown)")
-            .Distinct()
             .ToList();
         if (directories.Count == 0) return;
         _ = RefreshBranchesCoreAsync(directories);
@@ -662,9 +753,8 @@ public sealed partial class ChatStore : IDisposable
             try
             {
                 var branch = await _client.GetBranchAsync(directory);
-                _directoryBranches[directory] = branch ?? "";
-                var group = DirectoryGroups.FirstOrDefault(g => g.Directory == directory);
-                if (group is not null) group.Branch = branch ?? "";
+                if (_groupsByDirectory.TryGetValue(directory, out var group))
+                    group.Branch = branch ?? "";
             }
             catch (Exception ex)
             {
@@ -705,36 +795,53 @@ public sealed partial class ChatStore : IDisposable
 
     /// <summary>
     /// Expands/collapses a sidebar directory group (show all sessions vs. a capped preview).
+    /// The state lives on the group's reactive <c>IsExpanded</c>, which survives reconciles
+    /// because group instances are reused.
     /// </summary>
     public void ToggleDirectoryExpanded(string directory)
     {
-        var expanded = !_directoryExpanded.GetValueOrDefault(directory);
-        _directoryExpanded[directory] = expanded;
-        var group = DirectoryGroups.FirstOrDefault(g => g.Directory == directory);
-        if (group is not null) group.IsExpanded = expanded;
+        if (_groupsByDirectory.TryGetValue(directory, out var group))
+            group.IsExpanded = !group.IsExpanded;
     }
 
     /// <summary>
-    /// Rebuilds <see cref="ActiveSubagents"/> (subagent sessions whose parent is the active
-    /// session) and updates the reactive <see cref="SubagentCount"/>. Subagents are hidden from
-    /// the sidebar, so this collection is the chat page's way to list them.
+    /// Reconciles <see cref="ActiveSubagents"/> (subagent sessions whose parent is the active
+    /// session) in place and updates the reactive <see cref="SubagentCount"/>. Subagents are
+    /// hidden from the sidebar, so this collection is the chat page's way to list them. Items
+    /// are the same persistent SessionInfo instances as <see cref="Sessions"/>, so survivors
+    /// keep their live state; only missing/added/reordered ones change.
     /// </summary>
-    private void RebuildActiveSubagents()
+    private void ReconcileActiveSubagents()
     {
-        ActiveSubagents.Clear();
         var sessionId = Active.SessionId;
-        if (sessionId.Length == 0)
-        {
-            SubagentCount = 0;
-            return;
-        }
-        foreach (var session in Sessions
-            .Where(s => s.ParentId == sessionId)
-            .OrderByDescending(s => s.Updated))
-        {
-            ActiveSubagents.Add(session);
-        }
+        var desired = sessionId.Length == 0
+            ? new List<SessionInfo>()
+            : Sessions.Where(s => s.ParentId == sessionId).OrderByDescending(s => s.Updated).ToList();
+        ReconcileSessionCollection(ActiveSubagents, desired);
         SubagentCount = ActiveSubagents.Count;
+    }
+
+    /// <summary>
+    /// Reconciles an observable session list in place against the desired (sorted) set, using
+    /// reference identity — the items are shared persistent SessionInfo instances, so surviving
+    /// entries keep their live reactive state. Removes items not in <paramref name="desired"/>,
+    /// inserts new ones, and moves the rest to match <paramref name="desired"/>'s order.
+    /// </summary>
+    private static void ReconcileSessionCollection(ObservableCollection<SessionInfo> items, List<SessionInfo> desired)
+    {
+        for (var i = items.Count - 1; i >= 0; i--)
+        {
+            if (!desired.Contains(items[i])) items.RemoveAt(i);
+        }
+
+        var index = 0;
+        foreach (var session in desired)
+        {
+            var current = items.IndexOf(session);
+            if (current < 0) items.Insert(index, session);
+            else if (current != index) items.Move(current, index);
+            index++;
+        }
     }
 
     /// <summary>
@@ -749,32 +856,27 @@ public sealed partial class ChatStore : IDisposable
         var session = SessionInfoFromJson(info);
         if (session.Id.Length == 0) return;
 
-        var existing = Sessions.FirstOrDefault(s => s.Id == session.Id);
+        var existing = GetSession(session.Id);
         if (existing is not null)
         {
             var directoryChanged = existing.Directory != session.Directory;
-            existing.Title = session.Title;
-            existing.Updated = session.Updated;
-            existing.Agent = session.Agent;
-            if (session.ModelId.Length > 0)
-            {
-                existing.ModelId = session.ModelId;
-                existing.ModelProviderId = session.ModelProviderId;
-                existing.ModelVariant = session.ModelVariant;
-            }
+            ApplySessionUpdate(existing, session);
 
             // Title/Updated/Cost/tokens are QuickMarkup reactive fields on SessionInfo, so
             // mutating them propagates to the sidebar immediately. Only a directory change (which
-            // moves the session between groups) requires rebuilding the sidebar groups.
-            if (directoryChanged) RebuildDirectoryGroups();
-            RebuildActiveSubagents();
+            // moves the session between groups) requires re-grouping the sidebar.
+            if (directoryChanged) ReconcileDirectoryGroups();
+            ReconcileActiveSubagents();
         }
         else
         {
             ApplySessionFlags(session);
             Sessions.Add(session);
-            RebuildDirectoryGroups();
-            RebuildActiveSubagents();
+            _sessionsById[session.Id] = session;
+            // Subagents are kept in Sessions (lookup/unread) but filtered out of the sidebar
+            // groups, so only a new root session needs a directory-group reconcile.
+            if (!session.IsSubagent) ReconcileDirectoryGroups();
+            ReconcileActiveSubagents();
         }
 
         // Keep any cached store (the active one included) in sync: title renames, the subagent
@@ -791,19 +893,15 @@ public sealed partial class ChatStore : IDisposable
         var id = properties.GetStringProperty("sessionID");
         if (id.Length == 0) return;
 
-        var removed = Sessions.FirstOrDefault(s => s.Id == id);
+        var removed = GetSession(id);
         if (removed is null) return;
 
         Sessions.Remove(removed);
-        RebuildDirectoryGroups();
-        RebuildActiveSubagents();
+        _sessionsById.Remove(id);
+        ReconcileDirectoryGroups();
+        ReconcileActiveSubagents();
         RefreshBranches();
-        _sessionStatus.Remove(id);
-        _unread.Remove(id);
-        _sessionOutcome.Remove(id);
-        _pendingQuestions.Remove(id);
-        _pendingPermissions.Remove(id);
-
+        _sessionFlags.Remove(id);
         _sessionStores.Remove(id);
 
         if (id != Active.SessionId) return;
@@ -811,7 +909,7 @@ public sealed partial class ChatStore : IDisposable
         // The active session was deleted; fall back to an empty state.
         Active = NewDraftStore();
         ActiveSessionId = "";
-        RebuildActiveSubagents();
+        ReconcileActiveSubagents();
         ActiveStoreChanged?.Invoke();
         _permissions.Clear();
         ActivePermission = null;
@@ -898,15 +996,15 @@ public sealed partial class ChatStore : IDisposable
         _pendingDirectory = directory;
         Active = NewDraftStore();
         ActiveSessionId = "";
-        RebuildActiveSubagents();
+        ReconcileActiveSubagents();
         ActiveStoreChanged?.Invoke();
         _permissions.Clear();
         ActivePermission = null;
         DismissToast();
-        // Show the picked folder immediately (even with zero sessions — RebuildDirectoryGroups
+        // Show the picked folder immediately (even with zero sessions — ReconcileDirectoryGroups
         // merges opened folders in), then background-refresh so any existing sessions in it are
         // fetched from the server (the default GET /session list excludes other instances).
-        RebuildDirectoryGroups();
+        ReconcileDirectoryGroups();
         _ = RefreshSessionsAsync();
         _ = RefreshMcpStatusAsync();
         return Task.CompletedTask;
@@ -921,7 +1019,7 @@ public sealed partial class ChatStore : IDisposable
     {
         if (sessionId.Length == 0 || sessionId == Active.SessionId) return;
 
-        var known = Sessions.FirstOrDefault(s => s.Id == sessionId);
+        var known = GetSession(sessionId);
         var cached = GetStore(sessionId);
         var store = cached ?? NewCachedStore(sessionId);
 
@@ -934,10 +1032,10 @@ public sealed partial class ChatStore : IDisposable
         if (store.SessionId.Length > 0) store.IsBusy = IsSessionBusy(sessionId);
 
         // Viewing the session now; clear any unread marker for it.
-        _unread[sessionId] = false;
+        Flags(sessionId).Unread = false;
         if (known is not null) known.IsUnread = false;
 
-        RebuildActiveSubagents();
+        ReconcileActiveSubagents();
 
         if (cached is not null)
         {
@@ -1089,7 +1187,7 @@ public sealed partial class ChatStore : IDisposable
                 // update for a turn carries its definitive outcome (error/finish/cost/tokens).
                 if (evt.Properties.TryGetProperty("info", out var info)
                     && info.GetStringProperty("role") == "assistant")
-                    _sessionOutcome[sessionId] = SessionStore.ClassifyMessageOutcome(info);
+                    Flags(sessionId).Outcome = SessionStore.ClassifyMessageOutcome(info);
                 GetStore(sessionId)?.ApplyMessageUpdated(evt.Properties);
                 break;
             }
@@ -1273,8 +1371,9 @@ public sealed partial class ChatStore : IDisposable
         var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length > 0)
         {
-            _sessionStatus[sessionId] = type;
-            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            var flags = Flags(sessionId);
+            flags.Status = type;
+            var item = GetSession(sessionId);
             if (item is not null)
             {
                 item.IsBusy = type != "idle";
@@ -1282,9 +1381,9 @@ public sealed partial class ChatStore : IDisposable
                 // outcome already tracked from the turn's final message.updated.
                 if (type == "idle" && sessionId != Active.SessionId)
                 {
-                    _unread[sessionId] = true;
+                    flags.Unread = true;
                     item.IsUnread = true;
-                    item.Outcome = _sessionOutcome.GetValueOrDefault(sessionId) ?? "";
+                    item.Outcome = flags.Outcome;
                 }
             }
         }
@@ -1302,8 +1401,8 @@ public sealed partial class ChatStore : IDisposable
         var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length > 0)
         {
-            _pendingQuestions[sessionId] = _pendingQuestions.GetValueOrDefault(sessionId) + 1;
-            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            Flags(sessionId).PendingQuestions++;
+            var item = GetSession(sessionId);
             if (item is not null) ApplySessionFlags(item);
         }
 
@@ -1316,9 +1415,9 @@ public sealed partial class ChatStore : IDisposable
     {
         var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length == 0) return;
-        if (_pendingQuestions.TryGetValue(sessionId, out var count) && count > 0)
-            _pendingQuestions[sessionId] = count - 1;
-        var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+        var flags = _sessionFlags.GetValueOrDefault(sessionId);
+        if (flags is not null && flags.PendingQuestions > 0) flags.PendingQuestions--;
+        var item = GetSession(sessionId);
         if (item is not null) ApplySessionFlags(item);
     }
 
@@ -1332,8 +1431,8 @@ public sealed partial class ChatStore : IDisposable
         var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length > 0)
         {
-            _pendingPermissions[sessionId] = _pendingPermissions.GetValueOrDefault(sessionId) + 1;
-            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            Flags(sessionId).PendingPermissions++;
+            var item = GetSession(sessionId);
             if (item is not null) ApplySessionFlags(item);
         }
 
@@ -1348,9 +1447,9 @@ public sealed partial class ChatStore : IDisposable
         var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length > 0)
         {
-            if (_pendingPermissions.TryGetValue(sessionId, out var count) && count > 0)
-                _pendingPermissions[sessionId] = count - 1;
-            var item = Sessions.FirstOrDefault(s => s.Id == sessionId);
+            var flags = _sessionFlags.GetValueOrDefault(sessionId);
+            if (flags is not null && flags.PendingPermissions > 0) flags.PendingPermissions--;
+            var item = GetSession(sessionId);
             if (item is not null) ApplySessionFlags(item);
         }
     }
@@ -1375,7 +1474,7 @@ public sealed partial class ChatStore : IDisposable
         while (current.Length > 0 && guard++ < 64)
         {
             if (current == Active.SessionId) return true;
-            var info = Sessions.FirstOrDefault(s => s.Id == current);
+            var info = GetSession(current);
             current = info?.ParentId ?? "";
         }
         return false;
@@ -1424,7 +1523,7 @@ public sealed partial class ChatStore : IDisposable
         var request = _permissions.FirstOrDefault(p => p.Id == requestId);
         if (request is not null && request.SessionId.Length > 0)
         {
-            var session = Sessions.FirstOrDefault(s => s.Id == request.SessionId);
+            var session = GetSession(request.SessionId);
             if (session is not null && session.Directory.Length > 0) return session.Directory;
         }
         return ActiveDirectory();
@@ -1444,12 +1543,12 @@ public sealed partial class ChatStore : IDisposable
             var root = await _client.GetPendingQuestionsAsync();
             if (root.ValueKind != JsonValueKind.Array) return;
 
-            _pendingQuestions.Clear();
+            foreach (var flags in _sessionFlags.Values) flags.PendingQuestions = 0;
             foreach (var question in root.EnumerateArray())
             {
                 var sessionId = question.GetStringProperty("sessionID");
                 if (sessionId.Length == 0) continue;
-                _pendingQuestions[sessionId] = _pendingQuestions.GetValueOrDefault(sessionId) + 1;
+                Flags(sessionId).PendingQuestions++;
 
                 GetStore(sessionId)?.AttachQuestionRequest(question);
             }
@@ -1476,12 +1575,11 @@ public sealed partial class ChatStore : IDisposable
         {
             var requests = await _client.GetPendingPermissionsAsync(ActiveDirectory());
 
-            _pendingPermissions.Clear();
+            foreach (var flags in _sessionFlags.Values) flags.PendingPermissions = 0;
             foreach (var request in requests)
             {
                 if (request.Id.Length == 0) continue;
-                if (request.SessionId.Length > 0)
-                    _pendingPermissions[request.SessionId] = _pendingPermissions.GetValueOrDefault(request.SessionId) + 1;
+                if (request.SessionId.Length > 0) Flags(request.SessionId).PendingPermissions++;
             }
 
             _permissions.Clear();
@@ -1518,5 +1616,21 @@ public sealed partial class ChatStore : IDisposable
         {
             ConnectionStatus = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>Per-session sidebar state, keyed by session id in <see cref="_sessionFlags"/>.</summary>
+    private sealed class SessionFlags
+    {
+        // Last-known session.status type (null until a status event/poll reports one);
+        // anything other than "idle" is busy.
+        public string? Status;
+        // Client-side "turn finished but not viewed yet".
+        public bool Unread;
+        // How the last finished turn ended: ""/success/error/interrupted.
+        public string Outcome = "";
+        // Pending question.asked not yet replied/rejected.
+        public int PendingQuestions;
+        // Pending permission.asked not yet replied.
+        public int PendingPermissions;
     }
 }
