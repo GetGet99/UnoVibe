@@ -146,24 +146,34 @@ public sealed partial class SessionStore
     /// </summary>
     public string ForkPromptText { get; internal set; } = "";
 
-    public async Task SendAsync(string text)
+    /// <summary>
+    /// Sends the prompt. <paramref name="mode"/> overrides the send-mode setting
+    /// (<see cref="SettingsStore.SendMode"/>) for a one-shot send (used by the busy-state dropdown's
+    /// per-send overrides; it never persists). While a turn is running the effective mode decides:
+    ///   - OnNextToolCall (default): send immediately and let the server serialize — prompt_async
+    ///     stores the message at once and the running session loop picks it up at the next agent
+    ///     step (after the in-flight tool call). Matches the opencode TUI.
+    ///   - Queue: hold the prompt in the client-side queue (EnqueuePrompt) and flush it one at a
+    ///     time when the session goes idle (DrainPendingPromptsAsync).
+    ///   - SendImmediately: interrupt the running turn first (abort), then send — the new prompt
+    ///     becomes the active request instead of waiting for the next agent step. The abort POST
+    ///     returns once the runner is idle, so the following prompt starts a fresh turn. When idle
+    ///     it sends like OnNextToolCall.
+    /// </summary>
+    public async Task SendAsync(string text, SendPromptMode? mode = null)
     {
         try
         {
             if (!await Router.EnsureSessionAsync()) return;
 
-            // The send-mode setting decides what a send does while a turn is running:
-            //  - OnNextToolCall (default): send immediately and let the server serialize —
-            //    prompt_async stores the message at once and the running session loop picks it
-            //    up at the next agent step (after the in-flight tool call). Matches the opencode
-            //    TUI (stream.transport.ts `runPromptTurn` fires promptAsync regardless of busy).
-            //  - Queue: hold the prompt in the client-side queue (EnqueuePrompt) and flush it
-            //    one at a time when the session goes idle (DrainPendingPromptsAsync).
-            if (SettingsStore.SendMode == SendPromptMode.Queue && IsBusy)
+            var effective = mode ?? SettingsStore.SendMode;
+            if (effective == SendPromptMode.Queue && IsBusy)
             {
                 EnqueuePrompt(text);
                 return;
             }
+            if (effective == SendPromptMode.SendImmediately && IsBusy)
+                await InterruptAsync();
             await SendPromptNowAsync(text);
         }
         catch (Exception ex)

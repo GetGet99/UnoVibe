@@ -22,6 +22,7 @@ namespace UnoVibe.Pages;
     string RejectText = "";
     bool EditingTitle = false;
     string TitleEdit = "";
+    string SendMode = "";
     <setup>
         var theme = ThemeBrushes.Global;
         var transparent = new SolidColorBrush(Colors.Transparent);
@@ -326,9 +327,8 @@ namespace UnoVibe.Pages;
                         </Border>
                     if (`Store.Active.IsBusy`)
                         <Button Content="⏹ Stop" @Click+=`await Store.Active.InterruptAsync()` CornerRadius=6 />
-                    <Button @Click+=`await SendAsync()` IsEnabled=`Store.ActivePermission is null`>
-                        <SymbolIcon Symbol=Send VerticalAlignment=Center />
-                    </Button>
+                    <SendMessageButton Mode=`SendMode` IsBusy=`Store.Active.IsBusy` Enabled=`Store.ActivePermission is null`
+                                       SendRequested+=`SendWithMode` />
                 </StackPanel>
             </Grid>
             <StackPanel Grid.Row=5 Orientation=Horizontal Spacing=12 Padding=`new Thickness(16, 0, 16, 10)`>
@@ -396,6 +396,13 @@ public partial class ChatPage : Page
 
         _ = store.ConnectAsync();
 
+        // The busy-state send button's primary action (and menu checkmark) track the configured
+        // send default live, so a change from the Settings page applies immediately. The event may
+        // fire on a background thread (cross-process file watcher), so bounce to the UI thread.
+        _dispatcher = DispatcherQueue.GetForCurrentThread();
+        SendMode = SettingsStore.SendMode.ToString();
+        SettingsStore.Changed += OnSettingsChanged;
+
         // Suggestion sources for the input box. Server-backed providers (commands, skills, files)
         // return empty lists when the server is unreachable or has no data (no mock fallback — the
         // box simply shows nothing); the directory is read fresh on every query so it tracks the
@@ -430,14 +437,20 @@ public partial class ChatPage : Page
         }
     }
 
-    private async Task SendAsync(string? text = null)
+    private async Task SendAsync(string? text = null, SendPromptMode? mode = null)
     {
         var content = (text ?? Input).Trim();
         if (content.Length == 0 && Store.Active.PendingImages.Count == 0) return;
         Input = "";
-        await Store.Active.SendAsync(content);
+        await Store.Active.SendAsync(content, mode);
         ForceScrollToBottom();
     }
+
+    /// <summary>
+    /// Sends with an explicit mode (the busy-state split button's primary action or a one-shot
+    /// dropdown override) instead of the configured default.
+    /// </summary>
+    private async Task SendWithMode(SendPromptMode mode) => await SendAsync(mode: mode);
 
     /// <summary>Enter was pressed in the input box with the suggestion flyout closed — send the message.</summary>
     private async Task OnSubmitRequested(SuggestBox sender, string text)
@@ -493,6 +506,14 @@ public partial class ChatPage : Page
     /// handler (and part hooks) to the newly-active store's collection.
     /// </summary>
     private SessionStore? _hookedStore;
+
+    /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
+    private DispatcherQueue? _dispatcher;
+
+    private void OnSettingsChanged()
+    {
+        _ = _dispatcher?.TryEnqueue(() => SendMode = SettingsStore.SendMode.ToString());
+    }
 
     private void HookActiveStore()
     {

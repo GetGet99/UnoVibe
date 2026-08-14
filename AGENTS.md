@@ -157,6 +157,7 @@ the user is talking to this opencode session **through the running UnoVibe app**
 - `UnoVibe/Controls/` — reusable UI: `SessionSidebar`, `MessageView`,
   `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
   `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`),
+  `SendMessageButton` (send button: plain when idle, split button with mode menu while busy; see "Send while busy"),
   `ToolViews/*` (ToolView* render opencode tool calls).
 - `UnoVibe/Services/` — core logic:
   - `OpencodeClient.cs` — minimal HTTP client for the opencode REST API; Basic-auth capable.
@@ -521,8 +522,22 @@ a send does while a turn is running:
   one at a time when the session goes idle (`OnTurnCompleted` / `ApplySessionStatus`). The queue is
   per-`SessionStore` (so per cached session) and survives session switches; queued prompts drain in
   the background when that session idles.
+- **Send immediately**: `SessionStore.SendAsync` interrupts the running turn first
+  (`InterruptAsync` → `POST /session/:id/abort`) then fires `prompt_async`, so the new message
+  becomes the active request instead of waiting for the next agent step. The abort POST returns once
+  the runner is idle, so the following prompt starts a fresh turn. When idle it sends like
+  "On next tool call". (Verified sound against the server: `prompt` → `createUserMessage` then
+  `loop` → `Runner.ensureRunning`, which starts a fresh run from `Idle`; the TUI/web have no
+  interrupt+send flow — this is UnoVibe-only.)
 
-A future "send immediately" mode is anticipated; `SendPromptMode` is an enum so a third value slots in.
+**Busy-state send button:** while a turn runs, the composer's send button becomes a `SplitButton`
+(`Controls/SendModeButton.cs`) — the primary click sends with the configured `SendMode`, and the
+chevron opens a `MenuFlyout` of the three modes as **one-time overrides** (they never change the
+`send.mode` setting; the primary stays the configured default). The menu checkmark + the button
+tooltip track the setting live: `ChatPage` keeps the reactive `SendMode` ref synced via
+`SettingsStore.Changed` (bounced to the UI thread) and passes it as the component's `Mode` prop;
+the component reads `SettingsStore.SendMode` fresh for the primary click. When idle the send button
+is a plain button that sends immediately.
 
 ### Settings
 

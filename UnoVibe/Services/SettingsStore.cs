@@ -15,6 +15,11 @@ public enum SendPromptMode
     /// <c>EnqueuePrompt</c>/<c>DrainPendingPromptsAsync</c>) and flush them one at a time when the
     /// session goes idle.</summary>
     Queue,
+
+    /// <summary>Interrupt the running turn (abort) first, then send the prompt — the new message
+    /// becomes the active request instead of waiting for the next agent step. When idle it sends
+    /// like <see cref="OnNextToolCall"/>.</summary>
+    SendImmediately,
 }
 
 /// <summary>The UI kinds a setting can have (values of <see cref="SettingSpec.Kind"/>); the settings
@@ -85,12 +90,13 @@ public static class SettingsStore
         new(
             SendModeKey,
             "Send message default",
-            "What sending a message does while a turn is already running. \"On next tool call\" sends immediately and lets the server order it; \"Queue\" holds it until the session is idle.",
+            "What sending a message does while a turn is already running. \"On next tool call\" sends immediately and lets the server order it; \"Queue\" holds it until the session is idle; \"Send immediately\" interrupts the running turn and sends right away. This is the split send-button's primary action while busy; its dropdown offers one-time overrides.",
             SettingKinds.Choice,
             new SettingOption[]
             {
                 new("OnNextToolCall", "On next tool call"),
                 new("Queue", "Queue until idle"),
+                new("SendImmediately", "Send immediately"),
             }),
     };
 
