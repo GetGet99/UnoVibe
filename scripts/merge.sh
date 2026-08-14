@@ -19,7 +19,8 @@ set -euo pipefail
 #   5. If the rebase is clean, squash all the branch's commits into one commit on
 #      develop, doing the checkout/merge/commit/push in the worktree that owns
 #      'develop' (a failed push is a warning, not an error; use --no-push to
-#      merge locally only).
+#      merge locally only). The feature branch is then realigned to develop
+#      (git reset develop) so it is not left diverged.
 #
 # Usage: scripts/merge.sh ["message"] [--no-push]
 #   An optional single message sets the squash commit subject (default: built
@@ -164,6 +165,11 @@ else
   git checkout -q "$current_branch"
 fi
 
+# Realign the feature branch with the merged develop so it isn't left diverged
+# (the squash landed develop's tree identical to the branch's, so a plain reset
+# only moves the pointer — the working tree is untouched).
+git reset "$DEVELOP"
+
 echo "Squashed $to_merge commit(s) onto $DEVELOP."
 if [[ "$PUSH" -eq 1 ]]; then
   if [[ -n "$dev_wt" ]]; then
@@ -184,8 +190,8 @@ else
 fi
 
 if [[ -n "$dev_wt" ]]; then
-  echo "Done. You are on '$current_branch' (the '$DEVELOP' worktree was updated: $dev_wt)."
+  echo "Done. You are on '$current_branch', realigned to $DEVELOP (the '$DEVELOP' worktree was updated: $dev_wt)."
 else
-  echo "Done. You are back on '$current_branch' (committed onto local '$DEVELOP')."
+  echo "Done. You are back on '$current_branch', realigned to $DEVELOP (committed onto local '$DEVELOP')."
 fi
 echo "Delete the feature branch with: git branch -D $current_branch"
