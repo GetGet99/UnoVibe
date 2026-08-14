@@ -20,13 +20,33 @@ set -euo pipefail
 #      develop, doing the checkout/merge/commit/push in the worktree that owns
 #      'develop' (a failed push is a warning, not an error; use --no-push to
 #      merge locally only).
+#
+# Usage: scripts/merge.sh ["message"] [--no-push]
+#   An optional single message sets the squash commit subject (default: built
+#   from the branch's commit subjects). --no-push may appear in any position.
 
 DEVELOP="develop"
 
+MESSAGE=""
 PUSH=1
-if [[ "${1:-}" == "--no-push" ]]; then
-  PUSH=0
-fi
+for arg in "$@"; do
+  case "$arg" in
+    --no-push)
+      PUSH=0
+      ;;
+    --help|-h)
+      echo "Usage: scripts/merge.sh [\"message\"] [--no-push]" >&2
+      exit 0
+      ;;
+    --*)
+      echo "Error: unknown argument '$arg' (expected an optional message and/or --no-push)" >&2
+      exit 1
+      ;;
+    *)
+      MESSAGE="$arg"
+      ;;
+  esac
+done
 
 # --- Prechecks ---
 current_branch=$(git branch --show-current)
@@ -111,16 +131,20 @@ if [[ "$to_merge" -eq 0 ]]; then
   exit 0
 fi
 
-# --- Build squash commit message from the feature branch commits ---
-lines=$(git log --format='%s' --reverse "$DEVELOP..$current_branch")
-subject=$(echo "$lines" | head -1)
-rest=$(echo "$lines" | tail -n +2)
-if [[ -n "$rest" ]]; then
-  msg="$subject
+# --- Build squash commit message ---
+if [[ -n "$MESSAGE" ]]; then
+  msg="$MESSAGE"
+else
+  lines=$(git log --format='%s' --reverse "$DEVELOP..$current_branch")
+  subject=$(echo "$lines" | head -1)
+  rest=$(echo "$lines" | tail -n +2)
+  if [[ -n "$rest" ]]; then
+    msg="$subject
 
 $rest"
-else
-  msg="$subject"
+  else
+    msg="$subject"
+  fi
 fi
 
 # --- Squash-merge into develop (in the worktree that owns it) ---
