@@ -400,8 +400,14 @@ catch sessions already busy before the SSE stream attached (the server only emit
 transitions).
 
 Unread (`SessionInfo.IsUnread`, a client-side concept — the server has no read/unread tracking) is
-set when a *background* session's turn completes (`session.status` → idle while not active) and
-cleared when the session is opened. The turn outcome (`SessionInfo.Outcome`:
+set when a *background* session's turn completes (`session.status` → idle while not active). The
+value is deliberately **kept** when the session is opened — viewing sets the separate `IsRead` flag
+(`SessionInfo.IsRead` / `SessionFlags.Read`), which merely *suppresses* the indicator, so the sidebar
+context menu can re-show it without losing state. **Right-clicking a sidebar session** opens a
+`ContextFlyout` `MenuFlyout` with **Mark as unread / Mark as read**
+(`ChatStore.SetSessionRead`, which also asserts `IsUnread` on mark-as-unread so the dot shows even
+for a session with no finished turn). A new background completion clears `Read` again so the
+indicator reappears. The turn outcome (`SessionInfo.Outcome`:
 `success`/`error`/`interrupted`) is derived client-side from the background session's last assistant
 `message.updated` `info.error` (`MessageAbortedError` → interrupted, any other error → error,
 none → success; mirrors the web client's `rows.ts` logic) and drives the sidebar icon (✓/✕/■)

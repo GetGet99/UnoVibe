@@ -55,7 +55,13 @@ namespace UnoVibe.Controls;
                             }
                             foreach (var s in `group.IsExpanded ? group.Sessions.Reactive : group.Sessions.Reactive.Take(MaxVisibleSessions)`; `s.Id`)
                             {
-                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent`>
+                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent` ContextFlyout=sessionMenu = <MenuFlyout Placement=BottomEdgeAlignedRight>
+                                        if (`s.IsRead`) {
+                                            <MenuFlyoutItem Text="Mark as unread" CommandParameter=`s.Id` Click+=`(sender, e) => OnMarkUnread(sender, e)` />
+                                        } else {
+                                            <MenuFlyoutItem Text="Mark as read" CommandParameter=`s.Id` Click+=`(sender, e) => OnMarkRead(sender, e)` />
+                                        }
+                                    </MenuFlyout>>
                                     <Grid ColumnDefinitions=<>
                                         <ColumnDefinition Width=Auto />
                                         <ColumnDefinition />
@@ -64,9 +70,9 @@ namespace UnoVibe.Controls;
                                         <Grid Width=14 Margin=`new Thickness(0, 0, 6, 0)` VerticalAlignment=Center>
                                             <AppSymbolIcon Symbol=`AttentionSymbol(s)` FontSize=10 Foreground=`theme.SystemAttention` Visibility=`s.NeedsAttention ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
                                             <ProgressRing Width=12 Height=12 IsActive=`s.IsBusy` Visibility=`!s.NeedsAttention && s.IsBusy ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <AppSymbolIcon Symbol=`OutcomeSymbol(s)` FontSize=10 Foreground=`OutcomeBrush(s)` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsBusy && s.Outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <Border Width=6 Height=6 CornerRadius=`new CornerRadius(3)` Background=`theme.SystemAttention` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsBusy && s.Outcome.Length == 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <AppSymbolIcon Symbol=Message FontSize=10 Foreground=`theme.TertiaryText` Visibility=`!s.NeedsAttention && !s.IsBusy && !s.IsUnread ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <AppSymbolIcon Symbol=`OutcomeSymbol(s)` FontSize=10 Foreground=`OutcomeBrush(s)` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsRead && !s.IsBusy && s.Outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <Border Width=6 Height=6 CornerRadius=`new CornerRadius(3)` Background=`theme.SystemAttention` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsRead && !s.IsBusy && s.Outcome.Length == 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
+                                            <AppSymbolIcon Symbol=Message FontSize=10 Foreground=`theme.TertiaryText` Visibility=`!s.NeedsAttention && !s.IsBusy && (s.IsRead || !s.IsUnread) ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
                                         </Grid>
                                         <TextBlock Grid.Column=1 Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                         <TextBlock Grid.Column=2 Text=`s.TimeLabel` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
@@ -202,6 +208,22 @@ public partial class SessionSidebar : IQuickMarkupComponent
         if ((sender as Button)?.CommandParameter is not string id) return;
         if (id == Store.CurrentSessionId) return;
         _ = Store.SwitchSessionAsync(id);
+    }
+
+    /// <summary>
+    /// Right-click context-menu actions: "Mark as unread" / "Mark as read". The session id is
+    /// carried by the <see cref="MenuFlyoutItem.CommandParameter"/> and resolved from the sender.
+    /// </summary>
+    private void OnMarkUnread(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.CommandParameter is not string id) return;
+        Store.SetSessionRead(id, read: false);
+    }
+
+    private void OnMarkRead(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.CommandParameter is not string id) return;
+        Store.SetSessionRead(id, read: true);
     }
 
     private void OnToggleShowMore(object sender, RoutedEventArgs e)

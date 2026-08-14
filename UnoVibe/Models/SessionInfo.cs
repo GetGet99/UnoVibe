@@ -28,8 +28,14 @@ namespace UnoVibe.Models;
     public string TimeLabel => `FormatTimeLabel(Updated)`;
     // Server-driven: a turn is in progress (session.status busy/retry). Drives the sidebar spinner.
     public bool IsBusy;
-    // Client-side: a turn finished in a session we haven't viewed since. Drives the sidebar unread indicator.
+    // Client-side: a turn finished in a session whose result we haven't acknowledged yet. This is
+    // the underlying "value" — it is NOT deleted when the session is viewed (IsRead just suppresses
+    // the indicator), so the sidebar context menu can re-flag it as unread later.
     public bool IsUnread;
+    // Client-side: set when the session is viewed or explicitly marked read. When true it suppresses
+    // the unread indicator (outcome check mark / dot) even though IsUnread still holds the value.
+    // Toggled by the sidebar context menu ("Mark as unread" / "Mark as read").
+    public bool IsRead = true;
     // Client-side: how the last finished turn ended, one of "" (unknown), "success", "error", "interrupted".
     // Derived from the last assistant message's info.error/finish; selects the sidebar icon + color.
     public string Outcome = "";
