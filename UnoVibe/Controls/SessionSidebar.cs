@@ -37,14 +37,14 @@ namespace UnoVibe.Controls;
                                 <ColumnDefinition />
                                 <ColumnDefinition Width=Auto />
                             </> ColumnSpacing=4>
-                                <StackPanel Orientation=Horizontal>
+                                <StackPanel Orientation=Horizontal Spacing=4>
                                     <TextBlock Text=`DisplayPath(group.Directory)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                     if (`group.Branch.Length > 0`)
                                     {
                                         <TextBlock Text=`$"⎇ {group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                     }
                                 </StackPanel>
-                                <StackPanel Orientation=Horizontal Grid.Column=1>
+                                <StackPanel Orientation=Horizontal Grid.Column=1 Spacing=4>
                                     <Button Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in VS Code" Click+=`(sender, e) => OnOpenInVSCode(sender, e)`>
                                         <AppSymbolIcon Symbol=`Symbol.Code` FontSize=11 />
                                     </Button>
