@@ -44,20 +44,10 @@ namespace UnoVibe.Controls;
                                         <TextBlock Text=`$"⎇ {group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                     }
                                 </StackPanel>
-                                <StackPanel Orientation=Horizontal Grid.Column=1 Spacing=4>
-                                    <Button Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in VS Code" Click+=`(sender, e) => OnOpenInVSCode(sender, e)`>
-                                        <AppSymbolIcon Symbol=`Symbol.Code` FontSize=11 />
-                                    </Button>
-                                    // <Button Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in file manager" Click+=`(sender, e) => OnOpenInFileManager(sender, e)`>
-                                    //     <AppSymbolIcon Symbol=OpenLocal FontSize=11 />
-                                    // </Button>
-                                    <Button Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` ToolTipService.ToolTip="Open folder in terminal" Click+=`(sender, e) => OnOpenInTerminal(sender, e)`>
-                                        <AppSymbolIcon Symbol=`Symbol.Terminal` FontSize=11 />
-                                    </Button>
-                                    <Button Padding=`new Thickness(6, 4, 6, 4)` CommandParameter=`group.Directory` Click+=`(sender, e) => OnNewSession(sender, e)`>
-                                        <AppSymbolIcon Symbol=Add FontSize=11 />
-                                    </Button>
-                                </StackPanel>
+                                // TODO: When attached property support falling back to element properly, do that instead of wrapping in Grid.
+                                <Grid Grid.Column=1 VerticalAlignment=Center>
+                                    <FolderActions Directory=`group.Directory` />
+                                </Grid>
                             </Grid>
                             if (`group.Sessions.Reactive.Count == 0`)
                             {
@@ -210,36 +200,10 @@ public partial class SessionSidebar : IQuickMarkupComponent
         _ = Store.SwitchSessionAsync(id);
     }
 
-    private void OnNewSession(object sender, RoutedEventArgs e)
-    {
-        var directory = (sender as Button)?.CommandParameter as string;
-        _ = Store.NewSessionAsync(directory);
-    }
-
     private void OnToggleShowMore(object sender, RoutedEventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not string directory) return;
         Store.ToggleDirectoryExpanded(directory);
-    }
-
-    private void OnOpenInVSCode(object sender, RoutedEventArgs e) => RunFolderAction(sender, FolderLauncher.OpenInVSCode);
-
-    private void OnOpenInFileManager(object sender, RoutedEventArgs e) => RunFolderAction(sender, FolderLauncher.OpenInFileManager);
-
-    private void OnOpenInTerminal(object sender, RoutedEventArgs e) => RunFolderAction(sender, FolderLauncher.OpenInTerminal);
-
-    /// <summary>Runs a folder-launch action for the clicked group's directory, surfacing failures as a toast.</summary>
-    private void RunFolderAction(object sender, Func<string, string?> action)
-    {
-        if ((sender as Button)?.CommandParameter is not string directory) return;
-        var error = action(directory);
-        if (error is null) return;
-        Store.ShowToast(new ToastItem
-        {
-            Title = "Open folder",
-            Message = error,
-            Variant = "error",
-        });
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e) => _ = OpenFolderAndStartSessionAsync();

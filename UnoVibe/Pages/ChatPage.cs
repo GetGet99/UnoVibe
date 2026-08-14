@@ -66,10 +66,11 @@ namespace UnoVibe.Pages;
                     }
                 </StackPanel>
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=4 VerticalAlignment=Center>
-                    <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8,  2, 8,  2)` CornerRadius=6 VerticalAlignment=Center
+                    <FolderActions Directory=`Store.ActiveDirectory()` ShowFileManager=true ShowNewSession=false />
+                    <Button Padding=`new Thickness(6,  4, 6,  4)` VerticalAlignment=Center
                             ToolTipService.ToolTip="Fork full session"
                             IsEnabled=`Store.ActiveSessionId.Length > 0` @Click+=`await Store.ForkFullSessionAsync()`>
-                        <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=14 />
+                        <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=11 />
                     </Button>
                 <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(8,  2, 8,  2)` CornerRadius=6 VerticalAlignment=Center
                         ToolTipService.ToolTip="Session stats"
