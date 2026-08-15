@@ -29,7 +29,7 @@ namespace UnoVibe.Pages.Connect;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
-    <root>
+    <Page>
         <Grid RowDefinitions=<>
             <RowDefinition />
             <RowDefinition Height=Auto />
@@ -64,26 +64,25 @@ namespace UnoVibe.Pages.Connect;
                 </StackPanel>
             </ScrollViewer>
         </Grid>
-    </root>
+    </Page>
     """)]
-public partial class ConnectPage : Page
+public partial class ConnectPage : IQuickMarkupComponent<Page>
 {
     /// <summary>Owning window; set by the consumer before Init so it's ready for use.</summary>
-    public WindowController Controller { get; set; } = null!;
+    public WindowController Controller { get; private set; } = null!;
 
-    /// <summary>
+    /// <param name="startup">
     /// Command-line launch target (set by the consumer before the constructor method runs).
     /// When present, the page immediately runs the folder/serve or server connect flow and
     /// navigates to the main chat page on success — the VSCode-style `UnoVibe /path` open.
-    /// </summary>
-    public StartupArgs? Startup { get; set; }
-
+    /// </param>
     [QuickMarkupConstructor]
-    private void Ctor()
+    private void Ctor(WindowController controller, StartupArgs? startup)
     {
+        Controller = controller;
         RecentConnectionsStore.Load();
         SettingsStore.Load();
-        Init();
+        Init(controller, startup);
 
         // Restore the persisted folder-security settings (the source of truth for folder passwords).
         // A previously-confirmed custom password also pre-fills the confirm box so the stored value
@@ -102,10 +101,8 @@ public partial class ConnectPage : Page
         // Pre-fill the server password box from the standard environment variable.
         ServerPassword = Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar) ?? "";
 
-        if (Startup is { Kind: not LaunchKind.None })
+        if (startup is { Kind: not LaunchKind.None })
         {
-            var startup = Startup;
-            Startup = null;
             _ = RunStartupAsync(startup);
         }
     }
@@ -330,7 +327,7 @@ public partial class ConnectPage : Page
             PrimaryButtonText = "Connect",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
+            XamlRoot = MarkupNode.XamlRoot,
         };
         var result = await dialog.ShowAsync();
         if (result != ContentDialogResult.Primary) return null;

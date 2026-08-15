@@ -18,22 +18,14 @@ public sealed class WindowController
 
     public void ShowConnect(StartupArgs? startup = null)
     {
-        Window.Child = new ConnectPage(x =>
-        {
-            x.Controller = this;
-            x.Startup = startup;
-        });
+        Window.Child = new ConnectPage(this, startup).MarkupNode;
         Window.Title = "UnoVibe - Welcome";
     }
 
     public void ShowMain()
     {
         var label = Store.DisplayLabel;
-        Window.Child = new MainPage(x =>
-        {
-            x.ProvideStore(Store);
-            x.ProvideWindow(Window);
-        });
+        Window.Child = new MainPage(Store, Window).MarkupNode;
         Window.Title = string.IsNullOrEmpty(label) ? "UnoVibe" : $"UnoVibe - {label}";
     }
 }

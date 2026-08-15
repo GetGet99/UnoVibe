@@ -28,9 +28,11 @@ namespace UnoVibe.Pages.Main;
     Visibility SidebarVisibility => `!IsCompact || IsSidebarView ? Visibility.Visible : Visibility.Collapsed`;
     Visibility ChatVisibility => `!IsCompact || !IsSidebarView ? Visibility.Visible : Visibility.Collapsed`;
     <setup>
+        Store = store;
+        HostWindow = hostWindow;
         var theme = ThemeBrushes.Global;
     </setup>
-    <root>
+    <Page SizeChanged+=`OnRootSizeChanged`>
         <Grid>
             <Grid ColumnDefinitions=<>
                 <ColumnDefinition Width=`SidebarColumnWidth` />
@@ -72,19 +74,15 @@ namespace UnoVibe.Pages.Main;
                 </Grid>
             }
         </Grid>
-    </root>
+    </Page>
     """)]
-public partial class MainPage : Page
+public partial class MainPage : IQuickMarkupComponent<Page>
 {
     /// <summary>Viewport width (in pixels) below which the root switches to the compact small-screen layout.</summary>
     private const double CompactBreakpoint = 820;
 
     [QuickMarkupConstructor]
-    private void Ctor()
-    {
-        Init();
-        SizeChanged += OnRootSizeChanged;
-    }
+    private void Ctor(ChatStore store, Window hostWindow) => Init(store, hostWindow);
 
     /// <summary>Re-fits the root for the current window width: on small screens the sidebar and
     /// chat become a single full-width view (flag <c>IsSidebarView</c> picks which), while wide
@@ -99,11 +97,6 @@ public partial class MainPage : Page
             IsSidebarView = false;
         }
     }
-
-    public void ProvideStore(ChatStore store) => Store = store;
-
-    /// <summary>Host window of this page, used to init WinRT pickers/dialogs with an HWND.</summary>
-    public void ProvideWindow(Window window) => HostWindow = window;
 
     private static Brush? ToastAccent(ToastItem? toast) => toast?.Variant switch
     {
