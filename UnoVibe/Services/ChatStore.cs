@@ -76,7 +76,7 @@ public sealed partial class ChatStore : IDisposable
     public OpencodeClient? Client => _client;
 
     /// <summary>Owns any locally-launched <c>opencode serve</c> process so it stays alive after navigation.</summary>
-    public ServeProcess? ServeProcess { get; private set; }
+    public OpencodeServeProcess? ServeProcess { get; private set; }
 
     private OpencodeClient _client = null!;
     private readonly Channel<OpencodeEvent> _events = Channel.CreateUnbounded<OpencodeEvent>();
@@ -224,7 +224,7 @@ public sealed partial class ChatStore : IDisposable
     /// <summary>
     /// Takes ownership of a locally-launched serve process. Disposes any previous one.
     /// </summary>
-    public void AttachServeProcess(ServeProcess serve)
+    public void AttachServeProcess(OpencodeServeProcess serve)
     {
         var old = ServeProcess;
         ServeProcess = serve;

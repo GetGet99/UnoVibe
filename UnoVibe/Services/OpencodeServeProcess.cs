@@ -16,7 +16,7 @@ namespace UnoVibe.Services;
 /// <see cref="OpencodeClient.PasswordEnvVar"/> environment variable so only this
 /// app can talk to it.
 /// </summary>
-public sealed class ServeProcess : IDisposable
+public sealed class OpencodeServeProcess : IDisposable
 {
     private const string PasswordChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+[]{};:,.?";
     private Process? _process;
@@ -41,7 +41,7 @@ public sealed class ServeProcess : IDisposable
         return port;
     }
 
-    public ServeProcess(string? password = null)
+    public OpencodeServeProcess(string? password = null)
     {
         // null → generate a strong password; "" → no password (unsecured server);
         // otherwise use the caller-supplied password.
@@ -51,9 +51,11 @@ public sealed class ServeProcess : IDisposable
     /// <summary>Cryptographically-random password that is hard to guess.</summary>
     public static string GeneratePassword(int length = 32)
     {
-        var bytes = RandomNumberGenerator.GetBytes(length);
         var chars = new char[length];
-        for (var i = 0; i < length; i++) chars[i] = PasswordChars[bytes[i] % PasswordChars.Length];
+
+        for (var i = 0; i < length; i++)
+            chars[i] = PasswordChars[RandomNumberGenerator.GetInt32(PasswordChars.Length)];
+
         return new string(chars);
     }
 
@@ -66,7 +68,7 @@ public sealed class ServeProcess : IDisposable
         var port = FindFreePort();
         var startInfo = new ProcessStartInfo
         {
-            FileName = "opencode",
+            FileName = OpencodeExecutable,
             Arguments = $"serve --port {port}",
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
@@ -109,7 +111,7 @@ public sealed class ServeProcess : IDisposable
                     return BaseUrl;
                 }
             }
-            catch (Exception)
+            catch (HttpRequestException)
             {
                 // Server not up yet.
             }
@@ -143,4 +145,72 @@ public sealed class ServeProcess : IDisposable
         _process.Dispose();
         _process = null;
     }
+    static string? OpencodeExecutable => field ??= FindExecutable("opencode");
+    static string? FindExecutable(string name)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(path))
+            return null;
+
+        foreach (var directory in path.Split(Path.PathSeparator))
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+                continue;
+
+            var candidate = Path.Combine(directory, name);
+
+            if (OperatingSystem.IsWindows())
+            {
+                if (!Path.HasExtension(candidate))
+                {
+                    var exe = candidate + ".exe";
+                    if (File.Exists(exe))
+                        return Path.GetFullPath(exe);
+                }
+            }
+
+            if (File.Exists(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        return null;
+    }
+
+    static Lazy<Task<OpencodeExecutableStatus>> executableStatus => field ??= new(GetExecutableStatusPrivate);
+    public static Task<OpencodeExecutableStatus> GetExecutableStatus() => executableStatus.Value;
+    public static Version RequiredOpencodeVersion => field ??= Version.Parse("1.17.18");
+    static async Task<OpencodeExecutableStatus> GetExecutableStatusPrivate()
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = OpencodeExecutable,
+            Arguments = $"--version",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        var process = Process.Start(startInfo);
+        if (process is null)
+            return OpencodeExecutableStatus.NotAvaliable;
+        await process.WaitForExitAsync();
+        if (process.ExitCode is not 0)
+            return OpencodeExecutableStatus.NotAvaliable;
+        var version = await process.StandardOutput.ReadToEndAsync();
+        if (Version.TryParse(version, out var v))
+        {
+            if (v >= RequiredOpencodeVersion)
+                return OpencodeExecutableStatus.Avaliable;
+            else
+                return OpencodeExecutableStatus.MayNeedUpgrade;
+        }
+        return OpencodeExecutableStatus.NotAvaliable;
+    } 
+}
+
+public enum OpencodeExecutableStatus
+{
+    NotAvaliable,
+    MayNeedUpgrade,
+    Avaliable
 }

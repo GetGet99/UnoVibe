@@ -16,6 +16,7 @@ namespace UnoVibe.Pages.Connect;
 /// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
+    using UnoVibe.Services;
     provide bool Connecting = false;
     provide bool ShowConnectForm = false;
     provide string Url = "";
@@ -47,10 +48,10 @@ namespace UnoVibe.Pages.Connect;
 
                     <Grid RowDefinitions=<>
                         <RowDefinition />
-                        <RowDefinition Height=`IsCompact ? GridLength.Auto : new GridLength(0)` />
+                        if (`IsCompact`) <RowDefinition Height=`GridLength.Auto` />
                     </> ColumnDefinitions=<>
-                        <ColumnDefinition Width=`IsCompact ? new GridLength(1, GridUnitType.Star) : new GridLength(1.4, GridUnitType.Star)` />
-                        <ColumnDefinition Width=`IsCompact ? new GridLength(0) : new GridLength(1, GridUnitType.Star)` />
+                        <ColumnDefinition Width=`new GridLength(1.4, GridUnitType.Star)` />
+                        if (`!IsCompact`) <ColumnDefinition Width=`new GridLength(1, GridUnitType.Star)` />
                     </> ColumnSpacing=16 RowSpacing=`IsCompact ? 16 : 0`>
                         <Grid Grid.Row=0 Grid.Column=0>
                             <RecentListPanel OpenRecentRequested+=`OnOpenRecent` RemoveRecentRequested+=`OnRemoveRecent` />
@@ -59,8 +60,22 @@ namespace UnoVibe.Pages.Connect;
                             <ConnectPanel OpenFolderRequested+=`PickFolderAsync` ConnectToUrlRequested+=`ConnectToUrlAsync` />
                         </Grid>
                     </Grid>
-
                     <TextBlock Text="Tip: launch with a folder path or server URL to open it directly, e.g. `UnoVibe ~/project` or `UnoVibe http://localhost:4096`." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+
+                    await `OpencodeServeProcess.GetExecutableStatus()`
+                    with {
+                        <TextBlock Text="Checking OpenCode executable status..." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                    }
+                    catch (err) {
+                        <TextBlock Text=`$"Error while checking OpenCode executable status {err}"` FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                    }
+                    then (result) {
+                        if (`result is OpencodeExecutableStatus.NotAvaliable`) {
+                            <TextBlock Text="Opencode is not avaliable or not installed.\nYou can still use UnoVibe to connect to hosted Opencode server." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                        } else if (`result is OpencodeExecutableStatus.MayNeedUpgrade`) {
+                            <TextBlock Text=`"Installed Opencode may not be supported. This version of UnoVibe is tested with Opencode {OpencodeServeProcess.RequiredOpencodeVersion}.\nYou can still use UnoVibe to connect to hosted Opencode server."` FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                        }
+                    }
                 </StackPanel>
             </ScrollViewer>
         </Grid>
@@ -226,7 +241,7 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
         Connecting = true;
         Status = "Starting opencode serve...";
 
-        var serve = new ServeProcess(password);
+        var serve = new OpencodeServeProcess(password);
         var result = await serve.StartAsync(folder);
         if (!result.StartsWith("http://"))
         {
