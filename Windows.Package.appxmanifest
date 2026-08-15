@@ -9,13 +9,14 @@
   <Identity
     Name="3749Get.UnoVibe"
     Publisher="CN=95122495-0FC5-4CBE-B461-D28358AFE57A"
+    PublisherDisplayName="Get"
     Version="0.1.5.0" />
 
   <Properties>
     <DisplayName>UnoVibe</DisplayName>
     <PublisherDisplayName>UnoVibe</PublisherDisplayName>
     <Description>A vibecoding frontend application.</Description>
-    <Logo>Assets\Icons\StoreLogo.png</Logo>
+    <Logo>Assets\Icons\iconLogo.png</Logo>
   </Properties>
 
   <Dependencies>
@@ -42,7 +43,7 @@
 			  BackgroundColor="transparent"
         Square44x44Logo="Assets\Icons\iconLogo.png"
         Square150x150Logo="Assets\Icons\iconLogo.png">
-				<uap:DefaultTile Wide310x150Logo="Assets\iconWideTile.scale-100.png"  Square71x71Logo="Assets\Icons\iconLargeTile.scale-100.png" Square310x310Logo="Assets\Icons\iconLargeTile.scale-100.png"/>
+				<uap:DefaultTile Wide310x150Logo="Assets\iconWideTile.png"  Square71x71Logo="Assets\Icons\iconLargeTile.png" Square310x310Logo="Assets\Icons\iconLargeTile.png"/>
 				<uap:SplashScreen Image="Assets\Icons\iconLogo.png" />
       </uap:VisualElements>
 
