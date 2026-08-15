@@ -35,6 +35,9 @@ public class MicaWindow : Window
 
     private void ApplyBackground()
     {
+#if WASDK
+        AppWindow.TitleBar.PreferredTheme = Microsoft.UI.Windowing.TitleBarTheme.UseDefaultAppMode;
+#endif
         if (Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported())
         {
             try

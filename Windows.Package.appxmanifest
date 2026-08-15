@@ -41,10 +41,8 @@
         Description="A vibecoding frontend application."
 			  BackgroundColor="transparent"
         Square44x44Logo="Assets\Icons\iconLogo.png"
-        Square150x150Logo="Assets\Icons\iconLogo.png">
-				<uap:DefaultTile Wide310x150Logo="Assets\iconWideTile.png"  Square71x71Logo="Assets\Icons\iconLargeTile.png" Square310x310Logo="Assets\Icons\iconLargeTile.png"/>
-				<uap:SplashScreen Image="Assets\Icons\iconLogo.png" />
-      </uap:VisualElements>
+        Square150x150Logo="Assets\Icons\iconLogo.png"
+      />
 
     </Application>
   </Applications>
