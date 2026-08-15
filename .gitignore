@@ -490,3 +490,6 @@ $RECYCLE.BIN/
 solution-config.props
 # Publish Profiles
 !**/Properties/PublishProfiles/*.pubxml
+
+# Development certificate
+devcert.pfx

@@ -32,7 +32,7 @@ jobs:
       run: dotnet publish -c Release -f net10.0-desktop -r $env:RID --self-contained true -p:PublishAot=true -o .\artifacts\publish
 
     - name: Pack the project
-      run: winapp pack .\artifacts\publish --manifest .\Windows.Package.appxmanifest -o .\artifacts
+      run: winapp package .\artifacts\publish --manifest .\Windows.Package.appxmanifest --output .\artifacts
     - name: Upload MSIX artifacts
       uses: actions/upload-artifact@v4
       with:
