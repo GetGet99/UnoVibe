@@ -13,7 +13,7 @@ namespace UnoVibe.Controls.ToolViews;
     using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    PartItem Part;
+    required PartItem Part;
     bool Expanded = false;
     bool Hovering = false;
     <setup>

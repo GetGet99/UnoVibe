@@ -9,7 +9,7 @@ namespace UnoVibe.Controls.ToolViews;
 [QuickMarkup("""
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    PartItem Part;
+    required PartItem Part;
     string Text = "";
     bool SemiBold = false;
     bool IsShell = false;

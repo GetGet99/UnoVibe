@@ -13,11 +13,11 @@ public sealed record McpServerInfo
 /// share the same MCP servers. Reactive display fields are QuickMarkup references.
 /// </summary>
 [QuickMarkup("""
-    public string Name;
+    public required string Name;
     // One of "connected" | "disabled" | "failed" | "needs_auth" | "needs_client_registration".
     public string Status = "disabled";
     // Error message carried by the "failed"/"needs_client_registration" statuses.
-    public string Error;
+    public required string Error;
     // True while a connect/disconnect request for this server is in flight.
     public bool Connecting;
     public bool IsConnected => `Status == "connected"`;

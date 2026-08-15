@@ -15,7 +15,7 @@ namespace UnoVibe.Controls.ToolViews;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
     inject ChatStore Store;
-    PartItem Part;
+    required PartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>

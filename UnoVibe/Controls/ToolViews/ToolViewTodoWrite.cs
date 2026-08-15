@@ -6,7 +6,7 @@ namespace UnoVibe.Controls.ToolViews;
     using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    PartItem Part;
+    required PartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>

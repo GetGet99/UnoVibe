@@ -43,9 +43,9 @@ namespace UnoVibe.Services;
     // Compact "N active, M inactive, K error" summary for the collapsed MCP sidebar header.
     // inactive = explicitly disabled; error = failed/needs_auth/needs_client_registration (mutually exclusive).
     public string McpSummary = "";
-    // The store for the currently-open session (see the class doc). Never null after Ctor:
+    // The store for the currently-open session (see the class doc).
     // it starts as an unsaved draft and is re-pointed on switch/new/delete.
-    public SessionStore? Active;
+    public SessionStore Active = `NewDraftStore()`;
     """)]
 public sealed partial class ChatStore : IDisposable
 {
@@ -140,13 +140,6 @@ public sealed partial class ChatStore : IDisposable
     /// deleted / configure reset). The chat page re-hooks the active store's message list.
     /// </summary>
     public event Action? ActiveStoreChanged;
-
-    [QuickMarkupConstructor]
-    private void Ctor()
-    {
-        Active = NewDraftStore();
-        Init();
-    }
 
     private SessionStore NewDraftStore()
     {
@@ -534,7 +527,7 @@ public sealed partial class ChatStore : IDisposable
                 existing.Error = kv.Value.Error;
                 continue;
             }
-            var item = new McpServerItem { Name = kv.Key, Status = kv.Value.Status, Error = kv.Value.Error };
+            var item = new McpServerItem(Name: kv.Key, Error: kv.Value.Error) { Status = kv.Value.Status };
             _mcpServersByName[kv.Key] = item;
             var index = 0;
             while (index < McpServers.Count && StringComparer.OrdinalIgnoreCase.Compare(McpServers[index].Name, kv.Key) < 0) index++;

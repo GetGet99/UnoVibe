@@ -5,7 +5,7 @@ namespace UnoVibe.Controls.ToolViews;
 [QuickMarkup("""
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    QuestionFormItem Q;
+    required QuestionFormItem Q;
     <StackPanel Spacing=4>
         <TextBlock Text=`Q.Question` FontSize=12 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
         if (`Q.Multiple`)
