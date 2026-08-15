@@ -79,6 +79,11 @@ namespace UnoVibe.Pages.Connect;
                         }
                     }
                     <TextBlock Text="UnoVibe is not affiliated with OpenCode and is not built by Opencode team." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                    <TextBlock Text="Model provider registration and other configuration must be done in OpenCode CLI and config. See your provider's details for how they handle your data." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                    <StackPanel>
+                        <HyperlinkButton Content="Terms and Conditions" NavigateUri=`new Uri("https://github.com/GetGet99/UnoVibe/blob/main/TERMS.md")` HorizontalAlignment=Center />
+                        <HyperlinkButton Content="Privacy Policy" NavigateUri=`new Uri("https://github.com/GetGet99/UnoVibe/blob/main/PRIVACY.md")` HorizontalAlignment=Center />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
