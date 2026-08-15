@@ -31,6 +31,7 @@ namespace UnoVibe.Pages.Chat;
     public `ObservableCollection<ModelOption>` ItemsSource = `new()`;
     public ModelOption? SelectedItem = null;
     public double FontSize = 12;
+    inject? bool IsCompact;
     string Query = "";
     int HighlightIndex = -1;
     // Filtered model list — reactive to both the source collection and the query string.
@@ -42,7 +43,7 @@ namespace UnoVibe.Pages.Chat;
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <Grid MinWidth=200 MaxWidth=300 Height=28>
+        <Grid MinWidth=`IsCompact ? 120 : 200` MaxWidth=300 Height=28>
             triggerButton = <Button HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(12,  0, 12,  0)` CornerRadius=4
                     HorizontalContentAlignment=Stretch VerticalContentAlignment=Center
                     ToolTipService.ToolTip=`SelectedItem?.Name ?? "Select model"`

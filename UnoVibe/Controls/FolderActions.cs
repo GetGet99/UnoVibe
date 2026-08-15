@@ -15,6 +15,7 @@ namespace UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject ChatStore Store;
+    inject? bool IsSidebarView;
     required string Directory;
     bool ShowFileManager = false;
     bool ShowNewSession = true;
@@ -47,7 +48,12 @@ public partial class FolderActions : IQuickMarkupComponent
 
     private void OnOpenInTerminal() => RunFolderAction(FolderLauncher.OpenInTerminal);
 
-    private void OnNewSession() => _ = Store.NewSessionAsync(Directory);
+    private void OnNewSession()
+    {
+        // Small-screen view switching: a new session lands in its chat view.
+        IsSidebarView = false;
+        _ = Store.NewSessionAsync(Directory);
+    }
 
     /// <summary>Runs a folder-launch action and surfaces failures as a toast.</summary>
     private void RunFolderAction(Func<string, string?> action)

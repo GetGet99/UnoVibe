@@ -10,5 +10,7 @@ static class SymbolExtension {
         public static Symbol Code => (Symbol)0xe943;
         // Console/terminal icon.
         public static Symbol Terminal => (Symbol)0xe756;
+        // Hamburger menu icon, used on compact windows to open the session sidebar view.
+        public static Symbol GlobalNavButton => (Symbol)0xe700;
     }
 }

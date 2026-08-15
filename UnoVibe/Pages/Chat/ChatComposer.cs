@@ -21,6 +21,7 @@ namespace UnoVibe.Pages.Chat;
     inject ChatStore Store;
     inject Window HostWindow;
     inject string Input;
+    inject? bool IsCompact;
     string SendMode = "";
     <setup>
         var theme = ThemeBrushes.Global;
@@ -53,7 +54,7 @@ namespace UnoVibe.Pages.Chat;
                     }
                 </StackPanel>
             </ScrollViewer>
-            <Grid Grid.Row=1 ColumnSpacing=8 Padding=`new Thickness(16, 8, 16, 16)` ColumnDefinitions=<>
+            <Grid Grid.Row=1 ColumnSpacing=`IsCompact ? 6 : 8` Padding=`new Thickness(IsCompact ? 12 : 16, 8, IsCompact ? 12 : 16, IsCompact ? 12 : 16)` ColumnDefinitions=<>
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
@@ -74,19 +75,19 @@ namespace UnoVibe.Pages.Chat;
                                        SendRequested+=`OnSendWithMode` />
                 </StackPanel>
             </Grid>
-            <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=12 Padding=`new Thickness(16, 0, 16, 10)`>
+            <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 10)`>
                 <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
-                    <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                    modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Active.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=90 Height=28 FontSize=12 />
+                    <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
+                    modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Active.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=`IsCompact ? 76 : 90` Height=28 FontSize=12 />
                 </StackPanel>
                 <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
-                    <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                    <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
                     <ModelPicker ItemsSource=`Store.ModelOptions` SelectedItem=`Store.Active.SelectedModelOption`
                                  ModelSelected+=`OnModelSelected` />
                 </StackPanel>
                 <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
-                    <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                    variantCombo = <ComboBox ItemsSource=`Store.VariantOptions` SelectedItem=`Store.Active.Variant` IsEnabled=`Store.Active.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=90 Height=28 FontSize=12 />
+                    <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
+                    variantCombo = <ComboBox ItemsSource=`Store.VariantOptions` SelectedItem=`Store.Active.Variant` IsEnabled=`Store.Active.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=`IsCompact ? 76 : 90` Height=28 FontSize=12 />
                 </StackPanel>
             </StackPanel>
         </Grid>

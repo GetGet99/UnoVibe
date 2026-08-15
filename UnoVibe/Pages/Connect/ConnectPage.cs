@@ -25,6 +25,7 @@ namespace UnoVibe.Pages.Connect;
     provide string ConfirmPassword = "";
     provide bool SaveFolderPassword = false;
     string Status = "Choose a server to connect to.";
+    bool IsCompact = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -34,24 +35,27 @@ namespace UnoVibe.Pages.Connect;
             <RowDefinition Height=Auto />
         </>>
             scrollHost = <ScrollViewer Grid.Row=0 VerticalScrollBarVisibility=Auto>
-                content = <StackPanel MaxWidth=880 Padding=`new Thickness(28, 40, 28, 32)` Spacing=16 HorizontalAlignment=Center VerticalAlignment=Center>
+                content = <StackPanel MaxWidth=880 Padding=`IsCompact ? new Thickness(16, 24, 16, 24) : new Thickness(28, 40, 28, 32)` Spacing=16 HorizontalAlignment=Center VerticalAlignment=Center>
                     <StackPanel Spacing=4 HorizontalAlignment=Center>
                         <TextBlock Text="UnoVibe" FontSize=28 FontWeight=`FontWeights.SemiBold` HorizontalAlignment=Center />
                         <TextBlock Text="Connect to OpenCode" FontSize=18 FontWeight=`FontWeights.SemiBold` HorizontalAlignment=Center />
                     </StackPanel>
-                    <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Center>
-                        <ProgressRing Width=14 Height=14 IsActive=`Connecting` Visibility=`Connecting ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
+                    <WrapPanel HorizontalAlignment=Center>
+                        <ProgressRing Width=14 Height=14 IsActive=`Connecting` Visibility=`Connecting ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center Margin=`new Thickness(0, 0, 8, 0)` />
                         <TextBlock Text=`Status` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
-                    </StackPanel>
+                    </WrapPanel>
 
-                    <Grid ColumnDefinitions=<>
-                        <ColumnDefinition Width=`new GridLength(1.4, GridUnitType.Star)` />
-                        <ColumnDefinition />
-                    </> ColumnSpacing=16>
-                        <Grid Grid.Column=0>
+                    <Grid RowDefinitions=<>
+                        <RowDefinition />
+                        <RowDefinition Height=`IsCompact ? GridLength.Auto : new GridLength(0)` />
+                    </> ColumnDefinitions=<>
+                        <ColumnDefinition Width=`IsCompact ? new GridLength(1, GridUnitType.Star) : new GridLength(1.4, GridUnitType.Star)` />
+                        <ColumnDefinition Width=`IsCompact ? new GridLength(0) : new GridLength(1, GridUnitType.Star)` />
+                    </> ColumnSpacing=16 RowSpacing=`IsCompact ? 16 : 0`>
+                        <Grid Grid.Row=0 Grid.Column=0>
                             <RecentListPanel OpenRecentRequested+=`OnOpenRecent` RemoveRecentRequested+=`OnRemoveRecent` />
                         </Grid>
-                        <Grid Grid.Column=1>
+                        <Grid Grid.Row=`IsCompact ? 1 : 0` Grid.Column=`IsCompact ? 0 : 1`>
                             <ConnectPanel OpenFolderRequested+=`PickFolderAsync` ConnectToUrlRequested+=`ConnectToUrlAsync` />
                         </Grid>
                     </Grid>
@@ -92,13 +96,8 @@ public partial class ConnectPage : Page
 
         // Keep the centered content tall enough to fill the viewport so it stays vertically centered
         // while still scrolling when the window is small.
-        void UpdateContentMinHeight()
-        {
-            var h = scrollHost.ViewportHeight;
-            if (Math.Abs(content.MinHeight - h) > 0.5) content.MinHeight = h;
-        }
         scrollHost.ViewChanged += (_, _) => UpdateContentMinHeight();
-        scrollHost.SizeChanged += (_, _) => UpdateContentMinHeight();
+        scrollHost.SizeChanged += OnScrollHostSizeChanged;
 
         // Pre-fill the server password box from the standard environment variable.
         ServerPassword = Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar) ?? "";
@@ -109,6 +108,28 @@ public partial class ConnectPage : Page
             Startup = null;
             _ = RunStartupAsync(startup);
         }
+    }
+
+    /// <summary>Viewport width (in pixels) below which the recent/connect panels switch from
+    /// the side-by-side two-column layout to the stacked small-screen layout.</summary>
+    private const double CompactBreakpoint = 820;
+
+    /// <summary>Keeps the centered content tall enough to fill the viewport so it stays vertically
+    /// centered while still scrolling when the window is small.</summary>
+    private void UpdateContentMinHeight()
+    {
+        var h = scrollHost.ViewportHeight;
+        if (Math.Abs(content.MinHeight - h) > 0.5) content.MinHeight = h;
+    }
+
+    /// <summary>Re-fits the content for the current viewport size: keeps the centered block tall
+    /// enough to fill the viewport and switches the recent/connect panels between the side-by-side
+    /// desktop layout and the stacked small-screen layout.</summary>
+    private void OnScrollHostSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateContentMinHeight();
+        var compact = e.NewSize.Width < CompactBreakpoint;
+        if (compact != IsCompact) IsCompact = compact;
     }
 
     /// <summary>Connects to an existing server URL and records it in the recent list.

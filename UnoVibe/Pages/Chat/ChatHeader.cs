@@ -13,6 +13,8 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject ChatStore Store;
+    inject? bool IsCompact;
+    inject? bool IsSidebarView;
     bool EditingTitle = false;
     string TitleEdit = "";
     <setup>
@@ -20,10 +22,14 @@ namespace UnoVibe.Pages.Chat;
         var transparent = new SolidColorBrush(Colors.Transparent);
     </setup>
     <root>
-        <Grid ColumnSpacing=8 Padding=`new Thickness(16, 12, 16, 8)` ColumnDefinitions=<>
-            <ColumnDefinition />
-            <ColumnDefinition Width=Auto />
-        </>>
+        <Grid ColumnSpacing=`IsCompact ? 6 : 8` Padding=`new Thickness(IsCompact ? 12 : 16, 12, IsCompact ? 12 : 16, 8)`
+              RowDefinitions=<>
+                  <RowDefinition Height=Auto />
+                  <RowDefinition Height=`IsCompact ? GridLength.Auto : new GridLength(0)` />
+              </> ColumnDefinitions=<>
+                  <ColumnDefinition />
+                  <ColumnDefinition Width=Auto />
+              </>>
             <StackPanel VerticalAlignment=Center>
                 if (`EditingTitle`)
                 {
@@ -35,20 +41,43 @@ namespace UnoVibe.Pages.Chat;
                 }
                 else
                 {
-                    <StackPanel Orientation=Horizontal Spacing=8>
+                    // Title row as a Grid so a long title truncates with an ellipsis instead of
+                    // pushing the pencil off-screen: the title is a star column, so the trailing
+                    // Auto columns (pencil, busy ring) always keep their room. The conditional
+                    // leading buttons (hamburger, back-to-parent) sit in Auto columns that react
+                    // to 0-width when absent, so they never leave phantom gaps.
+                    <Grid ColumnDefinitions=<>
+                        <ColumnDefinition Width=`IsCompact ? GridLength.Auto : new GridLength(0)` />
+                        <ColumnDefinition Width=`Store.Active.ParentSessionId.Length > 0 ? GridLength.Auto : new GridLength(0)` />
+                        <ColumnDefinition />
+                        <ColumnDefinition Width=Auto />
+                        <ColumnDefinition Width=`Store.Active.IsBusy ? GridLength.Auto : new GridLength(0)` />
+                    </>>
+                        if (`IsCompact`)
+                            <Button Grid.Column=0 Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)` CornerRadius=6
+                                    Margin=`new Thickness(0, 0, 8, 0)`
+                                    Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`IsSidebarView = true`
+                                    ToolTipService.ToolTip="Open session list">
+                                <AppSymbolIcon Symbol=`Symbol.GlobalNavButton` FontSize=14 />
+                            </Button>
                         if (`Store.Active.ParentSessionId.Length > 0`)
-                            <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)` CornerRadius=6
+                            <Button Grid.Column=1 Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)` CornerRadius=6
+                                    Margin=`new Thickness(0, 0, 8, 0)`
                                     Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`await Store.GoToParentAsync()`
                                     ToolTipService.ToolTip="Back to parent session">
                                 <AppSymbolIcon Symbol=Back FontSize=14 />
                             </Button>
-                        <TextBlock Text=`Store.Active.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
-                        <Button Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)` Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`StartTitleEdit()`>
+                        <TextBlock Grid.Column=2 Text=`Store.Active.SessionTitle` FontSize=16 FontWeight=`FontWeights.SemiBold`
+                                   TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                        <Button Grid.Column=3 Background=`transparent` BorderThickness=0 Padding=`new Thickness(6,  2, 6,  2)`
+                                Margin=`new Thickness(8, 0, 0, 0)`
+                                Foreground=`theme.SecondaryText` VerticalAlignment=Center @Click+=`StartTitleEdit()`>
                             <AppSymbolIcon Symbol=Edit FontSize=13 />
                         </Button>
-                        <ProgressRing Width=16 Height=16 IsActive=`Store.Active.IsBusy`
+                        <ProgressRing Grid.Column=4 Width=16 Height=16 IsActive=`Store.Active.IsBusy`
+                                      Margin=`new Thickness(8, 0, 0, 0)`
                                       Visibility=`Store.Active.IsBusy ? Visibility.Visible : Visibility.Collapsed` VerticalAlignment=Center />
-                    </StackPanel>
+                    </Grid>
                 }
             </StackPanel>
             <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=4 VerticalAlignment=Center>
@@ -136,7 +165,32 @@ namespace UnoVibe.Pages.Chat;
                         <ProgressBar Value=`Store.Active.ContextUsage` Minimum=0 Maximum=100 Height=4 />
                     </StackPanel>
                 </Flyout>>
-                <StackPanel Orientation=Horizontal Spacing=8>
+                // On compact the inline cost summary lives on the second header line, so the stats
+                // button itself shrinks to a "more details" icon (the flyout stays reachable).
+                if (`IsCompact`)
+                {
+                    <AppSymbolIcon Symbol=More FontSize=11 Foreground=`theme.SecondaryText` />
+                }
+                else
+                {
+                    <StackPanel Orientation=Horizontal Spacing=8>
+                        <TextBlock Text=`Store.Active.UsageCostLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                        <TextBlock Text="·" FontSize=12 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                        <TextBlock Text=`Store.Active.UsageTokensLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                        <TextBlock Text="tokens" FontSize=11 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                        <TextBlock Text="·" FontSize=12 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                        <TextBlock Text=`Store.Active.ContextLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                        <TextBlock Text="ctx" FontSize=11 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                        <ProgressBar Value=`Store.Active.ContextUsage` Minimum=0 Maximum=100 Width=70 Height=4 VerticalAlignment=Center />
+                    </StackPanel>
+                }
+            </Button>
+            </StackPanel>
+            // On compact windows the cost/tokens/context summary moves to a second line (it's
+            // important enough to keep visible) instead of the inline text on the stats button.
+            if (`IsCompact`)
+            {
+                <StackPanel Grid.Row=1 Grid.ColumnSpan=2 Orientation=Horizontal Spacing=8 HorizontalAlignment=Center Margin=`new Thickness(0, 4, 0, 0)`>
                     <TextBlock Text=`Store.Active.UsageCostLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                     <TextBlock Text="·" FontSize=12 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
                     <TextBlock Text=`Store.Active.UsageTokensLabel` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
@@ -146,8 +200,7 @@ namespace UnoVibe.Pages.Chat;
                     <TextBlock Text="ctx" FontSize=11 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
                     <ProgressBar Value=`Store.Active.ContextUsage` Minimum=0 Maximum=100 Width=70 Height=4 VerticalAlignment=Center />
                 </StackPanel>
-            </Button>
-            </StackPanel>
+            }
         </Grid>
     </root>
     """)]

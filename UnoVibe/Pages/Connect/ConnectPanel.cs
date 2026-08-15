@@ -61,8 +61,8 @@ namespace UnoVibe.Pages.Connect;
                     {
                         <PasswordBox Password<=>`CustomPassword` PlaceholderText="Set a password" IsEnabled=`!Connecting` />
                         <PasswordBox Password<=>`ConfirmPassword` PlaceholderText="Confirm password" IsEnabled=`!Connecting` />
-                        <StackPanel Orientation=Horizontal Spacing=8>
-                            <TextBlock Text=`SaveFolderPassword ? "Password saved on this device." : "Save this password on this device?"` FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap VerticalAlignment=Center />
+                        <WrapPanel>
+                            <TextBlock Text=`SaveFolderPassword ? "Password saved on this device." : "Save this password on this device?"` FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap VerticalAlignment=Center Margin=`new Thickness(0, 0, 8, 0)` />
                             <Button Content=`SaveFolderPassword ? "Forget" : "Save"` FontSize=11 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center IsEnabled=`!Connecting` Flyout=passwordFlyout = <Flyout Placement=BottomEdgeAlignedRight>
                                 if (`SaveFolderPassword`)
                                 {
@@ -87,7 +87,7 @@ namespace UnoVibe.Pages.Connect;
                                     </StackPanel>
                                 }
                             </Flyout> />
-                        </StackPanel>
+                        </WrapPanel>
                     }
                 </StackPanel>
             </Border>

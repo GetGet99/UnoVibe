@@ -13,11 +13,12 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     inject ChatStore Store;
+    inject? bool IsCompact;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <StackPanel Padding=`new Thickness(16, 0, 16, 4)` Spacing=6>
+        <StackPanel Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 4)` Spacing=6>
             if (`Store.Active.StatusMessage.Length > 0`)
                 <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(10,  6, 10,  6)`
                         BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` HorizontalAlignment=Stretch>

@@ -18,17 +18,26 @@ namespace UnoVibe.Pages.Main;
     provide ChatStore Store = null;
     provide Window HostWindow = null;
     provide bool SettingsOpen = false;
+    provide bool IsCompact = false;
+    provide bool IsSidebarView = false;
+    // On wide windows the sidebar and chat sit side by side (the flag is ignored). On compact
+    // windows only one of them is shown at a time — the flag picks which — since there's no room
+    // for both. The hidden panel is Collapsed (not just 0-width) so it doesn't lay out at all.
+    GridLength SidebarColumnWidth => `!IsCompact ? new GridLength(280) : (IsSidebarView ? new GridLength(1, GridUnitType.Star) : new GridLength(0))`;
+    GridLength ChatColumnWidth => `IsSidebarView ? new GridLength(0) : new GridLength(1, GridUnitType.Star)`;
+    Visibility SidebarVisibility => `!IsCompact || IsSidebarView ? Visibility.Visible : Visibility.Collapsed`;
+    Visibility ChatVisibility => `!IsCompact || !IsSidebarView ? Visibility.Visible : Visibility.Collapsed`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
         <Grid>
             <Grid ColumnDefinitions=<>
-                <ColumnDefinition Width=280 />
-                <ColumnDefinition />
+                <ColumnDefinition Width=`SidebarColumnWidth` />
+                <ColumnDefinition Width=`ChatColumnWidth` />
             </>>
-                <SessionSidebar />
-                <ChatPage Grid.Column=1 />
+                <SessionSidebar Visibility=`SidebarVisibility` />
+                <ChatPage Grid.Column=1 Visibility=`ChatVisibility` />
             </Grid>
             <Grid HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(16, 12, 16, 0)`>
                 if (`Store.CurrentToast is not null`)
@@ -67,6 +76,30 @@ namespace UnoVibe.Pages.Main;
     """)]
 public partial class MainPage : Page
 {
+    /// <summary>Viewport width (in pixels) below which the root switches to the compact small-screen layout.</summary>
+    private const double CompactBreakpoint = 820;
+
+    [QuickMarkupConstructor]
+    private void Ctor()
+    {
+        Init();
+        SizeChanged += OnRootSizeChanged;
+    }
+
+    /// <summary>Re-fits the root for the current window width: on small screens the sidebar and
+    /// chat become a single full-width view (flag <c>IsSidebarView</c> picks which), while wide
+    /// windows show both side by side. Entering/leaving compact resets the view flag to chat so a
+    /// later resize starts from the session the user was reading.</summary>
+    private void OnRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var compact = e.NewSize.Width < CompactBreakpoint;
+        if (compact != IsCompact)
+        {
+            IsCompact = compact;
+            IsSidebarView = false;
+        }
+    }
+
     public void ProvideStore(ChatStore store) => Store = store;
 
     /// <summary>Host window of this page, used to init WinRT pickers/dialogs with an HWND.</summary>

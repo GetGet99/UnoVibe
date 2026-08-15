@@ -17,6 +17,8 @@ namespace UnoVibe.Pages.Main;
     inject ChatStore Store;
     inject Window HostWindow;
     inject bool SettingsOpen;
+    inject? bool IsCompact;
+    inject? bool IsSidebarView;
     bool McpExpanded = false;
     bool ShowPassword = false;
     <setup>
@@ -31,6 +33,17 @@ namespace UnoVibe.Pages.Main;
         </>>
             <ScrollViewer Grid.Row=0>
                 <StackPanel Padding=`new Thickness(12, 0, 12, 12)`>
+                    if (`IsCompact`)
+                    {
+                        <Button HorizontalAlignment=Left Margin=`new Thickness(0, 8, 0, 0)` Padding=`new Thickness(6, 4, 10, 4)`
+                                Background=`transparent` BorderThickness=0 CornerRadius=6 Foreground=`theme.SecondaryText`
+                                @Click+=`IsSidebarView = false` ToolTipService.ToolTip="Back to chat">
+                            <StackPanel Orientation=Horizontal Spacing=6>
+                                <AppSymbolIcon Symbol=Back FontSize=12 />
+                                <TextBlock Text="Back to chat" FontSize=12 />
+                            </StackPanel>
+                        </Button>
+                    }
                     foreach (var group in `Store.DirectoryGroups`; `group.Directory`)
                     {
                         <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
@@ -207,6 +220,8 @@ public partial class SessionSidebar : IQuickMarkupComponent
     private void OnSwitchSession(object sender, RoutedEventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not string id) return;
+        // Small-screen view switching: tapping a session leaves the sidebar view and shows its chat.
+        IsSidebarView = false;
         if (id == Store.CurrentSessionId) return;
         _ = Store.SwitchSessionAsync(id);
     }
@@ -246,7 +261,12 @@ public partial class SessionSidebar : IQuickMarkupComponent
         try
         {
             var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null) await Store.NewSessionAsync(folder.Path);
+            if (folder is not null)
+            {
+                await Store.NewSessionAsync(folder.Path);
+                // Small-screen view switching: opening a folder lands in its new chat view.
+                IsSidebarView = false;
+            }
         }
         catch (Exception ex)
         {
