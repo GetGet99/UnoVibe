@@ -129,6 +129,10 @@ Note: `pkill -f "opencode serve ..."` and similar broad patterns can hang the sh
 prefer `pkill -9 -x <exact-name>` or `pkill -f` with a unique exact port, and check with
 `ps aux | grep "opencode serve"` afterward.
 
+Do **not** run `find /` (filesystem-wide searches) — they are extremely slow and time out the
+shell. Use targeted `find` under a specific directory (e.g. `find ~ -name recent.json`), the
+Glob/Grep tools, or known absolute paths.
+
 ### CRITICAL — do NOT kill the dev server
 
 **do NOT kill the dev `opencode serve` (port 4196) during this chat session:**
@@ -426,6 +430,14 @@ in `SystemAttention` that **overrides** the busy spinner (mirrors the web client
   `QuestionRejectedError` so the agent sees it was declined.
 - Per question, a `custom` field adds a "Type your own answer..." option that is exclusive with
   the options (single) or combinable (multi) and enables the text box only while selected.
+- **Pending questions are per workspace directory (instance), like permissions** — the server's
+  pending map lives in `InstanceState` (`question/index.ts`), so `ReplyQuestionAsync`/
+  `RejectQuestionAsync`/`GetPendingQuestionsAsync` take a `directory` and are called with the
+  owning session's instance (`ChatStore.QuestionDirectory`/`DirectoryOf`, `SyncPendingQuestionsAsync`
+  uses `ActiveDirectory()`), so a reply reaches the instance holding the request
+  (folder-opened sessions live in a non-default instance — a directory-less reply 404s
+  `QuestionNotFoundError`). A 404 reply/reject drops the stale request so the next pending
+  question surfaces instead of a dead form.
 
 **Assistant message errors** (`info.error`) are rendered as an `error` part box
 (`UnknownError` e.g. `"Streaming response failed: [503]..."`);
@@ -763,7 +775,8 @@ do not re-introduce a `using var serve` that disposes it early.
 `Services/RecentConnectionsStore.cs` keeps an `ObservableCollection<RecentConnection>` (model in
 `Models/RecentConnection.cs`) saved as JSON at
 `Windows.Storage.ApplicationData.Current.LocalFolder.Path/recent.json` (Skia desktop resolves this
-to `~/.local/share/UnoVibe/LocalState/` on Linux).
+to `~/.local/share/UnoVibe/<AppId>/LocalState/` on Linux — e.g.
+`/home/get/.local/share/UnoVibe/com.companyname.unovibe/LocalState/`).
 The file is an object `{ useGeneratedPassword, savePassword, customPassword, items[] }`; legacy
 bare-array files are migrated on load.
 Upserts happen only on a successful connect (after `ConnectionStatus == "Connected"`); the list is

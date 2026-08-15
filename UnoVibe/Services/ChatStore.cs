@@ -95,6 +95,11 @@ public sealed partial class ChatStore : IDisposable
     // so ApplyMcpStatus can reconcile in place instead of a Clear+re-Add rebuild.
     private readonly Dictionary<string, McpServerItem> _mcpServersByName = new();
     private readonly List<PermissionRequestItem> _permissions = new();
+    // Pending question requestID → owning workspace directory (see PermissionDirectory for the
+    // same per-instance contract). Seeded from question.asked events and the /question list so a
+    // reply/reject reaches the instance holding the pending question (folder-opened sessions live
+    // in a non-default instance — a directory-less reply would 404).
+    private readonly Dictionary<string, string> _questionDirectories = new();
     private CancellationTokenSource? _cts;
     private DispatcherQueue? _dispatcher;
     private bool _started;
@@ -200,6 +205,7 @@ public sealed partial class ChatStore : IDisposable
         ActiveSubagents.Clear();
         _permissions.Clear();
         ActivePermission = null;
+        _questionDirectories.Clear();
         Sessions.Clear();
         _sessionsById.Clear();
         DirectoryGroups.Clear();
@@ -1431,6 +1437,7 @@ public sealed partial class ChatStore : IDisposable
             Flags(sessionId).PendingQuestions++;
             var item = GetSession(sessionId);
             if (item is not null) ApplySessionFlags(item);
+            _questionDirectories[requestId] = DirectoryOf(sessionId);
         }
 
         // Attach the live question to the session's store (active or cached).
@@ -1446,6 +1453,9 @@ public sealed partial class ChatStore : IDisposable
         if (flags is not null && flags.PendingQuestions > 0) flags.PendingQuestions--;
         var item = GetSession(sessionId);
         if (item is not null) ApplySessionFlags(item);
+
+        var requestId = properties.GetStringProperty("requestID");
+        if (requestId.Length > 0) _questionDirectories.Remove(requestId);
     }
 
     private void ApplyPermissionAsked(JsonElement properties)
@@ -1557,6 +1567,30 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
+    /// Resolves the workspace directory that owns a pending question request, so a reply/reject
+    /// reaches the instance holding it (mirrors <see cref="PermissionDirectory"/>). The mapping is
+    /// seeded from question.asked events and the pending /question list; falls back to the active
+    /// directory when unknown.
+    /// </summary>
+    private string QuestionDirectory(string requestId)
+    {
+        if (_questionDirectories.TryGetValue(requestId, out var directory) && directory.Length > 0)
+            return directory;
+        return ActiveDirectory();
+    }
+
+    /// <summary>The workspace directory of a session (or the active directory when unknown).</summary>
+    private string DirectoryOf(string sessionId)
+    {
+        if (sessionId.Length > 0)
+        {
+            var session = GetSession(sessionId);
+            if (session is not null && session.Directory.Length > 0) return session.Directory;
+        }
+        return ActiveDirectory();
+    }
+
+    /// <summary>
     /// Re-syncs pending questions from the server: rebuilds the per-session pending-question
     /// counts (drives the sidebar attention indicator) and re-attaches requestIDs to each
     /// cached session store's tool parts after a reload (requestIDs only exist in the live
@@ -1567,7 +1601,7 @@ public sealed partial class ChatStore : IDisposable
     {
         try
         {
-            var root = await _client.GetPendingQuestionsAsync();
+            var root = await _client.GetPendingQuestionsAsync(ActiveDirectory());
             if (root.ValueKind != JsonValueKind.Array) return;
 
             foreach (var flags in _sessionFlags.Values) flags.PendingQuestions = 0;
@@ -1576,6 +1610,9 @@ public sealed partial class ChatStore : IDisposable
                 var sessionId = question.GetStringProperty("sessionID");
                 if (sessionId.Length == 0) continue;
                 Flags(sessionId).PendingQuestions++;
+
+                var requestId = question.GetStringProperty("id");
+                if (requestId.Length > 0) _questionDirectories[requestId] = DirectoryOf(sessionId);
 
                 GetStore(sessionId)?.AttachQuestionRequest(question);
             }
@@ -1623,9 +1660,19 @@ public sealed partial class ChatStore : IDisposable
 
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers)
     {
+        var directory = QuestionDirectory(requestId);
         try
         {
-            await _client.ReplyQuestionAsync(requestId, answers);
+            await _client.ReplyQuestionAsync(requestId, answers, directory);
+            _questionDirectories.Remove(requestId);
+        }
+        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // The request is gone server-side without a question.replied event (answered
+            // elsewhere, or its turn/instance was aborted/disposed) — drop the stale entry so the
+            // next pending question can surface instead of a dead 404 form.
+            _questionDirectories.Remove(requestId);
+            ConnectionStatus = $"Question no longer pending ({requestId})";
         }
         catch (Exception ex)
         {
@@ -1635,9 +1682,16 @@ public sealed partial class ChatStore : IDisposable
 
     public async Task RejectQuestionAsync(string requestId)
     {
+        var directory = QuestionDirectory(requestId);
         try
         {
-            await _client.RejectQuestionAsync(requestId);
+            await _client.RejectQuestionAsync(requestId, directory);
+            _questionDirectories.Remove(requestId);
+        }
+        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _questionDirectories.Remove(requestId);
+            ConnectionStatus = $"Question no longer pending ({requestId})";
         }
         catch (Exception ex)
         {

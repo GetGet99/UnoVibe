@@ -197,17 +197,28 @@ public sealed class OpencodeClient
         return ParseSessionInfo(doc.RootElement);
     }
 
+    /// <summary>
+    /// Post /question/{requestID}/reply — answers a pending question request in the given
+    /// workspace directory (or the server's default instance when null). Pending questions are
+    /// per-instance, so the directory must match the one that owns the request or the reply
+    /// will 404.
+    /// </summary>
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers,
-        CancellationToken ct = default)
+        string? directory = null, CancellationToken ct = default)
     {
         var body = new ReplyQuestionRequest { Answers = answers };
-        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reply", body, AppJsonContext.Default.ReplyQuestionRequest, ct);
+        using var response = await Http.PostAsJsonAsync(
+            DirectoryUrl($"/question/{requestId}/reply", directory),
+            body, AppJsonContext.Default.ReplyQuestionRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task RejectQuestionAsync(string requestId, CancellationToken ct = default)
+    /// <summary>Post /question/{requestID}/reject — dismisses a pending question request (see <see cref="ReplyQuestionAsync"/> for the directory contract).</summary>
+    public async Task RejectQuestionAsync(string requestId, string? directory = null, CancellationToken ct = default)
     {
-        using var response = await Http.PostAsJsonAsync($"/question/{requestId}/reject", new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
+        using var response = await Http.PostAsJsonAsync(
+            DirectoryUrl($"/question/{requestId}/reject", directory),
+            new EmptyRequest(), AppJsonContext.Default.EmptyRequest, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -379,9 +390,14 @@ public sealed class OpencodeClient
         return doc.RootElement.Clone();
     }
 
-    public async Task<JsonElement> GetPendingQuestionsAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Get /question?directory= — lists pending question requests for the workspace directory
+    /// (or the server's default instance when null). Pending requests are per-instance, so the
+    /// directory must match the one that owns the requests or the replies will 404.
+    /// </summary>
+    public async Task<JsonElement> GetPendingQuestionsAsync(string? directory = null, CancellationToken ct = default)
     {
-        using var response = await Http.GetAsync("/question", ct);
+        using var response = await Http.GetAsync(DirectoryUrl("/question", directory), ct);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
