@@ -1,4 +1,4 @@
-# UnoVibe Terms and Conditions
+# UnoVibe Terms of Use
 
 UnoVibe is open-source software licensed under the MIT License. The source code is available on [GitHub](https://github.com/GetGet99/UnoVibe).
 

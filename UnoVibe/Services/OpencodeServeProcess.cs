@@ -200,7 +200,7 @@ public sealed class OpencodeServeProcess : IDisposable
         if (Version.TryParse(version, out var v))
         {
             if (v >= RequiredOpencodeVersion)
-                return OpencodeExecutableStatus.Avaliable;
+                return OpencodeExecutableStatus.NotAvaliable;
             else
                 return OpencodeExecutableStatus.MayNeedUpgrade;
         }
