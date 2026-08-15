@@ -26,7 +26,7 @@ namespace UnoVibe.Pages.Main;
         var transparent = new SolidColorBrush(Colors.Transparent);
     </setup>
     <root>
-        <Grid Background=`theme.CardBackground` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 0, 1, 0)` RowDefinitions=<>
+        <Grid Background=`theme.CardBackground` BorderBrush=`theme.DividerStroke` BorderThickness=`SessionSidebarBorder` RowDefinitions=<>
             <RowDefinition />
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
@@ -214,6 +214,14 @@ namespace UnoVibe.Pages.Main;
     """)]
 public partial class SessionSidebar : IQuickMarkupComponent
 {
+    Thickness SessionSidebarBorder =>
+#if WASDK
+        // WASDK title bar have the same mica color as body so would make sense to have top border too
+        new Thickness(0, 1, 1, 0)
+#else
+        new Thickness(0, 0, 1, 0)
+#endif
+        ;
     /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
     private const int MaxVisibleSessions = 5;
 

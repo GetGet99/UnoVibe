@@ -18,12 +18,6 @@ public partial class App : Application
 #if WASDK
         // read once to initialize it
         _ = DataTemplateDelegator.IdProperty;
-        AppDomain.CurrentDomain.FirstChanceException += (o, e) =>
-        {
-            System.Diagnostics.Debug.WriteLine(e.Exception);
-            System.Diagnostics.Debug.WriteLine(e.Exception.StackTrace);
-            System.Diagnostics.Debugger.Break();
-        };
 #endif
     }
 
