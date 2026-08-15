@@ -71,9 +71,9 @@ namespace UnoVibe.Pages.Connect;
                     }
                     then (result) {
                         if (`result is OpencodeExecutableStatus.NotAvaliable`) {
-                            <TextBlock Text="Opencode is not avaliable or not installed.\nYou can still use UnoVibe to connect to hosted Opencode server." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
-                            <HyperlinkButton Content="Visit Opencode Installation Guide" NavigateUri=`new Uri("https://github.com/anomalyco/opencode#installation")` />
-                            <TextBlock Text="Please relaunch UnoVibe after completed installation" FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                            <TextBlock Text="Opencode CLI is not avaliable or not installed in PATH.\nYou can still use UnoVibe to connect to hosted Opencode server." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap TextAlignment=Center />
+                            <HyperlinkButton Content="Visit Opencode Installation Guide" NavigateUri=`new Uri("https://github.com/anomalyco/opencode#installation")` HorizontalAlignment=Center />
+                            <TextBlock Text="Please relaunch UnoVibe after completed installation of CLI version." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
                         } else if (`result is OpencodeExecutableStatus.MayNeedUpgrade`) {
                             <TextBlock Text=`"Installed Opencode may not be supported. This version of UnoVibe is tested with Opencode {OpencodeServeProcess.RequiredOpencodeVersion}.\nYou can still use UnoVibe to connect to hosted Opencode server."` FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
                         }
