@@ -1,0 +1,43 @@
+name: UnoVibe Publish Windows
+
+on:
+  workflow_dispatch:
+
+env:
+  WORKING_DIR: '${{ github.workspace }}'
+
+jobs:
+  build-uno-win-msix:
+    runs-on: windows-2025-vs2026
+    strategy:
+      matrix:
+        platform:
+          - x64
+          - arm64
+    env:
+      RID: ${{ matrix.platform == 'x64' && 'win-x64' || 'win-arm64' }}
+    
+    steps:
+    - name: Checkout the repository
+      uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Setup WinApp CLI
+      uses: microsoft/setup-WinAppCli@v0.1
+
+    - name: Publish Windows project
+      run: dotnet publish -c Release -f net10.0-desktop -r $env:RID --self-contained true -p:PublishAot=true -o .\artifacts\publish
+
+    - name: Pack the project
+      run: winapp pack .\artifacts\publish --manifest .\Windows.Package.appxmanifest -o .\artifacts
+    - name: Upload MSIX artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MSIX artifacts
+        path: |
+          .\artifacts\*.msix
+          .\artifacts\*.appx
+  

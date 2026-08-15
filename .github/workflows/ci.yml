@@ -1,0 +1,40 @@
+name: UnoVibe CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - '*.md'
+
+run-name: UnoVibe CI
+
+env:
+  WORKING_DIR: '${{ github.workspace }}'
+
+jobs:
+  build-uno:
+    runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x64, arm64]
+    env:
+      CONFIGURATION: ${{ matrix.configuration }}
+      PLATFORM: ${{ matrix.platform }}
+
+    steps:
+    - name: Checkout the repository
+      uses: actions/checkout@v6
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: |
+          9.0.x
+          10.0.x
+    - name: Build the app
+      run: dotnet build $env:UNO_APP_PROJ_PATH -c $env:CONFIGURATION -a $env:PLATFORM
