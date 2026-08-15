@@ -15,7 +15,7 @@ public partial class App : Application
     public App()
     {
         this.InitializeComponent();
-#if WINDOWS
+#if WASDK
         // read once to initialize it
         // _ = DataTemplateDelegator.IdProperty;
 #endif

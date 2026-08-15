@@ -120,7 +120,7 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
         modelFlyout.FlyoutPresenterStyle = new()
         {
             BasedOn = (Style)
-#if WINDOWS
+#if WASDK
             App.Current.Resources["DefaultFlyoutPresenterStyle"]
 #else
             App.Current.Resources["DefaultFlyoutPresenter"]

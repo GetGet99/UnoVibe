@@ -17,18 +17,25 @@ public static class FolderLauncher
         if (!Directory.Exists(folder)) return $"Folder not found locally: {folder}";
         try
         {
-            if (OperatingSystem.IsWindows())
+#if WINDOWS
             {
                 var psi = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
                 psi.ArgumentList.Add(folder);
                 Process.Start(psi);
             }
-            else
+#elif DESKTOP_MACOS
             {
-                var psi = new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open") { UseShellExecute = false };
+                var psi = new ProcessStartInfo("open") { UseShellExecute = false };
                 psi.ArgumentList.Add(folder);
                 Process.Start(psi);
             }
+#else
+            {
+                var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+                psi.ArgumentList.Add(folder);
+                Process.Start(psi);
+            }
+#endif
             return null;
         }
         catch (Exception ex)
@@ -55,7 +62,14 @@ public static class FolderLauncher
         try
         {
             // On Windows the command may resolve via the shell (e.g. code.cmd); on Unix it execs the wrapper script.
-            var psi = new ProcessStartInfo(command) { UseShellExecute = OperatingSystem.IsWindows() };
+            var psi = new ProcessStartInfo(command)
+            {
+#if WINDOWS
+                UseShellExecute = true
+#else
+                UseShellExecute = false
+#endif
+            };
             psi.ArgumentList.Add(folder);
             Process.Start(psi);
             return null;
@@ -72,13 +86,13 @@ public static class FolderLauncher
         if (!Directory.Exists(folder)) return $"Folder not found locally: {folder}";
         try
         {
-            return OperatingSystem.IsWindows()
-                ? OpenWindowsTerminal(folder)
-                : OperatingSystem.IsMacOS()
-                    ? OpenMacTerminal(folder)
-                    : OperatingSystem.IsLinux()
-                        ? OpenLinuxTerminal(folder)
-                        : "Opening a terminal is not supported on this platform.";
+#if WINDOWS
+            return OpenWindowsTerminal(folder);
+#elif DESKTOP_MACOS
+            return OpenMacTerminal(folder);
+#else
+            return OpenLinuxTerminal(folder);
+#endif
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
@@ -169,10 +183,12 @@ public static class FolderLauncher
         if (string.IsNullOrEmpty(path)) return false;
 
         // On Windows a bare name like "code" resolves through PATHEXT (code.cmd / code.exe).
-        var extensions = OperatingSystem.IsWindows()
-            ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
-                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : null;
+#if WINDOWS
+        var extensions = (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+#else
+        string[]? extensions = null;
+#endif
 
         foreach (var directory in path.Split(Path.PathSeparator))
         {

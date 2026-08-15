@@ -19,13 +19,6 @@ public class MicaWindow : Window
         ApplyBackground();
     }
 
-    /// <summary>
-    /// Whether the current OS/runtime can render a Mica system backdrop. Currently Windows 11
-    /// (build 22621+) and macOS; all other platforms fall back to the solid theme background.
-    /// </summary>
-    public static bool IsSystemBackdropSupported =>
-        OperatingSystem.IsMacOS()
-        || (OperatingSystem.IsWindows() && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621));
 
     /// <summary>
     /// The window's content. Replaces any previously assigned child.

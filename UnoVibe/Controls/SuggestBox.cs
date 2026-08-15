@@ -74,7 +74,7 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         suggestFlyout.FlyoutPresenterStyle = new()
         {
             BasedOn = (Style)
-#if WINDOWS
+#if WASDK
             App.Current.Resources["DefaultFlyoutPresenterStyle"]
 #else
             App.Current.Resources["DefaultFlyoutPresenter"]

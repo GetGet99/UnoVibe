@@ -32,14 +32,38 @@
     </UnoFeatures>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      Per-OS compile-time constants.
+
+      WASDK: the net10.0-windows (WinAppSDK) target only.
+      WINDOWS: any Windows-targeted build (a net10.0-desktop build with a win RID or on a
+      Windows host, plus the net10.0-windows TFM where the .NET SDK also auto-defines it).
+      DESKTOP_WINDOWS / DESKTOP_LINUX / DESKTOP_MACOS: the OS of a net10.0-desktop (Skia)
+      build. NOT defined on the net10.0-windows TFM.
+
+      An explicit -r (cross-publish) identifies the target OS; otherwise the build host
+      IS the run host (F5 / dotnet run), so fall back to IsOSPlatform.
+    -->
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('windows10'))">$(DefineConstants);WASDK;WINDOWS</DefineConstants>
+
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('win'))">$(DefineConstants);DESKTOP_WINDOWS;WINDOWS</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('linux'))">$(DefineConstants);DESKTOP_LINUX</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.StartsWith('osx')) or $(RuntimeIdentifier.StartsWith('mac')))">$(DefineConstants);DESKTOP_MACOS</DefineConstants>
+
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">$(DefineConstants);DESKTOP_WINDOWS;WINDOWS</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">$(DefineConstants);DESKTOP_LINUX</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(DefineConstants);DESKTOP_MACOS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Markdig" />
   </ItemGroup>
-  <ItemGroup Condition=" '$(TargetFramework)' == 'net10.0-windows' ">
+  <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />
   </ItemGroup>
-  <ItemGroup Condition=" '$(TargetFramework)' != 'net10.0-windows' ">
+  <ItemGroup Condition="'$(TargetFramework)' == '' or !$(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.Uno" />
   </ItemGroup>
 

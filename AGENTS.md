@@ -73,13 +73,37 @@ All JSON (de)serialization must go through the source-generated **`Services/AppJ
   (the model combo binds `SelectedItem` to the reactive computed `SessionStore.SelectedModelOption`,
   resolved from `Router.ModelOptions` via `.Reactive.FirstOrDefault(...)`).
 
+### Compile-time OS constants
+
+The csproj defines these constants for `#if`-gated OS-specific code (all conditions are scoped
+to the active TFM via `$(TargetFramework)`, so cross-target builds can't leak one target's OS
+into another):
+
+- **`DESKTOP_WINDOWS` / `DESKTOP_LINUX` / `DESKTOP_MACOS`** — the OS of a `net10.0-desktop`
+  (Skia) build only; **never** defined on the `net10.0-windows10.0.26100.0` TFM.
+- **`WINDOWS`** — any Windows-targeted build: a `net10.0-desktop` build with a `win-*` RID or on a
+  Windows host, plus the `net10.0-windows10.0.26100.0` TFM (where the .NET SDK also auto-defines it).
+- **`WASDK`** — the `net10.0-windows10.0.26100.0` (WinAppSDK) target only.
+
+Resolution order (per TFM): an explicit `-r` (cross-publish, e.g. `dotnet publish -r win-x64`
+from Linux) identifies the target OS directly; with no RID (F5 / `dotnet run` / the
+`build-desktop` task) the build host IS the run host, so the conditions fall back to
+`[MSBuild]::IsOSPlatform(...)`. Verified: F5 on Linux → `DESKTOP_LINUX` only; desktop
+`-r win-x64`/`win-arm64` → `DESKTOP_WINDOWS`+`WINDOWS`; desktop `-r osx-arm64` → `DESKTOP_MACOS`;
+desktop `-r linux-x64` → `DESKTOP_LINUX`; `net10.0-windows10.0.26100.0` (any RID) → `WASDK`+`WINDOWS`.
+
+This replaces runtime `OperatingSystem.IsWindows()/IsMacOS()/IsLinux()` dispatch. The
+`net10.0-desktop` build's OS still comes from `DESKTOP_*` where Skia/WinUI behavior differs; pure OS behaviors
+that are identical on WinAppSDK use the broader `WINDOWS` guard instead
+(`Services/FolderLauncher.cs` file-manager/editor/terminal/`PATHEXT` Windows branches).
+
 ## Windows Build (WinUI) Conventions
 
 The Windows **WinUI** target is supported and should be kept compilable, so follow these conventions when writing cross-target code. On a Linux dev environment you **cannot** build `net10.0-windows` — there's no way to compile/verify the Windows target here — so write code that follows the portable forms below to avoid breaking Windows later. (On Windows the dev machine also lacks the reference clones listed in "Referenced / Cloned Projects" — those are Linux-only paths.)
 
 - **Windows has no `Thickness` two-value constructor.** `new Thickness(1, 2)` (horizontal/vertical) compiles under Uno but not under the real WinUI/WinRT `Thickness` — always write all four values: `new Thickness(1, 2, 1, 2)`.
 - **Windows has no implicit `Brush` conversion.** `Brush b = Colors.Transparent;` compiles under Uno (implicit conversion) but not WinUI — construct the brush explicitly, e.g. `new SolidColorBrush(Colors.Transparent)`.
-- **Windows APIs that need an HWND to appear.** Dialogs/pickers (e.g. `FolderPicker`, `FileOpenPicker`) and similar WinRT APIs must be associated with a window handle on Windows — calling `PickSingleFolderAsync`/`PickSingleFileAsync` **without** `InitializeWithWindow.Initialize` crashes the app on the Windows target. Uno's Skia target does this internally, so use the `UnoVibe.WindowsHelper` wrapper instead of `WinRT.Interop` directly: `WindowsHelper.InitializeWithWindow(picker, window)` — it takes the app `Window` (resolving the `hwnd` via `window.AppWindow.Id` internally) and no-ops on non-Windows targets via an internal `#if WINDOWS` guard. The `Window` is **always non-null** at call sites (never pass null — it must be set or the Windows target crashes). **Getting the `Window` at a picker call site**: the window flows through the QuickMarkup provide/inject context — `MainPage` declares `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and pass it to `WindowsHelper.InitializeWithWindow`. Callers like `SessionStore.PickImageAsync(Window)` take it as a parameter. `ConnectPage` reaches it through its own `Controller.Window` instead.
+- **Windows APIs that need an HWND to appear.** Dialogs/pickers (e.g. `FolderPicker`, `FileOpenPicker`) and similar WinRT APIs must be associated with a window handle on Windows — calling `PickSingleFolderAsync`/`PickSingleFileAsync` **without** `InitializeWithWindow.Initialize` crashes the app on the Windows target. Uno's Skia target does this internally, so use the `UnoVibe.WindowsHelper` wrapper instead of `WinRT.Interop` directly: `WindowsHelper.InitializeWithWindow(picker, window)` — it takes the app `Window` (resolving the `hwnd` via `window.AppWindow.Id` internally) and no-ops on non-WinUI targets via an internal `#if WASDK` guard. The `Window` is **always non-null** at call sites (never pass null — it must be set or the Windows target crashes). **Getting the `Window` at a picker call site**: the window flows through the QuickMarkup provide/inject context — `MainPage` declares `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and pass it to `WindowsHelper.InitializeWithWindow`. Callers like `SessionStore.PickImageAsync(Window)` take it as a parameter. `ConnectPage` reaches it through its own `Controller.Window` instead.
 - Since the Windows target is planned/supported, prefer these portable forms whenever convenient; on Linux just write the forms above — the goal is code that compiles on both targets.
 
 ## How to Build & Run
