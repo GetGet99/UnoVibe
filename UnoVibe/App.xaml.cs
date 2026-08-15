@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using Microsoft.Extensions.Logging;
 using Uno.Resizetizer;
-using UnoVibe.Pages;
 using UnoVibe.Services;
 
 namespace UnoVibe;

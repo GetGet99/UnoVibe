@@ -157,11 +157,20 @@ the user is talking to this opencode session **through the running UnoVibe app**
 
 ## Source Layout
 
-- `UnoVibe/Pages/` — top-level pages: `ConnectPage`, `MainPage`, `ChatPage`.
-- `UnoVibe/Controls/` — reusable UI: `SessionSidebar`, `MessageView`,
+- `UnoVibe/Pages/Connect/` — `ConnectPage` plus its page-local panels: `RecentListPanel`
+  (the recent-connections card) and `ConnectPanel` (the start-a-session + folder-security column).
+  The connect flow (serve launch, URL connect, password resolution) stays on the page.
+- `UnoVibe/Pages/Main/` — `MainPage` plus `SessionSidebar` and `SettingsPage` (both only hosted
+  by the main page; the settings panel is its modal overlay).
+- `UnoVibe/Pages/Chat/` — `ChatPage` plus the page-local chat components: `ChatHeader`
+  (title/rename/back/stats/usage), `ChatStatusArea` (status banner + subagent strip),
+  `ChatMessageList` (message list, revert/retry/continue/permission cards, autoscroll),
+  `ChatComposer` (image strip, input, send, mode/model/variant), and the message-rendering
+  controls `MessageView`, `MessageTextPart`, `ModelPicker`, `SendMessageButton`.
+  The chat page coordinates sends and provides the shared composer text (`Input`).
+- `UnoVibe/Controls/` — reusable UI used across pages: `AppSymbolIcon`, `FolderActions`,
   `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
-  `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`),
-  `SendMessageButton` (send button: plain when idle, split button with mode menu while busy; see "Send while busy"),
+  `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`), `SymbolExtemsion`,
   `ToolViews/*` (ToolView* render opencode tool calls).
 - `UnoVibe/Services/` — core logic:
   - `OpencodeClient.cs` — minimal HTTP client for the opencode REST API; Basic-auth capable.
@@ -195,7 +204,7 @@ the user is talking to this opencode session **through the running UnoVibe app**
     data-driven settings page, `settings.json` persistence, and a cross-process file watcher.
 - `UnoVibe/Models/` — DTOs (`MessageItem`, `SessionInfo`, `ModelOption`, `ToolView*` item types, etc.),
   plus the settings page's reactive row model (`SettingsEntry`).
-- `UnoVibe/Controls/SettingsPage.cs` — the settings panel (modal overlay), rendered from `SettingsStore.Specs`.
+- `UnoVibe/Pages/Main/SettingsPage.cs` — the settings panel (modal overlay), rendered from `SettingsStore.Specs`.
 - `App.xaml.cs` — startup routing: parses `StartupArgs` (`App.CreateWindow`), fails the launch on a file-target,
   hands folder/URL targets to `ConnectPage` via `WindowController.ShowConnect(startup)`,
   which runs the connect flow and swaps to `MainPage` on success.
@@ -568,7 +577,7 @@ open settings pages to re-read on the UI thread).
   loaded once at startup (`ConnectPage` ctor, like `RecentConnectionsStore`). Registered in
   `AppJsonContext` (`SettingsFileModel`).
 - **Adding a setting** = add a `SettingSpec` to `SettingsStore.Specs` + a `GetValue`/`SetValue` case;
-  the data-driven settings page (`Controls/SettingsPage.cs`) renders the row automatically
+  the data-driven settings page (`Pages/Main/SettingsPage.cs`) renders the row automatically
   (kinds: text / choice / toggle, `Models/SettingsEntry.cs` reactive row model).
 - **UI**: a ⚙ **Settings** button in the sidebar bottom status row opens a modal overlay on
   `MainPage` (`SettingsOpen` + `<SettingsPage OnClose=...>`); Back/Done close it. Changes are applied
@@ -880,7 +889,7 @@ web client's streaming "heal".
 
 **PlainMode:**
 `PlainMode` (a `bool` reference) switches to a raw-text `TextBlock`; the **toggle UI lives outside
-the component** — `MessageTextPart` (in `UnoVibe/Controls/MessageTextPart.cs`) owns the per-text-part
+the component** — `MessageTextPart` (in `UnoVibe/Pages/Chat/MessageTextPart.cs`) owns the per-text-part
 bubble: it renders the accent/card `Border` around a `MarkdownView` plus a per-part action row
 (markdown/plain bullets↔Aa toggle for both roles, and the ↶ undo button for user messages), and keeps
 its own internal `PlainMode` (defaulted in its ctor: user → plain, assistant → markdown) so toggling

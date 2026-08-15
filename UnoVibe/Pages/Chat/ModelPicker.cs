@@ -4,7 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using UnoVibe.Models;
 
-namespace UnoVibe.Controls;
+namespace UnoVibe.Pages.Chat;
 
 /// <summary>
 /// Searchable model picker for the chat toolbar. A <see cref="DropDownButton"/> that keeps the
@@ -24,6 +24,7 @@ namespace UnoVibe.Controls;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Models;
+    using UnoVibe.Controls;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     using Microsoft.UI.Xaml.Controls.Primitives;

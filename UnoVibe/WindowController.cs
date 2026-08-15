@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
-using UnoVibe.Pages;
+using UnoVibe.Pages.Connect;
+using UnoVibe.Pages.Main;
 using UnoVibe.Services;
 
 namespace UnoVibe;

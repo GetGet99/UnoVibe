@@ -1,7 +1,7 @@
 using System.Collections.Specialized;
 using UnoVibe.Models;
 
-namespace UnoVibe.Controls;
+namespace UnoVibe.Pages.Chat;
 
 /// <summary>
 /// Renders a single chat message: a role header and the message parts.

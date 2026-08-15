@@ -3,7 +3,7 @@ using QuickMarkup.WinUI;
 using UnoVibe.Models;
 using UnoVibe.Services;
 
-namespace UnoVibe.Pages;
+namespace UnoVibe.Pages.Main;
 
 /// <summary>
 /// Root page: session sidebar on the left, chat page on the right.
@@ -11,8 +11,7 @@ namespace UnoVibe.Pages;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
-    using UnoVibe.Controls;
-    using UnoVibe.Pages;
+    using UnoVibe.Pages.Chat;
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
     using Microsoft.UI;

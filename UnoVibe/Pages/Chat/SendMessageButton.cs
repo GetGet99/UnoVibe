@@ -1,6 +1,6 @@
 using UnoVibe.Services;
 
-namespace UnoVibe.Controls;
+namespace UnoVibe.Pages.Chat;
 
 /// <summary>
 /// The composer's send button. When the session is idle (<see cref="IsBusy"/> false) it is a plain

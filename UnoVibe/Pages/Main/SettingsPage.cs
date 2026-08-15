@@ -2,7 +2,7 @@ using Microsoft.UI.Dispatching;
 using UnoVibe.Models;
 using UnoVibe.Services;
 
-namespace UnoVibe.Controls;
+namespace UnoVibe.Pages.Main;
 
 /// <summary>
 /// App settings panel, rendered as a modal overlay over the main page. Rows are generated from
@@ -14,6 +14,7 @@ namespace UnoVibe.Controls;
 [QuickMarkup("""
     using UnoVibe.Services;
     using UnoVibe.Models;
+    using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;

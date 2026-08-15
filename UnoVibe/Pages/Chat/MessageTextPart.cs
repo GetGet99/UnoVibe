@@ -1,6 +1,6 @@
 using UnoVibe.Models;
 
-namespace UnoVibe.Controls;
+namespace UnoVibe.Pages.Chat;
 
 /// <summary>
 /// Renders one non-synthetic text part as a chat bubble with a per-part action row underneath:
@@ -11,6 +11,7 @@ namespace UnoVibe.Controls;
 [QuickMarkup("""
     using UnoVibe;
     using UnoVibe.Models;
+    using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Windows.UI.Text;
     required PartItem Part;

@@ -2,7 +2,7 @@ using UnoVibe.Services;
 using UnoVibe.Models;
 using Windows.ApplicationModel.DataTransfer;
 
-namespace UnoVibe.Controls;
+namespace UnoVibe.Pages.Main;
 
 /// <summary>
 /// Left sidebar listing sessions grouped by directory, with per-group "new session" buttons.
@@ -10,6 +10,7 @@ namespace UnoVibe.Controls;
 [QuickMarkup("""
     using UnoVibe.Services;
     using UnoVibe.Models;
+    using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
