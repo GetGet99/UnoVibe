@@ -14,5 +14,6 @@
     <PackageVersion Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.92.0" />
     <PackageVersion Include="Tmds.DBus.Generator" Version="0.92.0" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.2.251219" />
   </ItemGroup>
 </Project>

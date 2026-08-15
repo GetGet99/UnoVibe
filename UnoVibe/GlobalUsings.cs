@@ -15,6 +15,9 @@ global using System.Collections.ObjectModel;
 global using System.Linq;
 global using System.Threading;
 global using System.Threading.Tasks;
+#if WASDK
+global using WrapPanel = CommunityToolkit.WinUI.Controls.WrapPanel;
+#endif
 
 [assembly: QuickMarkupNewLifecycle]
 [assembly: QuickMarkupFramework(typeof(WinUIFramework))]

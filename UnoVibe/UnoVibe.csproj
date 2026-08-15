@@ -68,6 +68,7 @@
          wrapper (CanvasTextFormat.GetSystemFontFamilies); the desktop targets use SkiaSharp,
          which Uno's Skia host already ships. -->
     <PackageReference Include="Microsoft.Graphics.Win2D" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == '' or !$(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.Uno" />
