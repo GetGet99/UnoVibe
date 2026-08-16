@@ -654,7 +654,17 @@ toggle — exactly what `ChatStore.RefreshMcpStatusAsync` does.
 
 UnoVibe shows a collapsible **MCP section in `SessionSidebar`** (status dot + name + status/error +
 Connect/Disconnect toggle, summary `N active, M error`); `ChatStore.ToggleMcpAsync` calls
-connect/disconnect based on current status (mirrors the TUI's `local.mcp.toggle`).
+connect/disconnect/authenticate based on current status (mirrors the web client's `toggleMcp`):
+connected → disconnect, `needs_auth` → **`POST /mcp/{name}/auth/authenticate`**, anything else →
+connect. A `needs_auth` toggle therefore runs the server-side OAuth flow: the **server** opens the
+default browser on the authorization URL and the request **blocks** until the redirect returns to
+its own local callback server (up to 5 minutes), storing the tokens; the button label reads
+"Authenticate" (and "Authenticating…" while in flight). `OpencodeClient.McpAuthenticateAsync` uses a
+dedicated `HttpClient` with a 6-minute timeout because the shared client's 100s default would abort
+the wait, and surfaces the returned status (`{status, error}`) as the new `McpServerInfo`.
+The remaining OAuth routes (`POST /mcp/{name}/auth` start, `POST .../auth/callback` `{code}`,
+`DELETE /mcp/{name}/auth` remove) exist but are unused — the blocking `authenticate` route covers
+the browser-based flow UnoVibe needs.
 TUI source: `packages/tui/src/feature-plugins/sidebar/mcp.tsx` + `context/local.tsx`;
 API def: `server/routes/instance/httpapi/groups/mcp.ts`.
 

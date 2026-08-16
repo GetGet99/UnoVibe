@@ -18,11 +18,12 @@ public sealed record McpServerInfo
     public string Status = "disabled";
     // Error message carried by the "failed"/"needs_client_registration" statuses.
     public required string Error;
-    // True while a connect/disconnect request for this server is in flight.
+    // True while a connect/disconnect/auth request for this server is in flight.
     public bool Connecting;
     public bool IsConnected => `Status == "connected"`;
+    public bool NeedsAuth => `Status == "needs_auth"`;
     public string StatusLabel => `FormatStatus(Status)`;
-    public string ToggleLabel => `IsConnected ? "Disconnect" : "Connect"`;
+    public string ToggleLabel => `IsConnected ? "Disconnect" : NeedsAuth ? (Connecting ? "Authenticating…" : "Authenticate") : Connecting ? "Connecting…" : "Connect"`;
     """)]
 public sealed partial class McpServerItem
 {

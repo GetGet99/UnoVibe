@@ -561,6 +561,42 @@ public sealed class OpencodeClient
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>Post /mcp/{name}/auth/authenticate — starts the MCP server's OAuth flow and waits for it to complete.</summary>
+    /// <remarks>
+    /// The server itself opens the default browser on the authorization URL, then blocks this
+    /// request until the redirect arrives back at its local callback server (up to 5 minutes) or
+    /// the flow finishes without requiring a redirect. Returns the resulting server status, or a
+    /// "failed" status carrying the error when the request didn't yield a status object.
+    /// The wait can exceed the shared client's 100s timeout, so a dedicated client with a longer
+    /// timeout runs this call.
+    /// </remarks>
+    public async Task<McpServerInfo> McpAuthenticateAsync(string name, string? directory = null,
+        CancellationToken ct = default)
+    {
+        using var authHttp = new HttpClient
+        {
+            BaseAddress = Http.BaseAddress,
+            Timeout = TimeSpan.FromMinutes(6),
+        };
+        if (Http.DefaultRequestHeaders.Authorization is { } auth)
+            authHttp.DefaultRequestHeaders.Authorization = auth;
+
+        using var response = await authHttp.PostAsync(
+            DirectoryUrl($"/mcp/{Uri.EscapeDataString(name)}/auth/authenticate", directory), null, ct);
+        var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var status = doc.RootElement.GetStringProperty("status");
+        var error = doc.RootElement.GetStringProperty("error");
+        if (!response.IsSuccessStatusCode)
+        {
+            if (error.Length > 0) return new McpServerInfo { Status = "failed", Error = error };
+            if (status.Length > 0) return new McpServerInfo { Status = "failed", Error = status };
+            return new McpServerInfo { Status = "failed", Error = response.ReasonPhrase ?? "OAuth failed" };
+        }
+        if (status.Length == 0) return new McpServerInfo { Status = "failed", Error = error.Length > 0 ? error : "OAuth failed" };
+        return new McpServerInfo { Status = status, Error = error };
+    }
+
     /// <summary>Appends the ?directory= query used by instance-scoped routes when a directory is known.</summary>
     private static string DirectoryUrl(string path, string? directory) =>
         string.IsNullOrEmpty(directory)

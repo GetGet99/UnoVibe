@@ -543,8 +543,11 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>
-    /// Connects or disconnects an MCP server based on its current status, then refreshes
-    /// the list. Mirrors the TUI: connected → disconnect, anything else → connect.
+    /// Connects, disconnects, or authenticates an MCP server based on its current status, then
+    /// refreshes the list. Mirrors the web client's <c>toggleMcp</c>: connected → disconnect,
+    /// needs_auth → authenticate (OAuth), anything else → connect. A needs_auth server has no
+    /// usable client yet — the server routes <c>POST /mcp/{name}/auth/authenticate</c>, which
+    /// opens the browser on the authorization URL and blocks until the OAuth callback completes.
     /// </summary>
     public async Task ToggleMcpAsync(string name)
     {
@@ -555,8 +558,27 @@ public sealed partial class ChatStore : IDisposable
         var directory = _mcpDirectory;
         try
         {
-            if (server.IsConnected) await _client.McpDisconnectAsync(name, directory);
-            else await _client.McpConnectAsync(name, directory);
+            if (server.IsConnected)
+            {
+                await _client.McpDisconnectAsync(name, directory);
+            }
+            else if (server.NeedsAuth)
+            {
+                ShowToast(new ToastItem
+                {
+                    Title = $"Authenticating {name}",
+                    Message = "Complete the sign-in in the browser that opened to connect this MCP server.",
+                    Variant = "info",
+                    DurationMs = 8000,
+                });
+                var result = await _client.McpAuthenticateAsync(name, directory);
+                if (result.Status == "failed" && result.Error.Length > 0)
+                    ConnectionStatus = $"MCP {name} auth failed: {result.Error}";
+            }
+            else
+            {
+                await _client.McpConnectAsync(name, directory);
+            }
         }
         catch (Exception ex)
         {
