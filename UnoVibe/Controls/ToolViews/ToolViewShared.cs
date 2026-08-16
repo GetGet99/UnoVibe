@@ -342,12 +342,8 @@ public static class ToolViewShared
         return value[value.Length - 1] == '\n' ? count - 1 : count;
     }
 
-    public static string Generic(PartItem p)
-    {
-        var name = p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running tool...";
-        var input = p.ToolInput.Length > 0 && p.ToolInput.Length <= 400 ? " " + p.ToolInput : "";
-        return "⚙ " + name + input;
-    }
+    public static string Generic(PartItem p) =>
+        "⚙ " + (p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running tool...");
 
     /// <summary>Title for a subagent-spawning <c>task</c> tool call. The state.title is the model's short description.</summary>
     public static string Task(PartItem p)
@@ -388,6 +384,20 @@ public static class ToolViewShared
         var output = p.ShellOutput.Length > 0 ? p.ShellOutput : p.ToolOutput;
         if (output.Length == 0) return (output, false);
         return CollapseLines(output, ShellMaxLines, ShellMaxChars);
+    }
+
+    public static bool GenericInputOverflow(PartItem p) => GenericCollapse(p.ToolInput).Overflow;
+
+    public static string GenericInputCollapsed(PartItem p) => GenericCollapse(p.ToolInput).Output;
+
+    public static bool GenericOutputOverflow(PartItem p) => GenericCollapse(p.ToolOutput).Overflow;
+
+    public static string GenericOutputCollapsed(PartItem p) => GenericCollapse(p.ToolOutput).Output;
+
+    private static (string Output, bool Overflow) GenericCollapse(string value)
+    {
+        if (value.Length == 0) return (value, false);
+        return CollapseLines(value, ShellMaxLines, ShellMaxChars);
     }
 
     /// <summary>
