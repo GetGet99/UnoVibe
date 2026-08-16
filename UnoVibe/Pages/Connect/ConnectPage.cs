@@ -60,7 +60,8 @@ namespace UnoVibe.Pages.Connect;
                             <ConnectPanel OpenFolderRequested+=`PickFolderAsync` ConnectToUrlRequested+=`ConnectToUrlAsync` />
                         </Grid>
                     </Grid>
-                    <TextBlock Text="Tip: launch with a folder path or server URL to open it directly, e.g. `UnoVibe ~/project` or `UnoVibe http://localhost:4096`." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
+                    // we don't have CLI command installed for user yet.
+                    // <TextBlock Text="Tip: launch with a folder path or server URL to open it directly, e.g. `unovibe ~/project` or `unovibe http://localhost:4096`." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
 
                     await `OpencodeServeProcess.GetExecutableStatus()`
                     with {
