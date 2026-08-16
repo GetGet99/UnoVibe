@@ -23,9 +23,7 @@ namespace UnoVibe.Controls.ToolViews;
         if (`Expanded`)
         {
             if (`Part.Diff.Length > 0`)
-                <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                    <TextBlock Text=`ToolViewShared.Truncate(Part.Diff, 6000)` FontSize=12 FontFamily=`CodeFonts.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                </Border>
+                <DiffView Diff=`Part.Diff` />
             if (`Part.ToolOutput.Length > 0`)
                 <TextBlock Text=`ToolViewShared.Truncate(Part.ToolOutput, 4000)` FontSize=11 FontFamily=`CodeFonts.Current` Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
         }

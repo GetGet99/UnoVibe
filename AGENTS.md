@@ -365,8 +365,9 @@ the user is talking to this opencode session **through the running UnoVibe app**
   controls `MessageView`, `MessageTextPart`, `ModelPicker`, `SendMessageButton`.
   The chat page coordinates sends and provides the shared composer text (`Input`).
 - `UnoVibe/Controls/` — reusable UI used across pages: `AppSymbolIcon`, `CodeHighlighter`
-  (ColorCode-based syntax highlighting for fenced code blocks), `FolderActions`,
-  `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
+  (ColorCode-based syntax highlighting for fenced code blocks), `CodeView`/`DiffView`
+  (line-numbered syntax-highlighted code and colored unified-diff views for tool cards),
+  `FolderActions`, `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
   `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`), `SymbolExtemsion`,
   `ToolViews/*` (ToolView* render opencode tool calls).
 - `UnoVibe/Services/` — core logic:
@@ -556,8 +557,10 @@ is a per-file list
 `ToolViewPatch` — a collapsible card ("← Patch <path>" / "← Patch N files", "Preparing patch..."
 while in flight) that parses `PatchJson` via `ToolViewShared.ParsePatchFiles` and renders one
 bordered block per file with a TUI-style label (`# Created`/`# Deleted`/`# Moved a → b`/
-`← Patched <path>` + `(N+ M-)` counts) and the unified diff, falling back to the raw `Part.Diff`
-when the server omits per-file metadata.
+`← Patched <path>` + `(N+ M-)` counts). Each non-delete file's `patch` renders through
+`UnoVibe/Controls/DiffView.cs` (see "Tool diff / code views"); delete files show a `-N lines`
+summary instead (TUI parity). Falls back to the raw `Part.Diff` via `DiffView` when the server
+omits per-file metadata.
 
 Mirrors the TUI's `ApplyPatch` (`routes/session/index.tsx`) and the web client's `patch` renderer
 (`session-ui/src/components/message-part.tsx` + `apply-patch-file.ts`).
@@ -1194,6 +1197,10 @@ color.
   `SolidColorBrush` cache (`ColorCode.Styling.Style` is aliased — `Style` clashes with
   `Microsoft.UI.Xaml.Style`). Code blocks use the configured **Code font** setting
   (`SettingsStore.CodeFont`, resolved by `Services/CodeFonts.cs` — see "Settings").
+  The same class also exposes the lower-level building blocks for reuse: `ResolveLanguageFromPath`
+  (extension → ColorCode language, mirroring the TUI's `util/filetype.ts` subset), `ColorizeRuns`
+  (the styled fragment list — lets `CodeView` interleave line numbers) and `ToRun` (fragment →
+  `Run`).
 - Inline code (`CodeInline`) is tinted with the **secondary accent**
   (`AccentPalette.InlineCodeBrush` — the primary accent hue-rotated −40° into a teal family,
   brightness-shifted toward the theme background: `Light2` in dark themes, `Dark2` in light).
@@ -1204,6 +1211,35 @@ color.
 
 Reuse in another QuickMarkup project: copy this file + `AppSymbolIcon.cs` + `CodeHighlighter.cs`
 and add the Markdig + ColorCode.Core packages.
+
+### Tool diff / code views
+
+`UnoVibe/Controls/DiffView.cs` and `UnoVibe/Controls/CodeView.cs` are self-contained QuickMarkup
+controls (`IQuickMarkupComponent<UIElement>`) that render colored code into one selectable
+`TextBlock` (no RichTextBlock on Uno) and are used by the `edit`/`apply_patch`/`write` tool cards.
+
+- **`DiffView`** renders a unified diff with per-line coloring in a single TextBlock: hunk headers
+  (`@@ ... @@`) Accent + bold, added lines SystemSuccess, removed lines SystemCritical, file metadata
+  (`---`/`+++`/`diff --git`/`index`/`new file`/.../`\ No newline`) TertiaryText, context PrimaryText.
+  A muted old/new **gutter** column is derived from each hunk header's `-a,b +c,d` range (parsed in
+  `ParseHunk`) so line numbers track the file columns like git's diff output (added lines carry the
+  new number, removed lines the old, context both). Long diffs collapse via
+  `ToolViewShared.CollapsePreview` (`DiffMaxLines = 60`, capped chars) with a "Show more ▾" toggle,
+  and a trailing unnumbered muted `…` marks the truncation.
+- **`CodeView`** renders a `write` tool's `input.content` (part field `ToolContent`, path
+  `ToolFilePath`) as line-numbered, syntax-highlighted code. The whole source is colorized once via
+  `CodeHighlighter.ColorizeRuns` (so multi-line strings/comments span lines) and the runs are split at
+  line boundaries to interleave a muted gutter + `LineBreak` (the gutter width adapts to the line
+  count). The language is resolved from the file path via
+  `CodeHighlighter.ResolveLanguageFromPath`; unknown extensions render plain with line numbers.
+  Same `CodeMaxLines`/`Show more` collapse as DiffView.
+- Both re-render reactively via their generated `*Prop.Watch(_ => Render())` (streaming deltas) and
+  clear/re-add `host.Children` on each render; the `…` marker is appended as a `Run` after the last
+  `LineBreak` so it's never counted as a diff/code line.
+- `ToolViewEdit` shows `Part.Diff` in a `DiffView` (plus the raw `ToolOutput` when present);
+  `ToolViewPatch` uses a `DiffView` per file patch; `ToolViewWrite` shows `Part.ToolContent` in a
+  `CodeView` (falling back to truncated `ToolOutput` when older servers omit content). `WriteTitle`
+  counts the written file's lines from `ToolContent` (falling back to output/input).
 
 ### Chat input suggestion box
 

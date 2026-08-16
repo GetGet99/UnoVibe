@@ -22,7 +22,9 @@ namespace UnoVibe.Controls.ToolViews;
         </Button>
         if (`Expanded`)
         {
-            if (`Part.ToolOutput.Length > 0`)
+            if (`Part.ToolContent.Length > 0`)
+                <CodeView Text=`Part.ToolContent` FilePath=`Part.ToolFilePath` />
+            else if (`Part.ToolOutput.Length > 0`)
                 <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                     <TextBlock Text=`ToolViewShared.Truncate(Part.ToolOutput, 4000)` FontSize=12 FontFamily=`CodeFonts.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
                 </Border>

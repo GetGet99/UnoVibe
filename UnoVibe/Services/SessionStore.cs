@@ -1163,6 +1163,7 @@ public sealed partial class SessionStore
                 if (serialized != "{}") item.ToolInput = serialized;
                 if (input.TryGetProperty("command", out var command)) item.ToolCommand = command.GetString() ?? "";
                 if (input.TryGetProperty("filePath", out var filePath)) item.ToolFilePath = filePath.GetString() ?? "";
+                if (input.TryGetProperty("content", out var content)) item.ToolContent = content.GetString() ?? "";
                 if (input.TryGetProperty("pattern", out var pattern)) item.ToolPattern = pattern.GetString() ?? "";
                 if (input.TryGetProperty("path", out var searchPath)) item.ToolSearchPath = searchPath.GetString() ?? "";
                 if (input.TryGetProperty("include", out var include)) item.ToolInclude = include.GetString() ?? "";

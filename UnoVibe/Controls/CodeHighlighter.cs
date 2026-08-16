@@ -36,16 +36,71 @@ public static class CodeHighlighter
 
     private static readonly Dictionary<string, SolidColorBrush> BrushCache = new();
 
-    /// <summary>
-    /// Resolves a fenced-code info string (e.g. "ts", "csharp", "json") to a ColorCode
+    /// <summary>Resolves a fenced-code info string (e.g. "ts", "csharp", "json") to a ColorCode
     /// language via id + alias matching. Returns null when the info is empty or unknown —
-    /// the caller then falls back to plain text.
-    /// </summary>
+    /// the caller then falls back to plain text.</summary>
     public static ILanguage? ResolveLanguage(string? info)
     {
         if (string.IsNullOrWhiteSpace(info)) return null;
         var trimmed = info.Trim();
         return trimmed.Length > 0 ? Languages.FindById(trimmed) : null;
+    }
+
+    // Extension (lowercase, leading dot) -> ColorCode language id/alias for file paths.
+    // Mirrors the TUI's util/filetype.ts LANGUAGE_EXTENSIONS for the subset ColorCode supports.
+    private static readonly Dictionary<string, string> ExtensionLanguages = new()
+    {
+        [".c"] = "cpp",
+        [".cc"] = "cpp",
+        [".cpp"] = "cpp",
+        [".cxx"] = "cpp",
+        [".c++"] = "cpp",
+        [".cs"] = "c#",
+        [".csx"] = "c#",
+        [".css"] = "css",
+        [".fs"] = "fsharp",
+        [".fsi"] = "fsharp",
+        [".fsx"] = "fsharp",
+        [".fsscript"] = "fsharp",
+        [".hs"] = "haskell",
+        [".lhs"] = "haskell",
+        [".html"] = "html",
+        [".htm"] = "html",
+        [".java"] = "java",
+        [".js"] = "javascript",
+        [".mjs"] = "javascript",
+        [".cjs"] = "javascript",
+        [".jsx"] = "javascript",
+        [".json"] = "json",
+        [".md"] = "markdown",
+        [".markdown"] = "markdown",
+        [".php"] = "php",
+        [".ps1"] = "powershell",
+        [".psm1"] = "powershell",
+        [".py"] = "python",
+        [".sql"] = "sql",
+        [".ts"] = "typescript",
+        [".mts"] = "typescript",
+        [".cts"] = "typescript",
+        [".tsx"] = "typescript",
+        [".xml"] = "xml",
+        [".xaml"] = "xml",
+        [".axml"] = "xml",
+    };
+
+    /// <summary>
+    /// Resolves a file/directory path's extension to a ColorCode language (e.g. "src/App.cs" →
+    /// "c#"), mirroring the TUI's <c>util/filetype.ts</c>. Returns null for unknown extensions,
+    /// "\d+.png" image thumbnails, or paths with no extension — the caller falls back to plain.
+    /// </summary>
+    public static ILanguage? ResolveLanguageFromPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        var fileName = Path.GetFileName(path);
+        var dot = fileName.LastIndexOf('.');
+        if (dot <= 0 || dot == fileName.Length - 1) return null;
+        var ext = fileName.Substring(dot).ToLowerInvariant();
+        return ExtensionLanguages.TryGetValue(ext, out var id) ? Languages.FindById(id) : null;
     }
 
     /// <summary>
@@ -55,13 +110,45 @@ public static class CodeHighlighter
     /// </summary>
     public static bool Colorize(TextBlock target, string source, string? language)
     {
+        var runs = ColorizeRuns(source, language);
+        if (runs is null) return false;
+        foreach (var run in runs)
+        {
+            if (run.Text.Length == 0) continue;
+            var element = ToRun(run.Text, run.Style);
+            target.Inlines.Add(element);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Colorizes <paramref name="source"/> into a flat list of styled text fragments (null when the
+    /// language can't be resolved or the source is empty). Lets a caller build custom Inlines —
+    /// e.g. <see cref="CodeView"/> interleaves per-line line numbers with the highlighted runs.
+    /// </summary>
+    public static IReadOnlyList<StyledRun>? ColorizeRuns(string source, string? language)
+    {
         var lang = ResolveLanguage(language);
-        if (lang is null || source.Length == 0) return false;
+        if (lang is null || source.Length == 0) return null;
 
         var styles = IsDarkTheme() ? DarkStyles : LightStyles;
         var formatter = new TextBlockFormatter(styles);
-        formatter.FormatInlines(source, lang, target.Inlines);
-        return true;
+        return formatter.FormatRuns(source, lang);
+    }
+
+    /// <summary>Builds a <see cref="Run"/> from a styled fragment (version of the formatter's Emit).</summary>
+    public static Run ToRun(string text, Style? style) => new()
+    {
+        Text = text,
+        Foreground = StyleBrush(style),
+        FontWeight = style is { Bold: true } ? FontWeights.Bold : FontWeights.Normal,
+        FontStyle = style is { Italic: true } ? FontStyle.Italic : FontStyle.Normal,
+    };
+
+    private static Brush? StyleBrush(Style? style)
+    {
+        if (style is null) return null;
+        return !string.IsNullOrWhiteSpace(style.Foreground) ? BrushFromHex(style.Foreground) : null;
     }
 
     /// <summary>Same dark/light detection as AccentPalette: the WinUI system background color.</summary>
@@ -89,7 +176,7 @@ public static class CodeHighlighter
         byte.TryParse(h.AsSpan(offset, 2), System.Globalization.NumberStyles.HexNumber, null, out var b) ? b : (byte)0;
 
     /// <summary>Colorized single scope fragment: text + the resolved style for the scope name.</summary>
-    private readonly record struct StyledRun(string Text, Style? Style);
+    public readonly record struct StyledRun(string Text, Style? Style);
 
     /// <summary>
     /// A <see cref="CodeColorizerBase"/> that writes parsed fragments as styled <see cref="Run"/>s
@@ -99,19 +186,18 @@ public static class CodeHighlighter
     /// </summary>
     private sealed class TextBlockFormatter : CodeColorizerBase
     {
-        private InlineCollection? _inlines;
+        private readonly List<StyledRun> _runs = new();
 
         public TextBlockFormatter(StyleDictionary styles) : base(styles, null)
         {
         }
 
-        public void FormatInlines(string sourceCode, ILanguage language, InlineCollection inlines)
+        public IReadOnlyList<StyledRun> FormatRuns(string sourceCode, ILanguage language)
         {
-            _inlines = inlines;
+            _runs.Clear();
             languageParser.Parse(sourceCode, language, (parsed, scopes) => Write(parsed, scopes));
+            return _runs;
         }
-
-        private InlineCollection Inlines => _inlines!;
 
         protected override void Write(string parsedSourceCode, IList<Scope> scopes)
         {
@@ -163,15 +249,7 @@ public static class CodeHighlighter
         private void Emit(StyledRun run)
         {
             if (run.Text.Length == 0) return;
-            var element = new Run { Text = run.Text };
-            if (run.Style is { } style)
-            {
-                if (!string.IsNullOrWhiteSpace(style.Foreground))
-                    element.Foreground = BrushFromHex(style.Foreground);
-                if (style.Bold) element.FontWeight = FontWeights.Bold;
-                if (style.Italic) element.FontStyle = FontStyle.Italic;
-            }
-            Inlines.Add(element);
+            _runs.Add(run);
         }
     }
 }

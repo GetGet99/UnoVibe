@@ -267,7 +267,9 @@ public static class ToolViewShared
     public static string WriteTitle(PartItem p)
     {
         var title = Write(p);
-        var lineCount = CountLines(p.ToolOutput.Length > 0 ? p.ToolOutput : p.ToolInput);
+        // The written file's content lives in input.content (ToolContent); fall back to the
+        // input/output JSON when an older server only surfaces those.
+        var lineCount = CountLines(p.ToolContent.Length > 0 ? p.ToolContent : p.ToolOutput.Length > 0 ? p.ToolOutput : p.ToolInput);
         return lineCount > 0 ? $"{title}  ({lineCount} lines)" : title;
     }
 
@@ -417,5 +419,22 @@ public static class ToolViewShared
             return (preview.Substring(0, Math.Max(0, maxChars - 1)) + "…", true);
 
         return (preview + "\n…", true);
+    }
+
+    /// <summary>
+    /// Collapse helper for line-numbered views (DiffView/CodeView): returns the preview WITHOUT
+    /// the trailing "…" marker (the host renders it as a separate muted line so it isn't numbered
+    /// as diff/code content) plus an overflow flag.
+    /// </summary>
+    public static (string Preview, bool Overflow) CollapsePreview(string output, int maxLines, int maxChars)
+    {
+        var lines = output.Split('\n');
+        if (lines.Length <= maxLines && output.Length <= maxChars)
+            return (output, false);
+
+        var preview = string.Join("\n", lines.Take(maxLines));
+        if (preview.Length > maxChars)
+            preview = preview.Substring(0, Math.Max(0, maxChars - 1));
+        return (preview, true);
     }
 }

@@ -34,14 +34,14 @@ namespace UnoVibe.Controls.ToolViews;
                 <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
                     <StackPanel Spacing=4>
                         <TextBlock Text=`ToolViewShared.PatchFileLine(f)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                        if (`f.Patch.Length > 0`)
-                            <TextBlock Text=`ToolViewShared.Truncate(f.Patch, 6000)` FontSize=12 FontFamily=`CodeFonts.Current` Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                        if (`f.Type == "delete"`)
+                            <TextBlock Text=`f.Deletions > 0 ? $"-{f.Deletions} line" + (f.Deletions == 1 ? "" : "s") : "Deleted"` FontSize=12 FontFamily=`CodeFonts.Current` Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                        else if (`f.Patch.Length > 0`)
+                            <DiffView Diff=`f.Patch` />
                     </StackPanel>
                 </Border>
             if (`Part.Diff.Length > 0 && ToolViewShared.ParsePatchFiles(Part).Count == 0`)
-                <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
-                    <TextBlock Text=`ToolViewShared.Truncate(Part.Diff, 6000)` FontSize=12 FontFamily=`CodeFonts.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                </Border>
+                <DiffView Diff=`Part.Diff` />
         }
         if (`Part.ToolError.Length > 0`)
             <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
