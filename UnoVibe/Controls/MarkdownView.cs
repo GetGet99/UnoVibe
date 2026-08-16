@@ -26,8 +26,8 @@ namespace UnoVibe.Controls;
 /// literal), which matches how the web client "heals" partial markdown while a turn streams.
 ///
 /// Self-contained and portable: to reuse in another QuickMarkup project, copy this file together with
-/// <c>AppSymbolIcon.cs</c> and add the Markdig package. It only depends on QuickMarkup + Markdig + the
-/// WinUI types in the app's global usings.
+/// <c>AppSymbolIcon.cs</c> and add the Markdig + ColorCode.Core packages. It only depends on
+/// QuickMarkup + Markdig + ColorCode.Core + the WinUI types in the app's global usings.
 ///
 /// API:
 ///   - <see cref="Text"/> — the markdown source. Bind reactively (e.g. `Text=`part.Text``).
@@ -194,6 +194,20 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
     private UIElement RenderCode(CodeBlock code)
     {
         var text = code.Lines.ToString();
+        var tb = new TextBlock
+        {
+            FontFamily = CodeFont,
+            FontSize = 12,
+            Foreground = _theme.PrimaryText,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+        };
+        // Fenced code carries its language in Info (e.g. ```ts / ```csharp); indented code has
+        // none. Colorize via ColorCode when we can resolve the language, else plain text.
+        var info = code is FencedCodeBlock fenced ? fenced.Info : null;
+        if (!CodeHighlighter.Colorize(tb, text, info))
+            tb.Text = text;
+
         return new Border
         {
             Background = _theme.SystemNeutralBackground,
@@ -201,15 +215,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
             Padding = new Thickness(10, 6, 10, 6),
             Margin = new Thickness(0, 2, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Child = new TextBlock
-            {
-                Text = text,
-                FontFamily = CodeFont,
-                FontSize = 12,
-                Foreground = _theme.PrimaryText,
-                TextWrapping = TextWrapping.Wrap,
-                IsTextSelectionEnabled = true,
-            },
+            Child = tb,
         };
     }
 

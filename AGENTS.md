@@ -43,7 +43,8 @@ High-level goals/design:
   locally-packed build of the upstream `wt-master` repo): `QuickMarkup.Uno` for non-Windows
   targets, **`QuickMarkup.WinUI`** + **`Microsoft.WindowsAppSDK`** for `net10.0-windows`.
   Uses central package management.
-- Only external package references: `QuickMarkup.Uno` and `Markdig` (plus `QuickMarkup.WinUI` and
+- Only external package references: `QuickMarkup.Uno`, `Markdig`, and `ColorCode.Core`
+  (plus `QuickMarkup.WinUI` and
   `Microsoft.WindowsAppSDK` on the Windows target). Everything else comes from the Uno.Sdk
   implicit packages.
 - Build uses `Uno.SingleProject`; `EmitCompilerGeneratedFiles=true` so generated source lands under
@@ -361,7 +362,8 @@ the user is talking to this opencode session **through the running UnoVibe app**
   `ChatComposer` (image strip, input, send, mode/model/variant), and the message-rendering
   controls `MessageView`, `MessageTextPart`, `ModelPicker`, `SendMessageButton`.
   The chat page coordinates sends and provides the shared composer text (`Input`).
-- `UnoVibe/Controls/` — reusable UI used across pages: `AppSymbolIcon`, `FolderActions`,
+- `UnoVibe/Controls/` — reusable UI used across pages: `AppSymbolIcon`, `CodeHighlighter`
+  (ColorCode-based syntax highlighting for fenced code blocks), `FolderActions`,
   `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
   `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`), `SymbolExtemsion`,
   `ToolViews/*` (ToolView* render opencode tool calls).
@@ -1160,7 +1162,18 @@ color.
 - Tables render as a real Grid (star columns honoring `TableColumnDefinition.Width`, header row
   SubtleFill + SemiBold, per-cell DividerStroke gridlines, column alignment, ColumnSpan/RowSpan via
   `Grid.SetColumnSpan`/`SetRowSpan`, invalid/zero-column tables fall back to raw source).
-- No code syntax highlighting; code blocks use a fixed `Consolas` font.
+- **Fenced code blocks get ColorCode syntax highlighting.** `RenderCode` asks
+  `UnoVibe/Controls/CodeHighlighter.cs` to colorize the block's text (`ColorCode.Core` —
+  a `TextBlockFormatter : CodeColorizerBase` emits styled `Run`s into the code `TextBlock`'s
+  `Inlines`, flattened from the scope tree via a `List<Scope>` stack; `EffectiveStyle` returns the
+  innermost scope with a style entry, fixing ColorCode's own "previous scope" quirk). The language
+  comes from `FencedCodeBlock.Info` (trimmed) via `Languages.FindById`, so alias fences work
+  (`ts`→typescript, `csharp`→c#, `sh`→bash, `py`→python); indented code blocks have no `Info`, and
+  languages with no ColorCode grammar render as plain text. Theme (dark vs light) is detected once
+  per colorize via `UISettings` background brightness (same heuristic as `AccentPalette`) and picks
+  a cached `StyleDictionary.DefaultDark`/`DefaultLight`; brushes come from a `BrushFromHex`
+  `SolidColorBrush` cache (`ColorCode.Styling.Style` is aliased — `Style` clashes with
+  `Microsoft.UI.Xaml.Style`). Code blocks use a fixed `Consolas` font.
 - Inline code (`CodeInline`) is tinted with the **secondary accent**
   (`AccentPalette.InlineCodeBrush` — the primary accent hue-rotated −40° into a teal family,
   brightness-shifted toward the theme background: `Light2` in dark themes, `Dark2` in light).
@@ -1169,8 +1182,8 @@ color.
 - `Hyperlink` only for absolute URLs (email autolinks `<a@b.c>` get a `mailto:`-prefixed Uri so
   they navigate).
 
-Reuse in another QuickMarkup project: copy this file + `AppSymbolIcon.cs` and add the Markdig
-package.
+Reuse in another QuickMarkup project: copy this file + `AppSymbolIcon.cs` + `CodeHighlighter.cs`
+and add the Markdig + ColorCode.Core packages.
 
 ### Chat input suggestion box
 

@@ -59,6 +59,7 @@
 
   <ItemGroup>
     <PackageReference Include="Markdig" />
+    <PackageReference Include="ColorCode.Core" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.WinUI" />
