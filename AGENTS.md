@@ -1001,6 +1001,11 @@ color.
   SubtleFill + SemiBold, per-cell DividerStroke gridlines, column alignment, ColumnSpan/RowSpan via
   `Grid.SetColumnSpan`/`SetRowSpan`, invalid/zero-column tables fall back to raw source).
 - No code syntax highlighting; code blocks use a fixed `Consolas` font.
+- Inline code (`CodeInline`) is tinted with the **secondary accent**
+  (`AccentPalette.InlineCodeBrush` — the primary accent hue-rotated −40° into a teal family,
+  brightness-shifted toward the theme background: `Light2` in dark themes, `Dark2` in light).
+  This keeps `code` visually distinct from accent-colored links. The shared palette service lives
+  in `UnoVibe/AccentPalette.cs` (hue shift + WinUI light/dark variants) for reuse.
 - `Hyperlink` only for absolute URLs (email autolinks `<a@b.c>` get a `mailto:`-prefixed Uri so
   they navigate).
 

@@ -529,7 +529,9 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         if (style.Code)
         {
             run.FontFamily = CodeFont;
-            run.Foreground = _theme.SystemAttention;
+            // Secondary accent (hue-shifted from the primary) so snippets read distinct from
+            // accent-colored links; falls back to the attention color when no solid accent exists.
+            run.Foreground = AccentPalette.InlineCodeBrush(_theme) ?? _theme.SystemAttention;
         }
         target.Add(run);
     }
