@@ -72,6 +72,13 @@ public sealed partial class ChatStore : IDisposable
     /// <summary>The id of the currently-open session ("" for an unsaved draft).</summary>
     public string CurrentSessionId => Active?.SessionId ?? "";
 
+    /// <summary>
+    /// The window this store belongs to (set by <see cref="WindowController"/>). Used by the native
+    /// toast notifications' focus gate, which must only consider THIS window's foreground state —
+    /// a second window being focused must not suppress this window's active-session toasts.
+    /// </summary>
+    public Window? OwnerWindow { get; set; }
+
     /// <summary>The HTTP client for the configured server (null before <see cref="Configure"/>).</summary>
     public OpencodeClient? Client => _client;
 
@@ -1411,6 +1418,11 @@ public sealed partial class ChatStore : IDisposable
                     item.IsRead = false;
                     item.Outcome = flags.Outcome;
                 }
+                // Turn finished → native toast. Background-session completions always toast (the
+                // sidebar dot alone is easy to miss); the active session's completion is visible
+                // streaming in chat, so it only toasts while the owning window isn't foreground.
+                if (type == "idle")
+                    Notifications.NotifyCompleted(OwnerWindow, item, flags.Outcome, sessionId == Active.SessionId);
             }
         }
 
@@ -1430,11 +1442,29 @@ public sealed partial class ChatStore : IDisposable
             Flags(sessionId).PendingQuestions++;
             var item = GetSession(sessionId);
             if (item is not null) ApplySessionFlags(item);
+            // Native toast: suppressed only for the active session while its OWNING window is focused
+            // (the inline question form is already on screen there).
+            if (item is not null)
+                Notifications.NotifyQuestion(OwnerWindow, item, FirstQuestionText(properties),
+                    sessionId == Active.SessionId);
             _questionDirectories[requestId] = DirectoryOf(sessionId);
         }
 
         // Attach the live question to the session's store (active or cached).
         GetStore(sessionId)?.ApplyQuestionAsked(properties);
+    }
+
+    /// <summary>First question's text from a <c>question.asked</c> payload (for notification text).</summary>
+    private static string FirstQuestionText(JsonElement properties)
+    {
+        if (!properties.TryGetProperty("questions", out var questions) || questions.ValueKind != JsonValueKind.Array)
+            return "";
+        foreach (var q in questions.EnumerateArray())
+        {
+            var text = q.GetStringProperty("question");
+            if (text.Length > 0) return text;
+        }
+        return "";
     }
 
     /// <summary>Clears a session's pending-question count when a question is answered or dismissed.</summary>
@@ -1466,7 +1496,14 @@ public sealed partial class ChatStore : IDisposable
             if (item is not null) ApplySessionFlags(item);
         }
 
-        AddPermissionRequest(PermissionRequestItem.FromJson(properties));
+        var request = PermissionRequestItem.FromJson(properties);
+        // Native toast for a newly-arrived request. Suppressed for the active session (or a task
+        // child of it) while its OWNING window is focused — the approval dialog is already on
+        // screen there; a background session's approval always toasts.
+        if (!_permissions.Any(p => p.Id == request.Id) && sessionId.Length > 0 && GetSession(sessionId) is { } pending)
+            Notifications.NotifyPermission(OwnerWindow, pending, request.Title, request.Body,
+                IsActiveOrDescendant(request.SessionId));
+        AddPermissionRequest(request);
     }
 
     private void ApplyPermissionReplied(JsonElement properties)

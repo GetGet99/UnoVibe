@@ -16,6 +16,12 @@ public sealed class WindowController
 
     public ChatStore Store { get; } = new();
 
+    public WindowController()
+    {
+        // Each window's store knows its own window so toast focus-gating is per-window.
+        Store.OwnerWindow = Window;
+    }
+
     public void ShowConnect(StartupArgs? startup = null)
     {
         Window.Child = new ConnectPage(this, startup).MarkupNode;

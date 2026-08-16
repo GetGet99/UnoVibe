@@ -29,6 +29,7 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         ReactiveInitializer.InitReactiveScheduler();
+        Notifications.Initialize();
 
         MainWindow = CreateWindow().Window;
     }
@@ -59,6 +60,7 @@ public partial class App : Application
         };
 
         controller.Window.Activate();
+        Notifications.RegisterWindow(controller.Window);
         return controller;
     }
 

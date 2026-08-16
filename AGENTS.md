@@ -106,6 +106,30 @@ The Windows **WinUI** target is supported and should be kept compilable, so foll
 - **Windows APIs that need an HWND to appear.** Dialogs/pickers (e.g. `FolderPicker`, `FileOpenPicker`) and similar WinRT APIs must be associated with a window handle on Windows — calling `PickSingleFolderAsync`/`PickSingleFileAsync` **without** `InitializeWithWindow.Initialize` crashes the app on the Windows target. Uno's Skia target does this internally, so use the `UnoVibe.WindowsHelper` wrapper instead of `WinRT.Interop` directly: `WindowsHelper.InitializeWithWindow(picker, window)` — it takes the app `Window` (resolving the `hwnd` via `window.AppWindow.Id` internally) and no-ops on non-WinUI targets via an internal `#if WASDK` guard. The `Window` is **always non-null** at call sites (never pass null — it must be set or the Windows target crashes). **Getting the `Window` at a picker call site**: the window flows through the QuickMarkup provide/inject context — `MainPage` declares `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and pass it to `WindowsHelper.InitializeWithWindow`. Callers like `SessionStore.PickImageAsync(Window)` take it as a parameter. `ConnectPage` reaches it through its own `Controller.Window` instead.
 - Since the Windows target is planned/supported, prefer these portable forms whenever convenient; on Linux just write the forms above — the goal is code that compiles on both targets.
 
+**Windows toast notifications (WASDK only):**
+`Services/Notifications.cs` bridges the chat sidebar indicators to native Windows toast
+notifications. Every public method is a no-op on the Skia targets (the Windows API code lives
+behind `#if WASDK`), so callers need no `#if` guards — it uses the Windows App SDK's
+`Microsoft.Windows.AppNotifications` API (implemented by Windows/WASDK, **not** by Uno).
+
+- `App.xaml.cs` calls `Notifications.Initialize()` in `OnLaunched` (before the first window;
+  `Register()` also acquires the COM identity that lets an unpackaged app show toasts) and
+  `Notifications.RegisterWindow(controller.Window)` after each window activates. Windows are
+  stored as `Window` instances; the HWND is resolved on demand (`window.AppWindow.Id`) at check time.
+- Fires for the same events the sidebar indicators show, from `ChatStore`:
+  **background completion** (`ApplySessionStatus`, type idle + non-active session) and pending
+  **question**/**permission** (`ApplyQuestionAsked`/`ApplyPermissionAsked`).
+- **Focus gating is per-window:** a toast only fires when it carries info the user isn't already
+  looking at. Each event passes its store's `Window` (`ChatStore.OwnerWindow`, set by
+  `WindowController`); the gate compares only THAT window against `GetForegroundWindow()`.
+  Background-session events always toast; active-session events (inline form/dialog on screen)
+  are suppressed only while the owning window is the foreground window — a second window being
+  focused does not silence another window's active-session toasts.
+- Session titles default to "New Chat" for the server's `"New session - <ISO>"`/`"Child session - <ISO>"`.
+- Toast click-activation (switching to the session/replying) is **not** wired; the packaged
+  `Package.appxmanifest` does not declare a `windows.toastNotificationActivation` activator, which
+  is optional for showing toasts.
+
 ## How to Build & Run
 
 At the start of a new session, verify the dev server is actually running before assuming it is —
