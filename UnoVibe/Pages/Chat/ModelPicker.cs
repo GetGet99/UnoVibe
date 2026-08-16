@@ -3,6 +3,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using UnoVibe.Models;
+using UnoVibe.Services;
 
 namespace UnoVibe.Pages.Chat;
 
@@ -25,12 +26,14 @@ namespace UnoVibe.Pages.Chat;
 [QuickMarkup("""
     using UnoVibe.Models;
     using UnoVibe.Controls;
+    using UnoVibe.Services;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     using Microsoft.UI.Xaml.Controls.Primitives;
     public `ObservableCollection<ModelOption>` ItemsSource = `new()`;
     public ModelOption? SelectedItem = null;
     public double FontSize = 12;
+    inject ChatStore Store;
     inject? bool IsCompact;
     string Query = "";
     int HighlightIndex = -1;
@@ -86,6 +89,16 @@ namespace UnoVibe.Pages.Chat;
                                     </Border>
                             </StackPanel>
                         </ScrollViewer>
+                        <Border BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
+                            <Button HorizontalAlignment=Stretch HorizontalContentAlignment=Stretch
+                                    CornerRadius=6 @Click+=`ConnectProvider()`>
+                                <Grid ColumnSpacing=8 ColumnDefinitions=<><ColumnDefinition Width=Auto /><ColumnDefinition /></>>
+                                    <AppSymbolIcon Symbol=Add FontSize=12 Foreground=`theme.Accent` VerticalAlignment=Center />
+                                    <TextBlock Grid.Column=1 Text="Connect a provider…" FontSize=`FontSize` Foreground=`theme.Accent`
+                                               TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center HorizontalAlignment=Left />
+                                </Grid>
+                            </Button>
+                        </Border>
                     </StackPanel>
                 </Border>
             </Flyout>>
@@ -153,6 +166,31 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
     {
         if (modelFlyout is { IsOpen: true }) modelFlyout.Hide();
         ModelSelected?.Invoke(m);
+    }
+
+    /// <summary>Hides the flyout (buttons inside a Flyout don't auto-dismiss) and opens the connect dialog.</summary>
+    private void ConnectProvider()
+    {
+        if (modelFlyout is { IsOpen: true }) modelFlyout.Hide();
+        _ = OpenProviderDialogAsync();
+    }
+
+    /// <summary>
+    /// Opens the "Connect a provider" dialog (a mirror of the TUI's <c>/connect</c> flow) hosted
+    /// in a <see cref="ContentDialog"/> — not another flyout, since this flyout is still open.
+    /// The dialog is itself a QuickMarkup component whose root is the ContentDialog.
+    /// </summary>
+    private async Task OpenProviderDialogAsync()
+    {
+        if (Store.Client is null) return;
+        var xamlRoot = MarkupNode.XamlRoot;
+        if (xamlRoot is null) return;
+        var dialog = new ProviderConnectDialog { Store = Store };
+        await dialog.LoadAsync();
+
+        dialog.MarkupNode.XamlRoot = xamlRoot;
+        dialog.Completed += () => dialog.MarkupNode.Hide();
+        await dialog.MarkupNode.ShowAsync();
     }
 
     private bool IsSelected(ModelOption m) =>

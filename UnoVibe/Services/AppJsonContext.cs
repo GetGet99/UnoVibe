@@ -25,6 +25,13 @@ namespace UnoVibe.Services;
 [JsonSerializable(typeof(ForkSessionRequest))]
 [JsonSerializable(typeof(ReplyQuestionRequest))]
 [JsonSerializable(typeof(ReplyPermissionRequest))]
+[JsonSerializable(typeof(ProviderListResult))]
+[JsonSerializable(typeof(ProviderAuthMethod))]
+[JsonSerializable(typeof(Dictionary<string, ProviderAuthMethod[]>))]
+[JsonSerializable(typeof(AuthSetRequest))]
+[JsonSerializable(typeof(OAuthAuthorization))]
+[JsonSerializable(typeof(OAuthAuthorizeRequest))]
+[JsonSerializable(typeof(OAuthCallbackRequest))]
 internal sealed partial class AppJsonContext : JsonSerializerContext
 {
 }
@@ -144,4 +151,125 @@ internal sealed class ReplyPermissionRequest
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Message { get; set; }
+}
+
+// ── Provider connect (mirrors the TUI's /connect dialog API surface) ──────────
+
+/// <summary>
+/// GET /provider response — <c>{ all, default, connected }</c>. <c>all</c> is the provider
+/// catalog (Models.dev merged with runtime providers), <c>connected</c> the provider ids with
+/// a stored credential.
+/// </summary>
+public sealed class ProviderListResult
+{
+    public List<ProviderInfo>? All { get; set; }
+
+    public Dictionary<string, string>? Default { get; set; }
+
+    public List<string>? Connected { get; set; }
+}
+
+/// <summary>One provider entry from <see cref="ProviderListResult.All"/>.</summary>
+public sealed class ProviderInfo
+{
+    public string Id { get; set; } = "";
+
+    public string Name { get; set; } = "";
+}
+
+/// <summary>
+/// One auth method for a provider (GET /provider/auth): either an API-key entry
+/// (<c>type == "api"</c>) or an OAuth flow (<c>type == "oauth"</c>). Optional prompts
+/// (text/select inputs) must be answered before completing the method.
+/// </summary>
+public sealed class ProviderAuthMethod
+{
+    public string Type { get; set; } = "";
+
+    public string Label { get; set; } = "";
+
+    public List<AuthPrompt>? Prompts { get; set; }
+}
+
+/// <summary>A text or select input the auth method wants answered (e.g. a base URL, account id, deployment type).</summary>
+public sealed class AuthPrompt
+{
+    public string Type { get; set; } = "";
+
+    public string Key { get; set; } = "";
+
+    public string Message { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Placeholder { get; set; }
+
+    public List<AuthPromptOption>? Options { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AuthWhen? When { get; set; }
+}
+
+/// <summary>An option of a select <see cref="AuthPrompt"/>.</summary>
+public sealed class AuthPromptOption
+{
+    public string Label { get; set; } = "";
+
+    public string Value { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Hint { get; set; }
+}
+
+/// <summary>Condition gating an <see cref="AuthPrompt"/> on an earlier prompt's value.</summary>
+public sealed class AuthWhen
+{
+    public string Key { get; set; } = "";
+
+    public string Op { get; set; } = "";
+
+    public string Value { get; set; } = "";
+}
+
+/// <summary>
+/// PUT /auth/{providerID} body — stores an API-key credential (type "api"). The TUI's
+/// <c>/connect</c> flow uses exactly this shape; OAuth tokens are written server-side by the
+/// oauth callback endpoint instead.
+/// </summary>
+internal sealed class AuthSetRequest
+{
+    public string Type { get; set; } = "api";
+
+    public string Key { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? Metadata { get; set; }
+}
+
+/// <summary>POST /provider/{providerID}/oauth/authorize response.</summary>
+public sealed class OAuthAuthorization
+{
+    public string Url { get; set; } = "";
+
+    /// <summary>"auto" (no code — the callback completes as-is) or "code" (paste the authorization code).</summary>
+    public string Method { get; set; } = "";
+
+    public string Instructions { get; set; } = "";
+}
+
+/// <summary>POST /provider/{providerID}/oauth/authorize body.</summary>
+internal sealed class OAuthAuthorizeRequest
+{
+    public int Method { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? Inputs { get; set; }
+}
+
+/// <summary>POST /provider/{providerID}/oauth/callback body (code optional for "auto" methods).</summary>
+internal sealed class OAuthCallbackRequest
+{
+    public int Method { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Code { get; set; }
 }

@@ -289,6 +289,86 @@ public sealed class OpencodeClient
         return list;
     }
 
+    // ── Provider connect (mirrors the TUI's /connect dialog) ────────────────────
+
+    /// <summary>
+    /// Get /provider — the provider catalog <c>{ all, default, connected }</c> used by the
+    /// model picker. <c>all</c> merges the Models.dev catalog with runtime providers;
+    /// <c>connected</c> lists provider ids that have a stored credential. Returns null on
+    /// failure.
+    /// </summary>
+    public async Task<ProviderListResult?> GetProvidersAsync(CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/provider", ct);
+        if (!response.IsSuccessStatusCode) return null;
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        return await JsonSerializer.DeserializeAsync(stream, AppJsonContext.Default.ProviderListResult, ct);
+    }
+
+    /// <summary>
+    /// Get /provider/auth — the auth methods per provider
+    /// (<c>Record&lt;providerID, ProviderAuthMethod[]&gt;</c>). Empty map on failure.
+    /// </summary>
+    public async Task<Dictionary<string, ProviderAuthMethod[]>> GetProviderAuthMethodsAsync(
+        CancellationToken ct = default)
+    {
+        using var response = await Http.GetAsync("/provider/auth", ct);
+        if (!response.IsSuccessStatusCode) return new Dictionary<string, ProviderAuthMethod[]>();
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        return await JsonSerializer.DeserializeAsync(stream, AppJsonContext.Default.DictionaryStringProviderAuthMethodArray, ct)
+            ?? new Dictionary<string, ProviderAuthMethod[]>();
+    }
+
+    /// <summary>
+    /// Put /auth/{providerID} — stores an API-key credential (the "api" auth method path;
+    /// OAuth goes through <see cref="AuthorizeOAuthAsync"/>/<see cref="CompleteOAuthAsync"/> and
+    /// writes the token server-side). <paramref name="metadata"/> carries the prompt inputs
+    /// (e.g. account id, resource name).
+    /// </summary>
+    public async Task SetAuthAsync(string providerId, string key,
+        IReadOnlyDictionary<string, string>? metadata = null, CancellationToken ct = default)
+    {
+        var body = new AuthSetRequest { Key = key };
+        if (metadata is { Count: > 0 }) body.Metadata = new Dictionary<string, string>(metadata);
+        using var response = await Http.PutAsJsonAsync(
+            $"/auth/{Uri.EscapeDataString(providerId)}", body, AppJsonContext.Default.AuthSetRequest, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Post /provider/{providerID}/oauth/authorize — starts an OAuth flow for the given auth
+    /// method index, returning the URL to visit (plus whether a code is needed). Returns null
+    /// when the server rejects the request.
+    /// </summary>
+    public async Task<OAuthAuthorization?> AuthorizeOAuthAsync(string providerId, int method,
+        IReadOnlyDictionary<string, string>? inputs = null, CancellationToken ct = default)
+    {
+        var body = new OAuthAuthorizeRequest { Method = method };
+        if (inputs is { Count: > 0 }) body.Inputs = new Dictionary<string, string>(inputs);
+        using var response = await Http.PostAsJsonAsync(
+            $"/provider/{Uri.EscapeDataString(providerId)}/oauth/authorize",
+            body, AppJsonContext.Default.OAuthAuthorizeRequest, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        return await JsonSerializer.DeserializeAsync(stream, AppJsonContext.Default.OAuthAuthorization, ct);
+    }
+
+    /// <summary>
+    /// Post /provider/{providerID}/oauth/callback — completes an OAuth flow that was started
+    /// with <see cref="AuthorizeOAuthAsync"/>. <paramref name="code"/> is required for "code"
+    /// methods and omitted for "auto" methods. Writes the credential server-side.
+    /// </summary>
+    public async Task CompleteOAuthAsync(string providerId, int method, string? code = null,
+        CancellationToken ct = default)
+    {
+        var body = new OAuthCallbackRequest { Method = method };
+        if (!string.IsNullOrEmpty(code)) body.Code = code;
+        using var response = await Http.PostAsJsonAsync(
+            $"/provider/{Uri.EscapeDataString(providerId)}/oauth/callback",
+            body, AppJsonContext.Default.OAuthCallbackRequest, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     /// <summary>
     /// Get /session — lists sessions. Without a directory the list is scoped to the server's
     /// default project (instance); passing <paramref name="directory"/> (query param) lists the

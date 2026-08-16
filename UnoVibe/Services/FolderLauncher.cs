@@ -80,6 +80,37 @@ public static class FolderLauncher
         }
     }
 
+    /// <summary>Opens <paramref name="url"/> in the default browser. Returns an error message or null.</summary>
+    public static string? OpenUrl(string url)
+    {
+        try
+        {
+#if WINDOWS
+            {
+                var psi = new ProcessStartInfo(url) { UseShellExecute = true };
+                Process.Start(psi);
+            }
+#elif DESKTOP_MACOS
+            {
+                var psi = new ProcessStartInfo("open") { UseShellExecute = false };
+                psi.ArgumentList.Add(url);
+                Process.Start(psi);
+            }
+#else
+            {
+                var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+                psi.ArgumentList.Add(url);
+                Process.Start(psi);
+            }
+#endif
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+    }
+
     /// <summary>Opens the best available terminal at <paramref name="folder"/>. Returns an error message or null.</summary>
     public static string? OpenInTerminal(string folder)
     {
