@@ -30,7 +30,12 @@ namespace UnoVibe.Controls.ToolViews;
             <ColumnDefinition Width=Auto />
         </>>
             <Grid Width=14 Height=14 VerticalAlignment=Center>
-                <ToolBusyIndicator Part=`Part` />
+                if (`ToolViewShared.Busy(Part)`)
+                    <ToolBusyIndicator Part=`Part` />
+                else if (`Part.ToolStatus == "completed"`)
+                    <AppSymbolIcon Symbol=Accept FontSize=10 Foreground=`theme.SystemSuccess` HorizontalAlignment=Center VerticalAlignment=Center />
+                else if (`Part.ToolStatus == "error"`)
+                    <TextBlock Text="⚠" FontSize=12 Foreground=`theme.SystemCritical` HorizontalAlignment=Center VerticalAlignment=Center />
             </Grid>
             <StackPanel Grid.Column=1 Spacing=2 VerticalAlignment=Center>
                 <StackPanel Orientation=Horizontal Spacing=8>
@@ -44,10 +49,6 @@ namespace UnoVibe.Controls.ToolViews;
                 <TextBlock Text=`ToolViewShared.TaskStatus(Part)` FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
             </StackPanel>
             <StackPanel Grid.Column=2 Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
-                if (`Part.ToolStatus == "completed"`)
-                    <TextBlock Text="✓" FontSize=12 Foreground=`theme.SystemSuccess` VerticalAlignment=Center />
-                else if (`Part.ToolStatus == "error"`)
-                    <TextBlock Text="⚠" FontSize=12 Foreground=`theme.SystemCritical` VerticalAlignment=Center />
                 <AppSymbolIcon Symbol=Forward FontSize=11 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
             </StackPanel>
         </Grid>
