@@ -13,7 +13,7 @@ namespace UnoVibe.Controls.ToolViews;
     <StackPanel Spacing=4>
         <ToolViewTitle Part=`Part` Text=`ToolViewShared.TodoTitle(Part)` />
         foreach (var todo in `ToolViewShared.ParseTodos(Part)`)
-            <TextBlock Text=`ToolViewShared.TodoLine(todo)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true
+            <TextBlock Text=`ToolViewShared.TodoLine(todo)` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true
                        Foreground=`todo.Status == "in_progress" ? theme.SystemCaution : theme.TertiaryText` />
     </StackPanel>
     """)]

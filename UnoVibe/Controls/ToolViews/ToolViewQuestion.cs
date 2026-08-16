@@ -22,8 +22,8 @@ namespace UnoVibe.Controls.ToolViews;
             foreach (var q in `ToolViewShared.ParseQuestions(Part)`)
             {
                 <StackPanel Spacing=2>
-                    <TextBlock Text=`q.Question` FontSize=12 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                    <TextBlock Text=`q.Answer` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true
+                    <TextBlock Text=`q.Question` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                    <TextBlock Text=`q.Answer` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true
                                Padding=`new Thickness(8, 0, 0, 0)` />
                 </StackPanel>
             }
@@ -42,7 +42,7 @@ namespace UnoVibe.Controls.ToolViews;
             foreach (var q in `ToolViewShared.ParseQuestions(Part)`)
             {
                 <StackPanel Spacing=2>
-                    <TextBlock Text=`q.Question` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
+                    <TextBlock Text=`q.Question` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true />
                 </StackPanel>
             }
             if (`Part.ToolStatus == "error" && Part.ToolError.Length > 0`)

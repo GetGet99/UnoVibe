@@ -64,6 +64,10 @@
   <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <!-- SystemFonts (Services) enumerates installed fonts on WinUI via Win2D's DirectWrite
+         wrapper (CanvasTextFormat.GetSystemFontFamilies); the desktop targets use SkiaSharp,
+         which Uno's Skia host already ships. -->
+    <PackageReference Include="Microsoft.Graphics.Win2D" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == '' or !$(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.Uno" />

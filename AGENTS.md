@@ -44,9 +44,11 @@ High-level goals/design:
   targets, **`QuickMarkup.WinUI`** + **`Microsoft.WindowsAppSDK`** for `net10.0-windows`.
   Uses central package management.
 - Only external package references: `QuickMarkup.Uno`, `Markdig`, and `ColorCode.Core`
-  (plus `QuickMarkup.WinUI` and
-  `Microsoft.WindowsAppSDK` on the Windows target). Everything else comes from the Uno.Sdk
-  implicit packages.
+  (plus `QuickMarkup.WinUI`, `Microsoft.WindowsAppSDK`, and `Microsoft.Graphics.Win2D`
+  on the Windows target). Everything else comes from the Uno.Sdk
+  implicit packages. `SkiaSharp` is used by `Services/SystemFonts.cs` but **not referenced
+  directly** — it comes transitively from Uno's Skia host (its font manager), so desktop targets
+  get it with no added dependency.
 - Build uses `Uno.SingleProject`; `EmitCompilerGeneratedFiles=true` so generated source lands under
   `UnoVibe/obj/<tfm>/generated/...`.
 
@@ -792,6 +794,23 @@ Settings in use today:
 - **Default IDE/Editor** (`editor.command`, default `code`) — `FolderLauncher.OpenInEditor` runs
   `<command> <folder>`; errors surface as a toast.
 - **Send message default** (`send.mode`) — see "Send while busy".
+- **Code font** (`text.codefont`, default per-platform) — the monospaced font used only where the
+  content genuinely represents code or a terminal: markdown code blocks + inline `` `code` ``,
+  diff/patch bodies, tool output that is file content/terminal text (read loaded content, write/edit
+  output, generic tool input/output), and the shell tool's `$ command` title line.
+  It is deliberately **not** applied to UI chrome: tool title/header labels (except the shell command
+  line), expand/collapse chevrons + "Show more/less" buttons, the `/`-command suggestion list,
+  permission bodies, question text, or `ToolError` lines.
+  `Services/CodeFonts.cs` resolves the setting into a `FontFamily` everyone binds to
+  (`CodeFonts.Current`); the empty-string default maps to a font that ships with the OS —
+  **Consolas** on Windows, **DejaVu Sans Mono** on Linux (the fontconfig `monospace` default on
+  nearly every distro), **Menlo** on macOS — because a single hardcoded `Consolas` silently fell
+  back to the default sans font (no monospace) on Linux/macOS where the Microsoft font doesn't
+  exist. Any other installed monospaced font name works verbatim, or the `monospace` generic on
+  Linux. The picker lists every font installed on the device, enumerated once (lazily, on first
+  settings open) by `Services/SystemFonts.cs`: SkiaSharp's `SKFontManager.Default.FontFamilies`
+  on desktop (the same font manager that resolves `FontFamily` in the Skia renderer), and
+  Win2D's `CanvasTextFormat.GetSystemFontFamilies()` (DirectWrite) on the `net10.0-windows` target.
 
 ### Revert / undo
 
@@ -1173,7 +1192,8 @@ color.
   per colorize via `UISettings` background brightness (same heuristic as `AccentPalette`) and picks
   a cached `StyleDictionary.DefaultDark`/`DefaultLight`; brushes come from a `BrushFromHex`
   `SolidColorBrush` cache (`ColorCode.Styling.Style` is aliased — `Style` clashes with
-  `Microsoft.UI.Xaml.Style`). Code blocks use a fixed `Consolas` font.
+  `Microsoft.UI.Xaml.Style`). Code blocks use the configured **Code font** setting
+  (`SettingsStore.CodeFont`, resolved by `Services/CodeFonts.cs` — see "Settings").
 - Inline code (`CodeInline`) is tinted with the **secondary accent**
   (`AccentPalette.InlineCodeBrush` — the primary accent hue-rotated −40° into a teal family,
   brightness-shifted toward the theme background: `Light2` in dark themes, `Dark2` in light).

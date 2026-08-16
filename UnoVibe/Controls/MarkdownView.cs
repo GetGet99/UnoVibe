@@ -4,6 +4,7 @@ using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.UI.Xaml.Documents;
+using UnoVibe.Services;
 using Windows.UI.Text;
 using MarkdigBlock = Markdig.Syntax.Block;
 using MarkdigInline = Markdig.Syntax.Inlines.Inline;
@@ -52,8 +53,6 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         .UseAutoLinks()
         .UsePipeTables()
         .Build();
-
-    private static readonly FontFamily CodeFont = new("Consolas");
 
     private readonly ThemeBrushes _theme = ThemeBrushes.Global;
     private readonly List<(string Key, UIElement Element)> _elements = new();
@@ -196,7 +195,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         var text = code.Lines.ToString();
         var tb = new TextBlock
         {
-            FontFamily = CodeFont,
+            FontFamily = CodeFonts.Current,
             FontSize = 12,
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,
@@ -360,7 +359,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
                             BuildInlines(p.Inline, tb.Inlines, default);
                             break;
                         case CodeBlock code:
-                            tb.Inlines.Add(new Run { Text = code.Lines.ToString(), FontFamily = CodeFont });
+                            tb.Inlines.Add(new Run { Text = code.Lines.ToString(), FontFamily = CodeFonts.Current });
                             break;
                     }
                 }
@@ -428,7 +427,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         Child = new TextBlock
         {
             Text = raw,
-            FontFamily = CodeFont,
+            FontFamily = CodeFonts.Current,
             FontSize = 12,
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,
@@ -534,7 +533,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         if (style.FontSize > 0) run.FontSize = style.FontSize;
         if (style.Code)
         {
-            run.FontFamily = CodeFont;
+            run.FontFamily = CodeFonts.Current;
             // Secondary accent (hue-shifted from the primary) so snippets read distinct from
             // accent-colored links; falls back to the attention color when no solid accent exists.
             run.Foreground = AccentPalette.InlineCodeBrush(_theme) ?? _theme.SystemAttention;

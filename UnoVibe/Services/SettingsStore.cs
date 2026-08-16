@@ -58,6 +58,7 @@ public static class SettingsStore
 {
     public const string EditorCommandKey = "editor.command";
     public const string SendModeKey = "send.mode";
+    public const string CodeFontKey = "text.codefont";
 
     private static readonly string Dir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
     private static readonly string FilePath = Path.Combine(Dir, "settings.json");
@@ -78,33 +79,61 @@ public static class SettingsStore
     /// <summary>How a send behaves while the session is busy.</summary>
     public static SendPromptMode SendMode { get; set; } = SendPromptMode.OnNextToolCall;
 
-    /// <summary>The settings-page rows. Adding a setting = add a spec here + a GetValue/SetValue case.</summary>
-    public static IReadOnlyList<SettingSpec> Specs { get; } = new SettingSpec[]
+    /// <summary>Monospaced font used for code blocks, tool output, and diffs. Empty string (the
+    /// default) picks a font that ships with the OS (see <see cref="CodeFonts"/>); any other
+    /// value is a font family name used verbatim.</summary>
+    public static string CodeFont { get; set; } = CodeFonts.DefaultValue;
+
+    /// <summary>The settings-page rows. Built lazily (on first settings open) so the Code font options
+    /// can enumerate the user's installed fonts via <see cref="SystemFonts"/>; cached thereafter.
+    /// Adding a setting = add a spec here + a GetValue/SetValue case.</summary>
+    public static IReadOnlyList<SettingSpec> Specs => _specs ??= BuildSpecs();
+
+    private static IReadOnlyList<SettingSpec>? _specs;
+
+    private static IReadOnlyList<SettingSpec> BuildSpecs()
     {
-        new(
-            EditorCommandKey,
-            "Default IDE/Editor",
-            "Command used to open a folder in your editor, e.g. `code path/to/folder`. Set to any editor CLI on your PATH (`code`, `cursor`, `windsurf`, `zed`, ...).",
-            SettingKinds.Text,
-            Placeholder: "code"),
-        new(
-            SendModeKey,
-            "Send message default",
-            "What sending a message does while a turn is already running. \"On next tool call\" sends immediately and lets the server order it; \"Queue\" holds it until the session is idle; \"Send immediately\" interrupts the running turn and sends right away. This is the split send-button's primary action while busy; its dropdown offers one-time overrides.",
-            SettingKinds.Choice,
-            new SettingOption[]
-            {
-                new("OnNextToolCall", "On next tool call"),
-                new("Queue", "Queue until idle"),
-                new("SendImmediately", "Send immediately"),
-            }),
-    };
+        var codeFontOptions = new List<SettingOption>
+        {
+            new(CodeFonts.DefaultValue, "Default (per platform)"),
+        };
+        foreach (var name in SystemFonts.Families)
+            codeFontOptions.Add(new SettingOption(name, name));
+
+        return new SettingSpec[]
+        {
+            new(
+                EditorCommandKey,
+                "Default IDE/Editor",
+                "Command used to open a folder in your editor, e.g. `code path/to/folder`. Set to any editor CLI on your PATH (`code`, `cursor`, `windsurf`, `zed`, ...).",
+                SettingKinds.Text,
+                Placeholder: "code"),
+            new(
+                SendModeKey,
+                "Send message default",
+                "What sending a message does while a turn is already running. \"On next tool call\" sends immediately and lets the server order it; \"Queue\" holds it until the session is idle; \"Send immediately\" interrupts the running turn and sends right away. This is the split send-button's primary action while busy; its dropdown offers one-time overrides.",
+                SettingKinds.Choice,
+                new SettingOption[]
+                {
+                    new("OnNextToolCall", "On next tool call"),
+                    new("Queue", "Queue until idle"),
+                    new("SendImmediately", "Send immediately"),
+                }),
+            new(
+                CodeFontKey,
+                "Code font",
+                "Monospaced font used for code blocks, tool output, and diffs. \"Default (per platform)\" picks a font that ships with the OS — Consolas on Windows, DejaVu Sans Mono on Linux, Menlo on macOS. The list below contains every font installed on this device.",
+                SettingKinds.Choice,
+                codeFontOptions.ToArray()),
+        };
+    }
 
     /// <summary>Reads the current value of a setting by key (the UI-facing string form).</summary>
     public static string GetValue(string key) => key switch
     {
         EditorCommandKey => EditorCommand,
         SendModeKey => SendMode.ToString(),
+        CodeFontKey => CodeFont,
         _ => "",
     };
 
@@ -119,6 +148,9 @@ public static class SettingsStore
             case SendModeKey:
                 if (Enum.TryParse<SendPromptMode>(value, out var mode)) SendMode = mode;
                 else return;
+                break;
+            case CodeFontKey:
+                CodeFont = value;
                 break;
             default:
                 return;
@@ -160,6 +192,7 @@ public static class SettingsStore
             if (file is null) return;
             if (file.EditorCommand is not null) EditorCommand = file.EditorCommand;
             if (Enum.TryParse<SendPromptMode>(file.SendMode, out var mode)) SendMode = mode;
+            if (file.CodeFont is not null) CodeFont = file.CodeFont;
         }
         catch (JsonException)
         {
@@ -172,7 +205,7 @@ public static class SettingsStore
         try
         {
             Directory.CreateDirectory(Dir);
-            var file = new SettingsFileModel { EditorCommand = EditorCommand, SendMode = SendMode.ToString() };
+            var file = new SettingsFileModel { EditorCommand = EditorCommand, SendMode = SendMode.ToString(), CodeFont = CodeFont };
             var json = JsonSerializer.Serialize(file, AppJsonContext.Default.SettingsFileModel);
             lock (Gate)
             {
@@ -250,5 +283,6 @@ public static class SettingsStore
     {
         public string? EditorCommand { get; set; }
         public string? SendMode { get; set; }
+        public string? CodeFont { get; set; }
     }
 }

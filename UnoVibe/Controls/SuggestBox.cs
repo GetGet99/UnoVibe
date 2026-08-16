@@ -53,7 +53,7 @@ namespace UnoVibe.Controls;
                                     <Border Background=`KindBadgeBrush(item.Kind)` CornerRadius=3 Padding=`new Thickness(5, 1, 5, 2)` VerticalAlignment=Center>
                                         <TextBlock Text=`item.KindLabel` FontSize=10 Foreground=`AppTheme.TextOnAccent` FontWeight=`FontWeights.SemiBold` />
                                     </Border>
-                                    <TextBlock Text=`item.Text` FontSize=12 FontFamily="Consolas" VerticalAlignment=Center />
+                                    <TextBlock Text=`item.Text` FontSize=12 VerticalAlignment=Center />
                                     if (`item.Detail.Length > 0`)
                                         <TextBlock Text=`item.Detail` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=280 VerticalAlignment=Center />
                                 </StackPanel>

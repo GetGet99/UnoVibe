@@ -39,11 +39,11 @@ namespace UnoVibe.Controls.ToolViews;
             </Grid>
             <StackPanel Grid.Column=1 Spacing=2 VerticalAlignment=Center>
                 <StackPanel Orientation=Horizontal Spacing=8>
-                    <TextBlock Text=`ToolViewShared.Task(Part)` FontSize=12 FontFamily="Consolas" FontWeight=`FontWeights.SemiBold`
+                    <TextBlock Text=`ToolViewShared.Task(Part)` FontSize=12 FontWeight=`FontWeights.SemiBold`
                                Foreground=`theme.SecondaryText` TextWrapping=Wrap VerticalAlignment=Center />
                     if (`Part.ToolSubagentType.Length > 0`)
                         <Border Background=`theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(6, 1, 6, 2)` VerticalAlignment=Center>
-                            <TextBlock Text=`Part.ToolSubagentType` FontSize=10 FontFamily="Consolas" Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                            <TextBlock Text=`Part.ToolSubagentType` FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                         </Border>
                 </StackPanel>
                 <TextBlock Text=`ToolViewShared.TaskStatus(Part)` FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />

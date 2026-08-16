@@ -9,6 +9,7 @@ namespace UnoVibe.Controls.ToolViews;
 [QuickMarkup("""
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
+    using UnoVibe.Services;
     required PartItem Part;
     string Text = "";
     bool SemiBold = false;
@@ -21,7 +22,7 @@ namespace UnoVibe.Controls.ToolViews;
             <ToolBusyIndicator Part=`Part` />
             <TextBlock Text=`Text` FontSize=12
                        FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal`
-                       FontFamily="Consolas"
+                       FontFamily=`IsShell ? CodeFonts.Current : null`
                        Foreground=`IsShell ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             if (`Part.Interrupted`)

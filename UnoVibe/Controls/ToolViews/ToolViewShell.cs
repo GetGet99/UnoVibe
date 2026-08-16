@@ -17,16 +17,16 @@ namespace UnoVibe.Controls.ToolViews;
         if (`Part.ShellOutput.Length > 0`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                <TextBlock Text=`Expanded ? Part.ShellOutput : ToolViewShared.ShellCollapsed(Part)` FontSize=12 FontFamily="Consolas" TextWrapping=Wrap IsTextSelectionEnabled=true />
+                <TextBlock Text=`Expanded ? Part.ShellOutput : ToolViewShared.ShellCollapsed(Part)` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>
             if (`ToolViewShared.ShellOverflow(Part)`)
                 <Button Background=`theme.LayerFill` BorderThickness=0 CornerRadius=4 Padding=`new Thickness(8, 2, 8, 2)` HorizontalAlignment=Left Click+=`(s, e) => Expanded = !Expanded`>
-                    <TextBlock Text=`Expanded ? "Show less ▴" : "Show more ▾"` FontSize=11 FontFamily="Consolas" Foreground=`theme.TertiaryText` />
+                    <TextBlock Text=`Expanded ? "Show less ▴" : "Show more ▾"` FontSize=11 Foreground=`theme.TertiaryText` />
                 </Button>
         }
         if (`Part.ToolError.Length > 0`)
             <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                <TextBlock Text=`Part.ToolError` FontSize=12 FontFamily="Consolas" Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                <TextBlock Text=`Part.ToolError` FontSize=12 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>
     </StackPanel>
     """)]

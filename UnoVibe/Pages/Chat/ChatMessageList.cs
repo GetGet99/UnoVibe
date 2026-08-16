@@ -81,9 +81,9 @@ namespace UnoVibe.Pages.Chat;
                                 <StackPanel Spacing=2>
                                     <TextBlock Text=`Store.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                     if (`(Store.ActivePermission?.Body?.Length ?? 0) > 0`)
-                                        <TextBlock Text=`Store.ActivePermission?.Body ?? ""` FontSize=11 FontFamily="Consolas" Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                        <TextBlock Text=`Store.ActivePermission?.Body ?? ""` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                     if (`(Store.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
-                                        <TextBlock Text=`Store.ActivePermission?.PatternsText ?? ""` FontSize=10 FontFamily="Consolas" Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                        <TextBlock Text=`Store.ActivePermission?.PatternsText ?? ""` FontSize=10 Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                 </StackPanel>
                                 if (`PermissionStage == "reject"`)
                                     <StackPanel Spacing=8>
