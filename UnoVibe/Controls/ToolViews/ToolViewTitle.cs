@@ -22,7 +22,7 @@ namespace UnoVibe.Controls.ToolViews;
             <ToolBusyIndicator Part=`Part` />
             <TextBlock Text=`Text` FontSize=12
                        FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal`
-                       FontFamily=`IsShell ? CodeFonts.Current : null`
+                       FontFamily=`IsShell ? CodeFonts.Current : DefaultFont`
                        Foreground=`IsShell ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             if (`Part.Interrupted`)
@@ -32,4 +32,7 @@ namespace UnoVibe.Controls.ToolViews;
         </StackPanel>
     </root>
     """)]
-public partial class ToolViewTitle : IQuickMarkupComponent<UIElement>;
+public partial class ToolViewTitle : IQuickMarkupComponent<UIElement>
+{
+    public static FontFamily DefaultFont => new("Segoe UI Variable");
+}
