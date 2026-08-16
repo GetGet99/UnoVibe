@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!--
+    Minimal subset of the org.freedesktop.portal.Request D-Bus interface
+    (http://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Request.html)
+    consumed by the Linux FolderPicker polyfill (UnoVibe/Polyfills/Linux).
+
+    The portal answers every long-running call (including FileChooser.OpenFile)
+    asynchronously: it returns a handle object path and then emits the Response
+    signal on it once the user interacts. Declared here so Tmds.DBus.Generator
+    emits a client for the Close method and the Response signal watcher.
+-->
+<node name="/">
+  <interface name="org.freedesktop.portal.Request">
+    <method name="Close"/>
+    <signal name="Response">
+      <arg type="u" name="response"/>
+      <arg type="a{sv}" name="results"/>
+    </signal>
+  </interface>
+</node>

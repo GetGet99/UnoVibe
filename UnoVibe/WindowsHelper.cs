@@ -11,10 +11,12 @@ static class WindowsHelper
 
     /// <summary>
     /// Opens the platform folder picker and returns the picked folder's path, or null when
-    /// cancelled. On the WinAppSDK target the Windows App SDK <c>FolderPicker</c> is used so the
-    /// dialog can open at an exact <paramref name="startPath"/> (the current window path, as shown
-    /// in the window title); on other targets the classic <c>FolderPicker</c> is used, where the
-    /// start path is not controlled.
+    /// cancelled. On every target the dialog can open at an exact <paramref name="startPath"/>
+    /// (the current window path, as shown in the window title):
+    /// the WinAppSDK target uses the Windows App SDK <c>FolderPicker</c>, and the Skia Linux/macOS
+    /// targets use the WASDK-shaped <c>FolderPicker</c> polyfill (UnoVibe/Polyfills/*). Only the
+    /// Skia Windows target still falls back to Uno's classic <c>FolderPicker</c>, where the start
+    /// path is not controlled.
     /// </summary>
     public static async Task<string?> PickFolderAsync(Window window, string startPath)
     {
@@ -24,6 +26,15 @@ static class WindowsHelper
             picker.SuggestedStartFolder = startPath;
         var result = await picker.PickSingleFolderAsync();
         return result?.Path;
+#elif DESKTOP_LINUX || DESKTOP_MACOS
+        // `FolderPicker` / `PickFolderResult` resolve to the platform polyfill registered in
+        // UnoVibe/Polyfills/Linux (or MacOS) — see AGENTS.md "Polyfills".
+        var picker = new FolderPicker(window)
+        {
+            SuggestedStartFolder = startPath
+        };
+        var polyfillResult = await picker.PickSingleFolderAsync();
+        return polyfillResult?.Path;
 #else
         var picker = new Windows.Storage.Pickers.FolderPicker();
         InitializeWithWindow(picker, window);

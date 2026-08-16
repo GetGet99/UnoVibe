@@ -68,6 +68,28 @@
     <PackageReference Include="QuickMarkup.Uno" />
   </ItemGroup>
 
+  <!--
+    Linux FolderPicker polyfill (UnoVibe/Polyfills/Linux) talks to the XDG desktop portal over the
+    session D-Bus, so it needs Tmds.DBus (the same library Uno's own X11 picker uses). Only
+    DESKTOP_LINUX builds reference it — other OSes get no D-Bus dependency (see AGENTS.md Polyfills).
+    -->
+  <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and (('$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('linux'))) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))))">
+    <PackageReference Include="Tmds.DBus.Protocol" />
+    <PackageReference Include="Tmds.DBus.Generator" />
+    <AdditionalFiles Include="Polyfills/Linux/dbus-interfaces/org.freedesktop.portal.FileChooser.xml" Namespace="UnoVibe.Polyfills.Linux.DBus" GenerateDBusTypes="true" />
+    <AdditionalFiles Include="Polyfills/Linux/dbus-interfaces/org.freedesktop.portal.Request.xml" Namespace="UnoVibe.Polyfills.Linux.DBus" GenerateDBusTypes="true" />
+  </ItemGroup>
+
+  <!--
+    The macOS FolderPicker polyfill (UnoVibe/Polyfills/MacOS) drives NSOpenPanel through
+    objc_msgSend via [LibraryImport] stubs in a partial class; the interop source generator emits
+    "unsafe" blocks, so macOS desktop builds must opt in (Uno.Sdk only enables AllowUnsafeBlocks
+    for the WinAppSDK target). Matches the DESKTOP_MACOS constants above.
+    -->
+  <PropertyGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and (('$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.StartsWith('osx')) or $(RuntimeIdentifier.StartsWith('mac')))) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))))">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- Automatically emit generated files for every project build -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>

@@ -104,7 +104,7 @@ The Windows **WinUI** target is supported and should be kept compilable, so foll
 - **Windows has no `Thickness` two-value constructor.** `new Thickness(1, 2)` (horizontal/vertical) compiles under Uno but not under the real WinUI/WinRT `Thickness` — always write all four values: `new Thickness(1, 2, 1, 2)`.
 - **Windows has no implicit `Brush` conversion.** `Brush b = Colors.Transparent;` compiles under Uno (implicit conversion) but not WinUI — construct the brush explicitly, e.g. `new SolidColorBrush(Colors.Transparent)`.
 - **Windows APIs that need an HWND to appear.** Dialogs/pickers (e.g. `FolderPicker`, `FileOpenPicker`) and similar WinRT APIs must be associated with a window handle on Windows — calling `PickSingleFolderAsync`/`PickSingleFileAsync` **without** `InitializeWithWindow.Initialize` crashes the app on the Windows target. Uno's Skia target does this internally, so use the `UnoVibe.WindowsHelper` wrapper instead of `WinRT.Interop` directly: `WindowsHelper.InitializeWithWindow(picker, window)` — it takes the app `Window` (resolving the `hwnd` via `window.AppWindow.Id` internally) and no-ops on non-WinUI targets via an internal `#if WASDK` guard. The `Window` is **always non-null** at call sites (never pass null — it must be set or the Windows target crashes). **Getting the `Window` at a picker call site**: the window flows through the QuickMarkup provide/inject context — `MainPage` declares `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and pass it to `WindowsHelper.InitializeWithWindow`. Callers like `SessionStore.PickImageAsync(Window)` take it as a parameter. `ConnectPage` reaches it through its own `Controller.Window` instead.
-  **Folder picker (`WindowsHelper.PickFolderAsync(window, startPath)`):** on the WASDK target the folder picker uses the Windows App SDK's `Microsoft.Windows.Storage.Pickers.FolderPicker` (relies on the `Microsoft.WindowsAppSDK` package's `StoragePickersContract`, not Uno) so the dialog can open at an **exact path** — the `startPath` (set via `SuggestedStartFolder`) is the current window path, i.e. `ChatStore.ServerDirectory` (the folder/directory shown in the window title). The new picker takes the `WindowId` (`window.AppWindow.Id`) in its constructor, so it needs **no** `InitializeWithWindow`; its `PickSingleFolderAsync` returns a `PickFolderResult` (`.Path`), not a `StorageFolder`. On the Skia targets the classic `Windows.Storage.Pickers.FolderPicker` + `InitializeWithWindow` is used and `startPath` is ignored (that API has no exact-path control). Both call sites pass `Store.ServerDirectory` (`SessionSidebar`'s Open Folder / `ConnectPage`'s folder pick).
+  **Folder picker (`WindowsHelper.PickFolderAsync(window, startPath)`):** on the WASDK target the folder picker uses the Windows App SDK's `Microsoft.Windows.Storage.Pickers.FolderPicker` (relies on the `Microsoft.WindowsAppSDK` package's `StoragePickersContract`, not Uno) so the dialog can open at an **exact path** — the `startPath` (set via `SuggestedStartFolder`) is the current window path, i.e. `ChatStore.ServerDirectory` (the folder/directory shown in the window title). The new picker takes the `WindowId` (`window.AppWindow.Id`) in its constructor, so it needs **no** `InitializeWithWindow`; its `PickSingleFolderAsync` returns a `PickFolderResult` (`.Path`), not a `StorageFolder`. The Linux and macOS desktop targets use the per-OS polyfills (see "Polyfills") which honor `startPath` too; only `DESKTOP_WINDOWS` (a Skia build running on Windows) falls back to the classic `Windows.Storage.Pickers.FolderPicker` + `InitializeWithWindow`, where `startPath` is ignored (that API has no exact-path control). Both call sites pass `Store.ServerDirectory` (`SessionSidebar`'s Open Folder / `ConnectPage`'s folder pick).
 - Since the Windows target is planned/supported, prefer these portable forms whenever convenient; on Linux just write the forms above — the goal is code that compiles on both targets.
 
 **Windows toast notifications (WASDK only):**
@@ -130,6 +130,78 @@ behind `#if WASDK`), so callers need no `#if` guards — it uses the Windows App
 - Toast click-activation (switching to the session/replying) is **not** wired; the packaged
   `Package.appxmanifest` does not declare a `windows.toastNotificationActivation` activator, which
   is optional for showing toasts.
+
+## Polyfills (platform folder pickers)
+
+`UnoVibe/Polyfills/{Linux,MacOS,Windows}/` holds one-file-per-OS polyfills of the WinAppSDK
+**`Microsoft.Windows.Storage.Pickers.FolderPicker`** so every platform's folder dialog can open at
+an **exact path** (`WindowsHelper.PickFolderAsync`'s `startPath` = the window's folder). Uno's
+built-in `Windows.Storage.Pickers.FolderPicker` has no exact-path control, which the WASDK 2.0
+picker (`SuggestedStartFolder` = the path) does have. See
+https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.windows.storage.pickers.folderpicker.
+`WindowsHelper.PickFolderAsync` routes `#if WASDK` → WASDK picker, `#elif DESKTOP_LINUX ||
+DESKTOP_MACOS` → the polyfill, else the classic fallback; callers pass the app `Window` and get a
+`PickFolderResult?.Path`.
+
+**Conventions for every polyfill file:**
+- Each file starts and ends with a single `#if DESKTOP_LINUX` / `#if DESKTOP_MACOS` /
+  `#if DESKTOP_WINDOWS` guard (one guard per file, matching the file's folder). The OS-specific
+  code is what makes the file exist; the constants are defined per-TFM in the csproj (see
+  "Compile-time OS constants"), so the guard just keeps disabled targets from compiling it.
+- The class registers itself app-wide as `FolderPicker` via a top-level
+  `global using FolderPicker = UnoVibe.Polyfills.<OS>.FolderPicker;` (the app never `#if`s this —
+  callers use the one polyfilled name, and the WASDK/classic branches live inside
+  `WindowsHelper`). `PickFolderResult` is a separate sibling file that owns its own
+  `global using PickFolderResult = ...;` alias — an alias can appear in only one file, so never
+  duplicate it.
+- **API shape mirrors the WASDK picker** with two deliberate deviations: the constructor takes the
+  app `Window` instead of a `WindowId`, and shared props are `SuggestedStartFolder` (exact path),
+  `SuggestedFolder` (fallback), `SuggestedStartLocation` (a `PickerLocationId`), `CommitButtonText`,
+  `Title`, `SettingsIdentifier` (macOS only). Methods: `PickSingleFolderAsync()` →
+  `Task<PickFolderResult?>` (null = user cancelled; native failures throw). Getters/setters are
+  plain .NET properties.
+- **Keep the per-OS dependency footprint minimal** — the whole point of the polyfills is that a
+  platform needs only what it already ships:
+  - Desktop **Linux** talks to the XDG desktop portal over the session D-Bus, so it needs
+    `Tmds.DBus.Protocol` + `Tmds.DBus.Generator` 0.92.0 — the same versions Uno's own X11 picker
+    uses (`~/.nuget/packages/tmds.dbus.*`). C# interfaces are generated from two minimal XML files
+    under `UnoVibe/Polyfills/Linux/dbus-interfaces/`
+    (`org.freedesktop.portal.FileChooser.xml`, `org.freedesktop.portal.Request.xml`), wired to the
+    `Tmds.DBus.Generator` source generator via csproj `AdditionalFiles` items
+    (Namespace `UnoVibe.Polyfills.Linux.DBus`, `GenerateDBusTypes="true"`). The generated types
+    land under `UnoVibe/obj/<tfm>/generated/Tmds.DBus.Generator/.../UnoVibe.Polyfills.Linux.DBus.g.cs`.
+  - Desktop **macOS** drives `NSOpenPanel` through the Objective-C runtime with
+    `[LibraryImport("libobjc.A.dylib")]` stubs in a `static partial` class (libobjc is part of
+    macOS, so **no new dependency**). Because the interop source generator emits
+    `unsafe` blocks, macOS desktop builds set `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` in
+    the csproj (Uno.Sdk enables unsafe only for the WinAppSDK target).
+- **Gating in the csproj is per-OS**, matching the `DefineConstants` conditions above: the Tmds
+  packages + `AdditionalFiles` are referenced only for desktop-Linux builds, and `AllowUnsafeBlocks`
+  only for desktop-macOS builds (both via the same `$(TargetFramework)`, `$(RuntimeIdentifier)`, and
+  `[MSBuild]::IsOSPlatform(...)` combination used for the constants — one ItemGroup each, not two).
+
+**FolderPicker polyfill implementation notes:**
+- The canonical example is `UnoVibe/Polyfills/Linux/FolderPicker.cs` (the old
+  `SampleFolderPicker.cs` was deleted). Copy its `#if` + `global using` + ctor/props/Method shape
+  for a future polyfill.
+- **Linux D-Bus flow** (from Uno's `X11FolderPicker` in `uno/src/Uno.UI.Runtime.Skia.X11/...`):
+  session D-Bus → `org.freedesktop.portal.Desktop` `/org/freedesktop/portal/desktop` → check
+  `version >= 3` → subscribe `org.freedesktop.portal.Request`'s `Response` signal to the expected
+  request path **before** calling `OpenFile` (portal race warning) → `OpenFileAsync("",
+  title, options)` with `handle_token`, `accept_label`, `multiple=false`, `directory=true`,
+  and `current_folder` = the start path NUL-terminated in UTF-8 → validate the returned request path
+  equals the expected `.../request/<unique-names-sans-colons>/<handle_token>`, await the Response,
+  take `uris[0]` → `new Uri(...).LocalPath`. Response codes: 0 = success, 1 = user cancelled. Empty
+  `parent_window` means "no parent" — `WindowNative.GetWindowHandle` here only exposes the fake
+  `AppWindow.Id`, so always pass `""`.
+- **macOS flow**: build `NSOpenPanel` via `objc_msgSend` (`openPanel`,
+  `setCanChooseDirectories:`, `setCanChooseFiles:`, `setAllowsMultipleSelection:`); if the start
+  folder exists, `setDirectoryURL:` (from a `NSURL` built via `fileURLWithPath:`); run `runModal`
+  → 1 = OK, 0 = cancelled → `URL` → `path` → `UTF8String` → `Marshal.PtrToStringUTF8`.
+  **Always enqueue onto the main UI dispatcher before `runModal`** — AppKit crashes on reentrant
+  presentation from an in-flight pointer handler, and `DispatcherQueue.GetForCurrentThread()` wraps
+  Uno's main dispatcher (native `AppWindow.DispatcherQueue` is unimplemented on Skia), so call it
+  from the UI thread. When off the UI thread (no queue), run inline as a best effort.
 
 ## How to Build & Run
 
