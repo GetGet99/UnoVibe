@@ -69,15 +69,17 @@
   </ItemGroup>
 
   <!--
-    Linux FolderPicker polyfill (UnoVibe/Polyfills/Linux) talks to the XDG desktop portal over the
-    session D-Bus, so it needs Tmds.DBus (the same library Uno's own X11 picker uses). Only
-    DESKTOP_LINUX builds reference it — other OSes get no D-Bus dependency (see AGENTS.md Polyfills).
+    Linux polyfills (UnoVibe/Polyfills/Linux) talk to the session D-Bus: the FolderPicker goes
+    to the XDG desktop portal and Notifications to the org.freedesktop.Notifications daemon, so
+    they need Tmds.DBus (the same library Uno's own X11 picker uses). Only DESKTOP_LINUX builds
+    reference it — other OSes get no D-Bus dependency (see AGENTS.md Polyfills).
     -->
   <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and (('$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('linux'))) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))))">
     <PackageReference Include="Tmds.DBus.Protocol" />
     <PackageReference Include="Tmds.DBus.Generator" />
     <AdditionalFiles Include="Polyfills/Linux/dbus-interfaces/org.freedesktop.portal.FileChooser.xml" Namespace="UnoVibe.Polyfills.Linux.DBus" GenerateDBusTypes="true" />
     <AdditionalFiles Include="Polyfills/Linux/dbus-interfaces/org.freedesktop.portal.Request.xml" Namespace="UnoVibe.Polyfills.Linux.DBus" GenerateDBusTypes="true" />
+    <AdditionalFiles Include="Polyfills/Linux/dbus-interfaces/org.freedesktop.Notifications.xml" Namespace="UnoVibe.Polyfills.Linux.DBus" GenerateDBusTypes="true" />
   </ItemGroup>
 
   <!--

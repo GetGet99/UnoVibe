@@ -107,11 +107,18 @@ The Windows **WinUI** target is supported and should be kept compilable, so foll
   **Folder picker (`WindowsHelper.PickFolderAsync(window, startPath)`):** on the WASDK target the folder picker uses the Windows App SDK's `Microsoft.Windows.Storage.Pickers.FolderPicker` (relies on the `Microsoft.WindowsAppSDK` package's `StoragePickersContract`, not Uno) so the dialog can open at an **exact path** — the `startPath` (set via `SuggestedStartFolder`) is the current window path, i.e. `ChatStore.ServerDirectory` (the folder/directory shown in the window title). The new picker takes the `WindowId` (`window.AppWindow.Id`) in its constructor, so it needs **no** `InitializeWithWindow`; its `PickSingleFolderAsync` returns a `PickFolderResult` (`.Path`), not a `StorageFolder`. The Linux and macOS desktop targets use the per-OS polyfills (see "Polyfills") which honor `startPath` too; only `DESKTOP_WINDOWS` (a Skia build running on Windows) falls back to the classic `Windows.Storage.Pickers.FolderPicker` + `InitializeWithWindow`, where `startPath` is ignored (that API has no exact-path control). Both call sites pass `Store.ServerDirectory` (`SessionSidebar`'s Open Folder / `ConnectPage`'s folder pick).
 - Since the Windows target is planned/supported, prefer these portable forms whenever convenient; on Linux just write the forms above — the goal is code that compiles on both targets.
 
-**Windows toast notifications (WASDK only):**
-`Services/Notifications.cs` bridges the chat sidebar indicators to native Windows toast
-notifications. Every public method is a no-op on the Skia targets (the Windows API code lives
-behind `#if WASDK`), so callers need no `#if` guards — it uses the Windows App SDK's
-`Microsoft.Windows.AppNotifications` API (implemented by Windows/WASDK, **not** by Uno).
+**Desktop notifications:**
+`Services/Notifications.cs` bridges the chat sidebar indicators to native desktop notifications.
+Every public method is a platform-dispatching façade, so callers need no `#if` guards.
+- **The WASDK (WinUI) and desktop-Linux (Skia) targets share ONE toast path**, guarded
+  `#if WASDK || DESKTOP_LINUX`: the facade's `Show` builds the toast through the Windows App SDK's
+  `AppNotificationBuilder` and hands it to `AppNotificationManager.Default.Show`. On WinUI those
+  are the real `Microsoft.Windows.AppNotifications` types (implemented by Windows/WASDK, **not** by
+  Uno); on Linux the polyfill (see "Polyfills") provides the same WASDK-named types, whose manager
+  sends the toast over the session D-Bus `org.freedesktop.Notifications` service (the interface
+  `notify-send` uses, hosted by every common notification daemon). Only platform-specific bits
+  (registration, the foreground check) stay behind their own `#if WASDK`/`#elif DESKTOP_LINUX`.
+- **Anywhere else:** no-op.
 
 - `App.xaml.cs` calls `Notifications.Initialize()` in `OnLaunched` (before the first window;
   `Register()` also acquires the COM identity that lets an unpackaged app show toasts) and
@@ -126,12 +133,15 @@ behind `#if WASDK`), so callers need no `#if` guards — it uses the Windows App
   Background-session events always toast; active-session events (inline form/dialog on screen)
   are suppressed only while the owning window is the foreground window — a second window being
   focused does not silence another window's active-session toasts.
+  On Linux the foreground check compares by **WM_CLASS** instead of a per-window handle (see the
+  polyfill's doc — the real X11 window id is not exposed by Uno), so *any* app window being focused
+  suppresses the whole app's active-session toasts there.
 - Session titles default to "New Chat" for the server's `"New session - <ISO>"`/`"Child session - <ISO>"`.
 - Toast click-activation (switching to the session/replying) is **not** wired; the packaged
   `Package.appxmanifest` does not declare a `windows.toastNotificationActivation` activator, which
   is optional for showing toasts.
 
-## Polyfills (platform folder pickers)
+## Polyfills (platform folder pickers, desktop notifications)
 
 `UnoVibe/Polyfills/{Linux,MacOS,Windows}/` holds one-file-per-OS polyfills of the WinAppSDK
 **`Microsoft.Windows.Storage.Pickers.FolderPicker`** so every platform's folder dialog can open at
@@ -162,14 +172,16 @@ DESKTOP_MACOS` → the polyfill, else the classic fallback; callers pass the app
   plain .NET properties.
 - **Keep the per-OS dependency footprint minimal** — the whole point of the polyfills is that a
   platform needs only what it already ships:
-  - Desktop **Linux** talks to the XDG desktop portal over the session D-Bus, so it needs
-    `Tmds.DBus.Protocol` + `Tmds.DBus.Generator` 0.92.0 — the same versions Uno's own X11 picker
-    uses (`~/.nuget/packages/tmds.dbus.*`). C# interfaces are generated from two minimal XML files
+  - Desktop **Linux** talks to the XDG desktop portal over the session D-Bus (and the
+    `org.freedesktop.Notifications` daemon for toasts), so it needs `Tmds.DBus.Protocol` +
+    `Tmds.DBus.Generator` 0.92.0 — the same versions Uno's own X11 picker uses
+    (`~/.nuget/packages/tmds.dbus.*`). C# interfaces are generated from the minimal XML files
     under `UnoVibe/Polyfills/Linux/dbus-interfaces/`
-    (`org.freedesktop.portal.FileChooser.xml`, `org.freedesktop.portal.Request.xml`), wired to the
-    `Tmds.DBus.Generator` source generator via csproj `AdditionalFiles` items
-    (Namespace `UnoVibe.Polyfills.Linux.DBus`, `GenerateDBusTypes="true"`). The generated types
-    land under `UnoVibe/obj/<tfm>/generated/Tmds.DBus.Generator/.../UnoVibe.Polyfills.Linux.DBus.g.cs`.
+    (`org.freedesktop.portal.FileChooser.xml`, `org.freedesktop.portal.Request.xml`,
+    `org.freedesktop.Notifications.xml`), wired to the `Tmds.DBus.Generator` source generator via
+    csproj `AdditionalFiles` items (Namespace `UnoVibe.Polyfills.Linux.DBus`,
+    `GenerateDBusTypes="true"`). The generated types land under
+    `UnoVibe/obj/<tfm>/generated/Tmds.DBus.Generator/.../UnoVibe.Polyfills.Linux.DBus.g.cs`.
   - Desktop **macOS** drives `NSOpenPanel` through the Objective-C runtime with
     `[LibraryImport("libobjc.A.dylib")]` stubs in a `static partial` class (libobjc is part of
     macOS, so **no new dependency**). Because the interop source generator emits
@@ -202,6 +214,36 @@ DESKTOP_MACOS` → the polyfill, else the classic fallback; callers pass the app
   presentation from an in-flight pointer handler, and `DispatcherQueue.GetForCurrentThread()` wraps
   Uno's main dispatcher (native `AppWindow.DispatcherQueue` is unimplemented on Skia), so call it
   from the UI thread. When off the UI thread (no queue), run inline as a best effort.
+
+**Notifications polyfill (`UnoVibe/Polyfills/Linux/`):**
+- **`AppNotifications.cs` supplies the WASDK API shape on Linux.** It defines
+  `Microsoft.Windows.AppNotifications.AppNotificationManager`/`AppNotification` and
+  `Microsoft.Windows.AppNotifications.Builder.AppNotificationBuilder` (block namespaces — two file-scoped
+  namespaces in one file do not compile), so the facade's shared `#if WASDK || DESKTOP_LINUX`
+  `AppNotificationBuilder` body (see "Desktop notifications") compiles unchanged on both targets.
+  The builder/notification are plain text-line holders. `AppNotificationManager` owns the whole
+  toast implementation: `Default` singleton, `Register()` (returns true; installs the no-op Xlib
+  error handler), `Show` (fire-and-forget D-Bus send), and the `IsApplicationInForeground()` gate.
+  Only the surface the app actually uses is provided, not the full WASDK API (tags, actions, ...).
+- **D-Bus send flow (inside `AppNotificationManager`):** each toast opens its own session-bus
+  `DBusConnection`, calls `org.freedesktop.Notifications` `/org/freedesktop/Notifications` `Notify`
+  (app `UnoVibe`, empty icon, no actions/hints, `expire_timeout = -1`), fire-and-forget
+  (`Show` → `_ = ShowAsync(...)`); failures are logged, never thrown (no daemon → ServiceUnknown).
+- **Foreground gate (`IsApplicationInForeground`):** Uno exposes no real X11 window id
+  (`AppWindow.Id` is a fake per-window counter on Skia), so the check reads the EWMH
+  `_NET_ACTIVE_WINDOW` root property (walking child windows up to depth 2 for reparenting WMs) and
+  matches the active window's `WM_CLASS` (res_name/res_class) against `Package.Current.Id.Name`
+  (+ the entry-assembly name and "UnoVibe" as fallbacks) — every UnoVibe window shares that class
+  (`X11XamlRootHost.SetWMClass`), so "any app window active" is the gate. Uses Xlib via
+  `[DllImport("libX11.so.6")]` (ships with every X/XWayland server; no new package), opening a
+  private per-check `XOpenDisplay` connection (Xlib handles aren't thread-safe). A no-op
+  `XSetErrorHandler` is installed once (in `Register`) so Xlib's default exit-on-error handler can't
+  kill the app when a window closes mid-check. Failures/unknowns return "not focused" → the toast
+  fires (the WASDK path's conservative default too).
+- **`Notifications` is the generated D-Bus client class** (namespace `UnoVibe.Polyfills.Linux.DBus`),
+  not a polyfill file of its own; the manager obtains it via `var` to avoid shadowing.
+- **MacOS/Windows desktop have no notification polyfill yet** — desktop-MacOS and desktop-Windows
+  toasts remain no-ops today (folder pickers are polyfilled there, notifications are not).
 
 ## How to Build & Run
 
