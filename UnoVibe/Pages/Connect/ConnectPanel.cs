@@ -48,10 +48,10 @@ namespace UnoVibe.Pages.Connect;
                     {
                         <StackPanel Spacing=8>
                             <TextBox Text<=>`Url` PlaceholderText="http://localhost:4096" IsEnabled=`!Connecting` />
-                            <PasswordBox Password<=>`ServerPassword` PlaceholderText="Server password (optional)" IsEnabled=`!Connecting` />
+                            <PasswordBox Password<=>`ServerPassword` PlaceholderText="Server password (leave blank for no password)" IsEnabled=`!Connecting` />
                             <TextBlock Text="Only connect to OpenCode server that you trust" FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                             <Button Content="Connect" @Click+=`await OnConnectToUrl()` IsEnabled=`!Connecting` HorizontalAlignment=Right />
-                            <TextBlock Text="Leave blank if the server has no password. Uses the OPENCODE_SERVER_PASSWORD environment variable when set. Passwords are never stored — reopening a password-protected server asks for it again." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
+                            <TextBlock Text="Tip: OPENCODE_SERVER_PASSWORD environment variable will be used when set." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                         </StackPanel>
                     }
                     <Border BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)` Margin=`new Thickness(0, 6, 0, 0)` />
