@@ -110,14 +110,16 @@ The Windows **WinUI** target is supported and should be kept compilable, so foll
 **Desktop notifications:**
 `Services/Notifications.cs` bridges the chat sidebar indicators to native desktop notifications.
 Every public method is a platform-dispatching façade, so callers need no `#if` guards.
-- **The WASDK (WinUI) and desktop-Linux (Skia) targets share ONE toast path**, guarded
-  `#if WASDK || DESKTOP_LINUX`: the facade's `Show` builds the toast through the Windows App SDK's
-  `AppNotificationBuilder` and hands it to `AppNotificationManager.Default.Show`. On WinUI those
-  are the real `Microsoft.Windows.AppNotifications` types (implemented by Windows/WASDK, **not** by
-  Uno); on Linux the polyfill (see "Polyfills") provides the same WASDK-named types, whose manager
+- **The WASDK (WinUI), desktop-Linux and desktop-macOS (Skia) targets share ONE toast path**,
+  guarded `#if WASDK || DESKTOP_LINUX || DESKTOP_MACOS`: the facade's `Show` builds the toast
+  through the Windows App SDK's `AppNotificationBuilder` and hands it to
+  `AppNotificationManager.Default.Show`. On WinUI those are the real
+  `Microsoft.Windows.AppNotifications` types (implemented by Windows/WASDK, **not** by Uno);
+  on Linux and macOS the polyfills (see "Polyfills") provide the same WASDK-named types — Linux
   sends the toast over the session D-Bus `org.freedesktop.Notifications` service (the interface
-  `notify-send` uses, hosted by every common notification daemon). Only platform-specific bits
-  (registration, the foreground check) stay behind their own `#if WASDK`/`#elif DESKTOP_LINUX`.
+  `notify-send` uses), macOS via `terminal-notifier` (when on PATH) falling back to `osascript`.
+  Only platform-specific bits (registration, the foreground check) stay behind their own
+  `#if WASDK`/`#elif DESKTOP_LINUX`/`#elif DESKTOP_MACOS`.
 - **Anywhere else:** no-op.
 
 - `App.xaml.cs` calls `Notifications.Initialize()` in `OnLaunched` (before the first window;
@@ -134,8 +136,9 @@ Every public method is a platform-dispatching façade, so callers need no `#if` 
   are suppressed only while the owning window is the foreground window — a second window being
   focused does not silence another window's active-session toasts.
   On Linux the foreground check compares by **WM_CLASS** instead of a per-window handle (see the
-  polyfill's doc — the real X11 window id is not exposed by Uno), so *any* app window being focused
-  suppresses the whole app's active-session toasts there.
+  polyfill's doc — the real X11 window id is not exposed by Uno); on macOS it compares the
+  frontmost app's **process id** via `NSWorkspace.frontmostApplication` (see the polyfill's doc),
+  so *any* app window being focused suppresses the whole app's active-session toasts there.
 - Session titles default to "New Chat" for the server's `"New session - <ISO>"`/`"Child session - <ISO>"`.
 - Toast click-activation (switching to the session/replying) is **not** wired; the packaged
   `Package.appxmanifest` does not declare a `windows.toastNotificationActivation` activator, which
@@ -242,8 +245,35 @@ DESKTOP_MACOS` → the polyfill, else the classic fallback; callers pass the app
   fires (the WASDK path's conservative default too).
 - **`Notifications` is the generated D-Bus client class** (namespace `UnoVibe.Polyfills.Linux.DBus`),
   not a polyfill file of its own; the manager obtains it via `var` to avoid shadowing.
-- **MacOS/Windows desktop have no notification polyfill yet** — desktop-MacOS and desktop-Windows
-  toasts remain no-ops today (folder pickers are polyfilled there, notifications are not).
+
+**macOS notifications polyfill (`UnoVibe/Polyfills/MacOS/`):**
+- **`AppNotifications.cs` supplies the WASDK API shape on macOS** (same block namespaces as the Linux
+  file, so the facade's shared `#if WASDK || DESKTOP_LINUX || DESKTOP_MACOS` `AppNotificationBuilder`
+  body compiles unchanged). The manager delivers each toast by spawning the platform tooling — no
+  D-Bus, no app identity:
+- **`terminal-notifier` first, `osascript` fallback.** `Show` runs the `terminal-notifier` CLI when
+  it's on PATH (a PATH scan, cached including the negative; brew and the Ruby gem both put a launcher
+  on PATH), waited up to 10s with a clean-exit requirement, so a broken install falls back. Otherwise
+  it runs `osascript -e 'display notification "<body>" with title "<title>"'` — the same Standard
+  Addition fallback opencode and Claude Code use. Both are fire-and-forget (`Process.Start` with
+  `ArgumentList`, no shell); failures are logged, never thrown.
+- **Why not the native UserNotifications framework?** `UNUserNotificationCenter` hard-asserts with
+  `bundleProxyForCurrentProcess is nil` from a process that isn't part of a signed `.app` bundle, and
+  the deprecated `NSUserNotificationCenter` silently needs a valid main-bundle identifier — while
+  UnoVibe runs as a bare binary (`dotnet run` / plain `-r osx-arm64` publish). A future packaged
+  `.app` could add a `UNUserNotificationCenter` path and keep these CLI routes as the unbundled fallback.
+- **Attribution caveats:** with `terminal-notifier` the toast carries the tool's own identity and on
+  newer macOS only shows when "terminal-notifier" is enabled in System Settings → Notifications; the
+  `osascript` route is attributed to **Script Editor** (also enable it under System Settings). The
+  `-sender` flag is deliberately **not** passed — it both fixes some Tahoe setups *and* hangs on
+  Ventura/Sonoma (#301), so the polyfill stays on the default sender.
+- **Foreground gate (`IsApplicationInForeground`):** macOS has no per-window foreground API reachable
+  from an unbundled process, so the check compares the frontmost app's **process id**
+  (`NSWorkspace.frontmostApplication` → `processIdentifier`, via the shared `UnoVibe.Polyfills.MacOS.ObjC`
+  binder) with `Environment.ProcessId` — any app window focused counts as foreground. Failures/unknowns
+  return "not focused" → the toast fires (the WASDK path's conservative default too).
+- **Desktop-Windows has no notification polyfill yet** — desktop-Windows toasts remain no-ops today
+  (its folder picker is polyfilled, notifications are not).
 
 ## How to Build & Run
 

@@ -8,23 +8,28 @@ namespace UnoVibe.Services;
 /// Bridges the chat sidebar indicators (background completion, pending question/approval) to
 /// native desktop notifications. Every public method is a platform-dispatching façade, so callers
 /// need no <c>#if</c> guards:
-/// - The WASDK (WinUI) and desktop-Linux (Skia) targets share ONE toast path, guarded
-///   <c>#if WASDK || DESKTOP_LINUX</c>, that builds the toast through the Windows App SDK's
-///   <c>AppNotificationBuilder</c> and hands it to <c>AppNotificationManager.Default.Show</c>.
+/// - The WASDK (WinUI), desktop-Linux and desktop-macOS (Skia) targets share ONE toast path,
+///   guarded <c>#if WASDK || DESKTOP_LINUX || DESKTOP_MACOS</c>, that builds the toast through the
+///   Windows App SDK's <c>AppNotificationBuilder</c> and hands it to
+///   <c>AppNotificationManager.Default.Show</c>.
 ///   On WinUI those are the real WASDK types; on Linux they are polyfilled
 ///   (<c>UnoVibe/Polyfills/Linux/AppNotifications.cs</c>), whose manager sends the toast over the
 ///   session D-Bus <c>org.freedesktop.Notifications</c> service (the interface notify-send uses).
+///   On macOS they are polyfilled too (<c>UnoVibe/Polyfills/MacOS/AppNotifications.cs</c>), whose
+///   manager posts via the <c>terminal-notifier</c> CLI when it's on PATH, else the AppleScript
+///   <c>display notification</c> via <c>osascript</c> (the opencode/Claude-Code fallback).
 /// - On the WASDK target <c>AppNotificationManager.Register</c> also acquires the app identity,
 ///   including the COM registration that lets an unpackaged app show toasts.
-/// - Anywhere else this is a no-op.
+/// - Anywhere else (e.g. desktop-Windows Skia) this is a no-op.
 ///
 /// A toast only fires when it carries information the user isn't already looking at: an event that
 /// is visible when its owning window is focused (e.g. a question on the active session, shown
 /// inline in chat) is suppressed while that window is the foreground window. The gate is scoped
 /// per-window: each event passes the <c>Window</c> whose store raised it, so a second window being
 /// focused doesn't suppress another window's active-session toasts. (On Linux the foreground check
-/// matches the app's WM_CLASS instead of a per-window handle — see the polyfill's doc — so any app
-/// window being focused suppresses the whole app's active-session toasts there.)
+/// matches the app's WM_CLASS and on macOS it compares the frontmost app's process id — see the
+/// polyfills' docs — so any app window being focused suppresses the whole app's active-session
+/// toasts there.)
 /// </summary>
 internal static class Notifications
 {
@@ -60,10 +65,11 @@ internal static class Notifications
             _registered = false;
             System.Diagnostics.Debug.WriteLine($"UnoVibe: app-notification registration failed: {ex.Message}");
         }
-#elif DESKTOP_LINUX
-        // Nothing to register at startup — each toast is sent lazily over the session D-Bus
-        // org.freedesktop.Notifications service. This just installs the no-op Xlib error handler
-        // so the foreground check can't trip Xlib's default (exit-)error handler.
+#elif DESKTOP_LINUX || DESKTOP_MACOS
+        // Nothing to register at startup — Linux sends each toast lazily over the session D-Bus
+        // org.freedesktop.Notifications service (and installs the no-op Xlib error handler so the
+        // foreground check can't trip Xlib's default (exit-)error handler); macOS resolves the
+        // delivery route (terminal-notifier / osascript) per toast.
         AppNotificationManager.Default.Register();
 #endif
     }
@@ -143,7 +149,7 @@ internal static class Notifications
     {
 #if WASDK
         return _registered && (!visibleWhenFocused || !IsWindowInForeground(window));
-#elif DESKTOP_LINUX
+#elif DESKTOP_LINUX || DESKTOP_MACOS
         return !visibleWhenFocused || !IsWindowInForeground(window);
 #else
         return false;
@@ -154,7 +160,8 @@ internal static class Notifications
     /// True when <paramref name="window"/> is the foreground window (falling back to the
     /// registered-window set when no owning window is known). On Windows the HWND is resolved on
     /// demand from the live Window — never cached — so a handle the OS has invalidated can't
-    /// linger. On Linux the check matches the app's WM_CLASS instead (see the polyfill's doc).
+    /// linger. On Linux the check matches the app's WM_CLASS and on macOS it compares the frontmost
+    /// app's process id (see the polyfills' docs) — any app window focused counts as "foreground".
     /// </summary>
     private static bool IsWindowInForeground(Window? window)
     {
@@ -175,7 +182,7 @@ internal static class Notifications
             catch { /* window closed mid-iteration; skip it */ }
         }
         return false;
-#elif DESKTOP_LINUX
+#elif DESKTOP_LINUX || DESKTOP_MACOS
         return AppNotificationManager.Default.IsApplicationInForeground();
 #else
         return false;
@@ -192,12 +199,13 @@ internal static class Notifications
         return title;
     }
 
-    /// <summary>The one toast path shared by the WASDK and desktop-Linux targets: build the toast
-    /// through the Windows App SDK's <c>AppNotificationBuilder</c> and let the platform manager
-    /// show it (the real one on WinUI, the D-Bus polyfill on Linux). No-op elsewhere.</summary>
+    /// <summary>The one toast path shared by the WASDK, desktop-Linux and desktop-macOS targets:
+    /// build the toast through the Windows App SDK's <c>AppNotificationBuilder</c> and let the
+    /// platform manager show it (the real one on WinUI, the D-Bus polyfill on Linux, the
+    /// terminal-notifier/osascript polyfill on macOS). No-op elsewhere.</summary>
     private static void Show(string heading, string body)
     {
-#if WASDK || DESKTOP_LINUX
+#if WASDK || DESKTOP_LINUX || DESKTOP_MACOS
         try
         {
             var notification = new AppNotificationBuilder()
