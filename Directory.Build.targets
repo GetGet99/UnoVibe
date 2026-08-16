@@ -6,7 +6,7 @@
     bump logic.
   -->
   <PropertyGroup>
-    <ApplicationDisplayVersion>0.1.5</ApplicationDisplayVersion>
-    <ApplicationVersion>6</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1.6</ApplicationDisplayVersion>
+    <ApplicationVersion>7</ApplicationVersion>
   </PropertyGroup>
 </Project>
