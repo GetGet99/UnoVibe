@@ -894,6 +894,11 @@ The single source of truth is `MainPage` (the root page, so it sees the whole wi
     The picker row stays a horizontal `StackPanel` (Uno's `WrapPanel` here has no `Spacing`/`Padding`).
   - `ChatStatusArea`: shrinks the horizontal padding to match the header/composer.
 
+### Tips about `unovibe` CLI and environment variables
+
+- `unovibe` CLI command is not put in path automatically for them. So, they can't use without
+  adding manually. Thus, we commented out those hints for now until we support installing CLI command.
+
 ### Sidebar folder actions
 
 Each `SessionSidebar` directory-group header shows, left of the "+" (new session) button, two small
