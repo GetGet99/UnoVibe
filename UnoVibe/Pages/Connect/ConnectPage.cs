@@ -219,15 +219,13 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
     /// </summary>
     private async Task PickFolderAsync()
     {
-        var picker = new Windows.Storage.Pickers.FolderPicker();
-        WindowsHelper.InitializeWithWindow(picker, Controller.Window);
         try
         {
-            var folder = await picker.PickSingleFolderAsync();
-            if (folder is null) return;
+            var path = await WindowsHelper.PickFolderAsync(Controller.Window, Controller.Store.ServerDirectory);
+            if (path is null) return;
             var (ok, password) = ResolveUiFolderPassword();
             if (!ok) return;
-            if (await StartServeCoreAsync(folder.Path, password))
+            if (await StartServeCoreAsync(path, password))
             {
                 RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, SaveFolderPassword, CustomPassword);
                 Controller.ShowMain();

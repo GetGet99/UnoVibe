@@ -256,14 +256,12 @@ public partial class SessionSidebar : IQuickMarkupComponent
     /// </summary>
     private async Task OpenFolderAndStartSessionAsync()
     {
-        var picker = new Windows.Storage.Pickers.FolderPicker();
-        WindowsHelper.InitializeWithWindow(picker, HostWindow);
         try
         {
-            var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null)
+            var path = await WindowsHelper.PickFolderAsync(HostWindow, Store.ServerDirectory);
+            if (path is not null)
             {
-                await Store.NewSessionAsync(folder.Path);
+                await Store.NewSessionAsync(path);
                 // Small-screen view switching: opening a folder lands in its new chat view.
                 IsSidebarView = false;
             }
