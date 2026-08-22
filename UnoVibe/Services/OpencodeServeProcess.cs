@@ -111,6 +111,12 @@ public sealed class OpencodeServeProcess : IDisposable
                     return BaseUrl;
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // No idea whether it's due to 2 second timeout or ct
+                // rethrow if ct
+                ct.ThrowIfCancellationRequested();
+            }
             catch (HttpRequestException)
             {
                 // Server not up yet.
