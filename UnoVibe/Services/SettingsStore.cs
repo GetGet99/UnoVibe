@@ -60,6 +60,7 @@ public static class SettingsStore
     public const string SendModeKey = "send.mode";
     public const string CodeFontKey = "text.codefont";
     public const string ExpandSkillsKey = "command.skills";
+    public const string AutoContinueKey = "turn.autocontinue";
 
     private static readonly string Dir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
     private static readonly string FilePath = Path.Combine(Dir, "settings.json");
@@ -90,6 +91,12 @@ public static class SettingsStore
     /// prompt. A name backed by a real command still expands (the server itself gives commands
     /// priority over skills of the same name).</summary>
     public static bool ExpandSkills { get; set; } = true;
+
+    /// <summary>Automatically sends a "continue" message when a turn stops with the chat left
+    /// ending on a Thinking (reasoning) part, instead of surfacing the Continue button. The
+    /// swallowed stop fires no completion notification and no sidebar unread/outcome indicator.
+    /// See <see cref="SessionStore"/> for the streak cap that bounds runaway loops.</summary>
+    public static bool AutoContinueOnThinking { get; set; } = false;
 
     /// <summary>The settings-page rows. Built lazily (on first settings open) so the Code font options
     /// can enumerate the user's installed fonts via <see cref="SystemFonts"/>; cached thereafter.
@@ -137,6 +144,11 @@ public static class SettingsStore
                 "Expand skills via slash commands",
                 "When on, typing /skill-name invokes that skill like a command (default, TUI behavior). When off, skill-only names are sent as a plain message instead; real commands and MCP prompts still expand, and a name matching both a command and a skill always runs the command.",
                 SettingKinds.Toggle),
+            new(
+                AutoContinueKey,
+                "Automatically continue (Thinking stop)",
+                "When a turn stops with the chat ending on an unfinished Thinking block, automatically send a message to resume agent. Max 50 auto-continues.",
+                SettingKinds.Toggle),
         };
     }
 
@@ -147,6 +159,7 @@ public static class SettingsStore
         SendModeKey => SendMode.ToString(),
         CodeFontKey => CodeFont,
         ExpandSkillsKey => ExpandSkills ? "true" : "false",
+        AutoContinueKey => AutoContinueOnThinking ? "true" : "false",
         _ => "",
     };
 
@@ -167,6 +180,10 @@ public static class SettingsStore
                 break;
             case ExpandSkillsKey:
                 if (bool.TryParse(value, out var expand)) ExpandSkills = expand;
+                else return;
+                break;
+            case AutoContinueKey:
+                if (bool.TryParse(value, out var autoContinue)) AutoContinueOnThinking = autoContinue;
                 else return;
                 break;
             default:
@@ -211,6 +228,7 @@ public static class SettingsStore
             if (Enum.TryParse<SendPromptMode>(file.SendMode, out var mode)) SendMode = mode;
             if (file.CodeFont is not null) CodeFont = file.CodeFont;
             if (file.ExpandSkills is not null) ExpandSkills = file.ExpandSkills.Value;
+            if (file.AutoContinueOnThinking is not null) AutoContinueOnThinking = file.AutoContinueOnThinking.Value;
         }
         catch (JsonException)
         {
@@ -223,7 +241,7 @@ public static class SettingsStore
         try
         {
             Directory.CreateDirectory(Dir);
-            var file = new SettingsFileModel { EditorCommand = EditorCommand, SendMode = SendMode.ToString(), CodeFont = CodeFont, ExpandSkills = ExpandSkills };
+            var file = new SettingsFileModel { EditorCommand = EditorCommand, SendMode = SendMode.ToString(), CodeFont = CodeFont, ExpandSkills = ExpandSkills, AutoContinueOnThinking = AutoContinueOnThinking };
             var json = JsonSerializer.Serialize(file, AppJsonContext.Default.SettingsFileModel);
             lock (Gate)
             {
@@ -303,5 +321,6 @@ public static class SettingsStore
         public string? SendMode { get; set; }
         public string? CodeFont { get; set; }
         public bool? ExpandSkills { get; set; }
+        public bool? AutoContinueOnThinking { get; set; }
     }
 }

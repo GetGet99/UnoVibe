@@ -1480,9 +1480,18 @@ public sealed partial class ChatStore : IDisposable
         if (!properties.TryGetProperty("status", out var status)) return;
         var type = status.GetStringProperty("type");
 
+        var sessionId = properties.GetStringProperty("sessionID");
+        var store = sessionId.Length > 0 ? GetStore(sessionId) : null;
+
+        // An idle that the session's store converts into an automatic "continue" (turn stopped
+        // on a Thinking part, setting enabled — or the trailing echo of such a stop) is not a
+        // completion: skip the unread/outcome flags and the native toast, since the turn is
+        // already restarting. Must be asked BEFORE the store applies the event; both evaluate
+        // the same message list back-to-back on this thread.
+        var autoContinuing = type == "idle" && store is not null && store.WillAutoContinue();
+
         // Track busy/unread for every session the stream reports on, so the sidebar
         // indicators stay live even for background sessions.
-        var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length > 0)
         {
             var flags = Flags(sessionId);
@@ -1495,7 +1504,7 @@ public sealed partial class ChatStore : IDisposable
                 // outcome already tracked from the turn's final message.updated. The Read flag is
                 // cleared so the indicator actually shows (IsRead may have been set by a prior
                 // view or a manual "Mark as read").
-                if (type == "idle" && sessionId != Active.SessionId)
+                if (!autoContinuing && type == "idle" && sessionId != Active.SessionId)
                 {
                     flags.Unread = true;
                     flags.Read = false;
@@ -1506,13 +1515,13 @@ public sealed partial class ChatStore : IDisposable
                 // Turn finished → native toast. Background-session completions always toast (the
                 // sidebar dot alone is easy to miss); the active session's completion is visible
                 // streaming in chat, so it only toasts while the owning window isn't foreground.
-                if (type == "idle")
+                if (!autoContinuing && type == "idle")
                     Notifications.NotifyCompleted(OwnerWindow, item, flags.Outcome, sessionId == Active.SessionId);
             }
         }
 
         // The active-session banner (IsBusy/StatusMessage) only applies to the session's store.
-        GetStore(sessionId)?.ApplySessionStatus(properties);
+        store?.ApplySessionStatus(properties);
     }
 
     private void ApplyQuestionAsked(JsonElement properties)

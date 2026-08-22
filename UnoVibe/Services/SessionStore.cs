@@ -54,6 +54,7 @@ namespace UnoVibe.Services;
     public string RetryCountdown = "";
     // True when the stopped turn warrants the end-of-chat "Continue" button: the last assistant
     // message carried a non-interrupt error, or the chat ends on a Thinking (reasoning) part.
+    // Never set when the stop was handled by an automatic "continue" (turn.autocontinue setting).
     public bool ShowContinue;
     public string Mode = "build";
     public string ModelId = "";
@@ -117,6 +118,27 @@ public sealed partial class SessionStore
     private readonly Dictionary<string, MessageItem> _messagesById = new();
     private readonly Queue<string> _pendingPrompts = new();
 
+    // Auto-continue ("turn.autocontinue" setting) bookkeeping. When a turn stops with the chat
+    // ending on a Thinking (reasoning) part, a "continue" prompt is sent automatically instead of
+    // surfacing the end-of-chat Continue button, and the router suppresses the completion toast +
+    // sidebar unread/outcome indicators for that stop (the turn is already restarting).
+    private const int MaxAutoContinues = 50;
+
+    /// <summary>Consecutive automatic continues fired without an intervening manual send or a
+    /// stop that didn't qualify — bounds runaway loops against a provider that keeps stopping
+    /// mid-thinking; past the cap the manual Continue button returns.</summary>
+    private int autoContinueStreak;
+    private bool autoContinued;
+    private bool sawRunningStatus;
+
+    /// <summary>
+    /// True between an automatic continue firing and the server confirming the restarted turn
+    /// with its first non-idle status event. Any further stop signal for that same stop (the
+    /// server emits session.status idle and the final message.updated carrying finish in either
+    /// order) is an echo and must neither re-fire nor clobber the fresh turn's busy state.
+    /// </summary>
+    private bool AwaitingAutoContinueRun => autoContinued && !sawRunningStatus;
+
     [QuickMarkupConstructor]
     private void Ctor()
     {
@@ -161,7 +183,17 @@ public sealed partial class SessionStore
     ///     it sends like OnNextToolCall.
     /// </summary>
     public async Task SendAsync(string text, SendPromptMode? mode = null)
+        => await SendCoreAsync(text, mode, fromUser: true);
+
+    /// <summary>Send implementation. <paramref name="fromUser"/> distinguishes real user sends
+    /// (which reset the auto-continue streak) from the automatic "continue" (which must not).</summary>
+    private async Task SendCoreAsync(string text, SendPromptMode? mode, bool fromUser)
     {
+        if (fromUser)
+        {
+            autoContinueStreak = 0;
+            autoContinued = false;
+        }
         try
         {
             if (!await Router.EnsureSessionAsync()) return;
@@ -678,6 +710,8 @@ public sealed partial class SessionStore
         RevertCountLabel = "";
         RevertPromptText = "";
         ForkPromptText = "";
+        autoContinueStreak = 0;
+        autoContinued = false;
     }
 
     /// <summary>
@@ -795,10 +829,12 @@ public sealed partial class SessionStore
             ApplyMessageStats(message, info);
             MarkInterrupted(message, info);
             ApplyMessageError(message, info);
-            if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
-            // The server emits status idle before the final message.updated carrying the
-            // error, so surface the Continue button here when the turn is already stopped.
-            if (!IsBusy && ShouldShowContinue()) ShowContinue = true;
+            // The server emits session.status idle and this final message.updated (carrying
+            // finish/error) in either order; both are turn-stop signals handled uniformly
+            // (auto-continue or the Continue button). While an auto-continue is awaiting its
+            // restarted turn, a trailing finish echo must not clobber the fresh busy state.
+            if (!AwaitingAutoContinueRun && info.TryGetProperty("finish", out _)) OnTurnCompleted();
+            if (!IsBusy) HandleStoppedTurn();
             UpdateSessionStats();
             return;
         }
@@ -812,8 +848,8 @@ public sealed partial class SessionStore
         ApplyMessageStats(message, info);
         MarkInterrupted(message, info);
         ApplyMessageError(message, info);
-        if (info.TryGetProperty("finish", out _)) OnTurnCompleted();
-        if (!IsBusy && ShouldShowContinue()) ShowContinue = true;
+        if (!AwaitingAutoContinueRun && info.TryGetProperty("finish", out _)) OnTurnCompleted();
+        if (!IsBusy) HandleStoppedTurn();
         _messagesById[id] = message;
         AppendMessage(message);
         UpdateSessionStats();
@@ -893,6 +929,67 @@ public sealed partial class SessionStore
     /// </summary>
     private bool ShouldShowContinue() =>
         LastAssistantMessageErrored() || LastAssistantMessageEndsOnThinking();
+
+    /// <summary>
+    /// Router-facing decision made BEFORE a session.status event is applied: whether an idle
+    /// transition for this session will be swallowed by an automatic "continue" send (so the
+    /// router suppresses the completion toast and sidebar unread/outcome flags for it), or has
+    /// just been (<see cref="AwaitingAutoContinueRun"/> — echoes of that stop). Mirrors the check
+    /// <see cref="HandleStoppedTurn"/> makes moments later on the same message list.
+    /// </summary>
+    internal bool WillAutoContinue() =>
+        SettingsStore.AutoContinueOnThinking
+        && autoContinueStreak < MaxAutoContinues
+        && !AwaitingAutoContinueRun
+        && !LastAssistantMessageInterrupted()
+        && LastAssistantMessageEndsOnThinking();
+
+    /// <summary>
+    /// True when this session's most recent assistant message was interrupted by the user
+    /// (abort). Guards the auto-continue against a stop signal racing the aborted part: a user
+    /// Stop must never be answered with an automatic "continue".
+    /// </summary>
+    private bool LastAssistantMessageInterrupted()
+    {
+        for (var i = Messages.Count - 1; i >= 0; i--)
+        {
+            var m = Messages[i];
+            if (m.Role != "assistant") continue;
+            return m.Interrupted || m.Parts.Any(p => p.Type == "aborted");
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Handles a stopped turn (session.status idle, or a message.updated carrying finish when the
+    /// turn is already stopped): fires the automatic "continue" when the setting is on and the
+    /// chat ends on a Thinking part, otherwise surfaces the Continue button as before. Echoes of
+    /// an already-auto-continued stop are ignored, and the streak cap hands control back to the
+    /// manual Continue button.
+    /// </summary>
+    private void HandleStoppedTurn()
+    {
+        if (AwaitingAutoContinueRun) return;
+        if (autoContinued) autoContinued = false; // the restarted turn's own stop — decide fresh
+
+        if (SettingsStore.AutoContinueOnThinking && !LastAssistantMessageInterrupted()
+            && LastAssistantMessageEndsOnThinking() && autoContinueStreak < MaxAutoContinues)
+        {
+            autoContinued = true;
+            sawRunningStatus = false;
+            autoContinueStreak++;
+            _ = SendCoreAsync("""
+                continue
+                <continue_metadata>
+                If you have already finished your task, end the turn with a non-reasoning message instead.
+                </continue_metadata>
+                """, null, fromUser: false);
+            return;
+        }
+
+        autoContinueStreak = 0;
+        ShowContinue = ShouldShowContinue();
+    }
 
     /// <summary>
     /// Adds a reactive "error" part when the message carries a non-abort error (e.g. a
@@ -1051,6 +1148,7 @@ public sealed partial class SessionStore
         var type = status.GetStringProperty("type");
 
         IsBusy = type != "idle";
+        if (type != "idle") sawRunningStatus = true;
 
         if (type == "retry")
         {
@@ -1076,9 +1174,11 @@ public sealed partial class SessionStore
             RetryCountdown = "";
 
             // The turn finished. If it stopped because of a non-interrupt error, or with the
-            // chat left ending on a Thinking part, surface the "Continue" button. (Interrupts
-            // are MessageAbortedError → aborted part instead.)
-            if (type == "idle") ShowContinue = ShouldShowContinue();
+            // chat left ending on a Thinking part, surface the "Continue" button — or, when the
+            // auto-continue-on-thinking-stop setting is on and the stop qualifies, send the
+            // "continue" prompt instead (HandleStoppedTurn). (Interrupts are MessageAbortedError
+            // → aborted part instead.)
+            if (type == "idle") HandleStoppedTurn();
         }
 
         if (!IsBusy) _ = DrainPendingPromptsAsync();

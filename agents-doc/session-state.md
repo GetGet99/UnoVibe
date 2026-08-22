@@ -52,6 +52,22 @@ tooltip track the setting live: `ChatPage` keeps the reactive `SendMode` ref syn
 the component reads `SettingsStore.SendMode` fresh for the primary click. When idle the send button
 is a plain button that sends immediately.
 
+## Turn-stop handling: Continue button + auto-continue
+
+When a turn stops, `SessionStore` decides between showing the end-of-chat **⟳ Continue** button
+(`ShowContinue`, rendered by `ChatMessageList`; clicking it sends the literal prompt `continue`)
+and, when **Auto-continue on thinking stop** (`turn.autocontinue`,
+[`settings.md`](settings.md)) is enabled and the chat ends on an unfinished Thinking (reasoning)
+part, firing that same continue automatically (`HandleStoppedTurn`). Stop signals —
+`session.status idle` and/or the final `message.updated` carrying finish — arrive in either order,
+are handled uniformly (`HandleStoppedTurn` from both sites), and echoes of an already-auto-continued
+stop are ignored until the server confirms the restarted turn with its first non-idle status event.
+The auto-fired continue is silent: no completion toast and no sidebar unread/outcome check mark
+(`ChatStore.ApplySessionStatus` asks `store.WillAutoContinue()` before applying an idle event and
+skips both). A streak cap of 10 consecutive auto-continues — reset by any manual send or a
+non-qualifying stop — hands control back to the manual Continue button as a runaway-loop guard.
+Aborted turns never qualify (a user Stop must not be answered with a continue).
+
 ## Revert / undo
 
 **API:**

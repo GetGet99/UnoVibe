@@ -19,6 +19,9 @@ namespace UnoVibe.Pages.Chat;
     inject string Input;
     string PermissionStage = "choose";
     string RejectText = "";
+    // Mirrors the turn.autocontinue setting for the inline switch shown next to the Continue
+    // button (two-way bound below; kept in sync with SettingsStore from code-behind).
+    public bool AutoContinueOn = `SettingsStore.AutoContinueOnThinking`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -70,9 +73,14 @@ namespace UnoVibe.Pages.Chat;
                             </StackPanel>
                         </Border>
                     if (`Store.Active.ShowContinue`)
-                        <Button Content="⟳ Continue" CornerRadius=6 HorizontalAlignment=Left Margin=`new Thickness(0, 8, 0, 0)`
-                                ToolTipService.ToolTip=`"Sends a message with content \"continue\" to resume the work from the last incomplete step."`
-                                @Click+=`await ContinueAsync()` />
+                        <StackPanel Orientation=Horizontal Spacing=8 Margin=`new Thickness(0, 8, 0, 0)` HorizontalAlignment=Left>
+                            <Button Content="⟳ Continue" CornerRadius=6 VerticalAlignment=Center
+                                    ToolTipService.ToolTip=`"Sends a message with content \"continue\" to resume the work from the last incomplete step."`
+                                    @Click+=`await ContinueAsync()` />
+                            <ToggleSwitch OnContent="auto continue" OffContent="auto continue" IsOn<=>`AutoContinueOn`
+                                          FontSize=12 VerticalAlignment=Center
+                                          ToolTipService.ToolTip=`"When on, a turn that stops with the chat ending on an unfinished Thinking block is continued automatically — no completion notification and no sidebar check mark. Same as the \"Auto-continue on thinking stop\" setting."` />
+                        </StackPanel>
                     if (`Store.ActivePermission is not null`)
                     {
                         <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
@@ -127,6 +135,9 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     /// <summary>Pixels from the very bottom that still count as "at the bottom" for stickiness.</summary>
     private const double StickToBottomThreshold = 40;
 
+    /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
+    private DispatcherQueue? dispatcher;
+
     /// <summary>
     /// The SessionStore whose Messages collection this component is currently hooked to. Hooking
     /// tracks the router's Active store so a session switch re-wires the CollectionChanged
@@ -163,6 +174,24 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         var countdown = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         countdown.Tick += (_, _) => Store.Active.UpdateRetryCountdown();
         countdown.Start();
+
+        // The inline auto-continue switch next to the Continue button mirrors the
+        // turn.autocontinue setting two-way: toggling persists immediately (live-apply, like the
+        // settings page), and a change from anywhere else (settings overlay / another process)
+        // updates the switch. The Changed event may fire off-thread (cross-process file watcher),
+        // so bounce to the UI thread.
+        dispatcher = DispatcherQueue.GetForCurrentThread();
+        AutoContinueOnProp.Watch(on => SettingsStore.SetValue(SettingsStore.AutoContinueKey, on ? "true" : "false"));
+        SettingsStore.Changed += OnSettingsChanged;
+    }
+
+    private void OnSettingsChanged()
+    {
+        _ = dispatcher?.TryEnqueue(() =>
+        {
+            var value = SettingsStore.AutoContinueOnThinking;
+            if (AutoContinueOn != value) AutoContinueOn = value;
+        });
     }
 
     /// <summary>Scrolls to the permission card once it has been added to the message list.</summary>
