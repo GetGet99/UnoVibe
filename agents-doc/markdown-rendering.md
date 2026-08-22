@@ -61,12 +61,20 @@ color.
   comes from `FencedCodeBlock.Info` (trimmed) via `Languages.FindById`, so alias fences work
   (`ts`→typescript, `csharp`→c#, `sh`→bash, `py`→python); indented code blocks have no `Info`, and
   languages with no ColorCode grammar render as plain text. Theme (dark vs light) is detected once
-  per colorize via `UISettings` background brightness (same heuristic as `AccentPalette`) and picks
+  per colorize from the target element's resolved `ActualTheme` (`CodeHighlighter.IsDarkTheme`,
+  falling back to the `UISettings` background-brightness poll when no element is given) and picks
   a cached `StyleDictionary.DefaultDark`/`DefaultLight`; brushes come from a `BrushFromHex`
   `SolidColorBrush` cache (`ColorCode.Styling.Style` is aliased — `Style` clashes with
   `Microsoft.UI.Xaml.Style`). Code blocks use the configured **Code font** setting
   (`SettingsStore.CodeFont`, resolved by `Services/CodeFonts.cs` — see
   [`settings.md`](settings.md)).
+  **Live re-theming:** brushes are baked into elements at build time, so both `MarkdownView`
+  and `CodeView` re-render on their root element's `ActualThemeChanged`: `MarkdownView` carries
+  the dark/light flag in every reconcile key (`d:`/`l:` prefix), so the flip rebuilds all blocks;
+  `CodeView` clears and refills its TextBlock's inlines via `FillInlines`. Without this,
+  blocks rendered before a flip keep stale colors — notably ColorCode's light palette renders
+  black text on the dark background (the Linux startup order makes this visible: Uno's
+  X11 theme helper reports Light until the async DBus portal read resolves).
   The same class also exposes the lower-level building blocks for reuse: `ResolveLanguageFromPath`
   (extension → ColorCode language, mirroring the TUI's `util/filetype.ts` subset), `ColorizeRuns`
   (the styled fragment list — lets `CodeView` interleave line numbers) and `ToRun` (fragment →

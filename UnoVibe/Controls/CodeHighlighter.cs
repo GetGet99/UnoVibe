@@ -22,8 +22,10 @@ namespace UnoVibe.Controls;
 ///
 /// Each call creates a fresh formatter: ColorCode's language regexes are compiled once and
 /// cached internally, so warm parses run in ~0.1 ms — fine for MarkdownView's per-delta
-/// re-render. The style dictionary is picked from the app theme (dark/light), mirroring the
-/// heuristic <see cref="AccentPalette"/> already uses.
+/// re-render. The style dictionary is picked from the target element's resolved
+/// <see cref="FrameworkElement.ActualTheme"/> (falling back to the system background-color
+/// poll <see cref="AccentPalette"/> uses when no element is given), so callers can re-colorize
+/// on <c>ActualThemeChanged</c> to keep already-rendered blocks readable across theme flips.
 /// </summary>
 public static class CodeHighlighter
 {
@@ -110,12 +112,13 @@ public static class CodeHighlighter
     /// </summary>
     public static bool Colorize(TextBlock target, string source, string? language)
     {
-        var runs = ColorizeRuns(source, language);
+        var runs = ColorizeRuns(source, language, target);
         if (runs is null) return false;
+        var fallback = PlainTextBrush(target);
         foreach (var run in runs)
         {
             if (run.Text.Length == 0) continue;
-            var element = ToRun(run.Text, run.Style);
+            var element = ToRun(run.Text, run.Style, fallback);
             target.Inlines.Add(element);
         }
         return true;
@@ -125,22 +128,43 @@ public static class CodeHighlighter
     /// Colorizes <paramref name="source"/> into a flat list of styled text fragments (null when the
     /// language can't be resolved or the source is empty). Lets a caller build custom Inlines —
     /// e.g. <see cref="CodeView"/> interleaves per-line line numbers with the highlighted runs.
+    /// The dark/light palette is chosen from <paramref name="themeSource"/>'s resolved theme when
+    /// given (call again from its ActualThemeChanged to re-colorize), else the system theme.
     /// </summary>
-    public static IReadOnlyList<StyledRun>? ColorizeRuns(string source, string? language)
+    public static IReadOnlyList<StyledRun>? ColorizeRuns(string source, string? language, FrameworkElement? themeSource = null)
     {
         var lang = ResolveLanguage(language);
         if (lang is null || source.Length == 0) return null;
 
-        var styles = IsDarkTheme() ? DarkStyles : LightStyles;
+        var styles = IsDarkTheme(themeSource) ? DarkStyles : LightStyles;
         var formatter = new TextBlockFormatter(styles);
         return formatter.FormatRuns(source, lang);
     }
 
-    /// <summary>Builds a <see cref="Run"/> from a styled fragment (version of the formatter's Emit).</summary>
-    public static Run ToRun(string text, Style? style) => new()
+    /// <summary>
+    /// The plain-text brush of the palette <paramref name="themeSource"/> currently resolves to.
+    /// Used as the fallback for unstyled fragments: a Run with an unset Foreground defaults to
+    /// hardcoded black in Uno (TextElement.ForegroundProperty), which is unreadable on dark.
+    /// Re-resolve per render — callers rebuild on ActualThemeChanged, so it tracks the theme.
+    /// </summary>
+    public static Brush PlainTextBrush(FrameworkElement? themeSource)
+    {
+        bool isDark = IsDarkTheme(themeSource);
+        var styles = isDark ? DarkStyles : LightStyles;
+        if (styles.TryGetValue(ScopeName.PlainText, out var style) && !string.IsNullOrWhiteSpace(style.Foreground))
+            return BrushFromHex(style.Foreground);
+        return new SolidColorBrush(isDark ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 0, 0, 0));
+    }
+
+    /// <summary>
+    /// Builds a <see cref="Run"/> from a styled fragment (version of the formatter's Emit).
+    /// Fragments without a style/foreground get <paramref name="fallback"/> (see
+    /// <see cref="PlainTextBrush"/>) instead of Uno's hardcoded-black unset-Run default.
+    /// </summary>
+    public static Run ToRun(string text, Style? style, Brush? fallback = null) => new()
     {
         Text = text,
-        Foreground = StyleBrush(style),
+        Foreground = StyleBrush(style) ?? fallback,
         FontWeight = style is { Bold: true } ? FontWeights.Bold : FontWeights.Normal,
         FontStyle = style is { Italic: true } ? FontStyle.Italic : FontStyle.Normal,
     };
@@ -151,8 +175,17 @@ public static class CodeHighlighter
         return !string.IsNullOrWhiteSpace(style.Foreground) ? BrushFromHex(style.Foreground) : null;
     }
 
-    /// <summary>Same dark/light detection as AccentPalette: the WinUI system background color.</summary>
-    private static bool IsDarkTheme() => Ui.GetColorValue(UIColorType.Background).R < 255 / 2;
+    /// <summary>
+    /// Dark/light detection for palette picking: the element's resolved ActualTheme when available
+    /// (honors any app-level RequestedTheme override), else the WinUI system background color —
+    /// the same heuristic <see cref="AccentPalette"/> uses.
+    /// </summary>
+    public static bool IsDarkTheme(FrameworkElement? themeSource)
+    {
+        var theme = themeSource?.ActualTheme;
+        return theme is ElementTheme.Dark
+            || (theme is not ElementTheme.Light && Ui.GetColorValue(UIColorType.Background).R < 255 / 2);
+    }
 
     private static SolidColorBrush BrushFromHex(string hex)
     {

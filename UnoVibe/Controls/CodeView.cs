@@ -74,11 +74,15 @@ public partial class CodeView : IQuickMarkupComponent<UIElement>
         {
             FontFamily = CodeFonts.Current,
             FontSize = 12,
-            Foreground = _theme.PrimaryText,
+            // No explicit Foreground: unscoped tokens inherit this brush (baking one froze them
+            // to the build-time theme); left unset, Uno's theme walk keeps it current.
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
         };
-        BuildBlock(text.Inlines, visible, lineCount, overflow);
+        FillInlines(text, visible, lineCount, overflow);
+        // Runs bake their brushes at build time; rebuild them when the resolved theme flips
+        // so already-rendered blocks don't keep stale (e.g. black-on-dark) palette colors.
+        text.ActualThemeChanged += (_, _) => FillInlines(text, visible, lineCount, overflow);
         box.Child = text;
         host.Children.Add(box);
 
@@ -106,17 +110,24 @@ public partial class CodeView : IQuickMarkupComponent<UIElement>
         return (preview, overflow, lineCount);
     }
 
+    private void FillInlines(TextBlock text, string visible, int lineCount, bool overflow)
+    {
+        text.Inlines.Clear();
+        BuildBlock(text, visible, lineCount, overflow);
+    }
+
     /// <summary>
     /// Colorizes the source whole-then-line-splits the runs, emitting a line-number run at each
     /// line start and a LineBreak between lines. Falls back to a single plain run when the file
     /// path's language can't be resolved. A trailing muted "…" marks a collapsed preview (never
     /// numbered).
     /// </summary>
-    private void BuildBlock(InlineCollection inlines, string source, int previewLineCount, bool overflow)
+    private void BuildBlock(TextBlock text, string source, int previewLineCount, bool overflow)
     {
+        var inlines = text.Inlines;
         var lang = CodeHighlighter.ResolveLanguageFromPath(FilePath);
         var runs = lang is not null
-            ? CodeHighlighter.ColorizeRuns(source, lang.Id)
+            ? CodeHighlighter.ColorizeRuns(source, lang.Id, text)
             : null;
 
         int totalLines = previewLineCount > 0 ? previewLineCount : source.Split('\n').Length;
@@ -130,6 +141,7 @@ public partial class CodeView : IQuickMarkupComponent<UIElement>
 
         int line = 1;
         bool atLineStart = true;
+        var fallback = CodeHighlighter.PlainTextBrush(text);
         foreach (var run in runs)
         {
             var parts = run.Text.Split('\n');
@@ -146,7 +158,7 @@ public partial class CodeView : IQuickMarkupComponent<UIElement>
                     atLineStart = false;
                 }
                 if (part.Length > 0)
-                    inlines.Add(CodeHighlighter.ToRun(part, run.Style));
+                    inlines.Add(CodeHighlighter.ToRun(part, run.Style, fallback));
                 bool hadNewline = i < parts.Length - 1;
                 if (hadNewline)
                 {

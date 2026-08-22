@@ -56,6 +56,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
 
     private readonly ThemeBrushes _theme = ThemeBrushes.Global;
     private readonly List<(string Key, UIElement Element)> _elements = new();
+    private bool _themeHooked;
 
     [QuickMarkupConstructor]
     private void Ctor()
@@ -72,10 +73,22 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
     private void Render()
     {
         if (blocksHost is null) return;
+
+        // Brushes are baked into elements at build time (runs, inline-code accent, table fills),
+        // so a theme flip would otherwise leave stale colors. Hook the host's ActualThemeChanged
+        // once and re-render; the per-block keys below carry the theme so the reconcile treats
+        // every block as divergent and rebuilds them all with fresh brushes.
+        if (!_themeHooked)
+        {
+            _themeHooked = true;
+            blocksHost.ActualThemeChanged += (_, _) => Render();
+        }
+
+        bool dark = CodeHighlighter.IsDarkTheme(blocksHost);
         var text = Text ?? "";
         IReadOnlyList<MdBlock> blocks = PlainMode
-            ? new[] { new MdBlock($"plain:{Fnv(text)}", () => PlainTextBlock(text)) }
-            : BuildBlocks(text);
+            ? new[] { new MdBlock($"{ThemeKey(dark)}plain:{Fnv(text)}", () => PlainTextBlock(text)) }
+            : BuildBlocks(text, dark);
 
         int keep = 0;
         while (keep < _elements.Count && keep < blocks.Count && _elements[keep].Key == blocks[keep].Key)
@@ -95,12 +108,13 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         }
     }
 
-    private IReadOnlyList<MdBlock> BuildBlocks(string text)
+    private IReadOnlyList<MdBlock> BuildBlocks(string text, bool dark)
     {
         if (string.IsNullOrWhiteSpace(text)) return Array.Empty<MdBlock>();
         var doc = Markdown.Parse(text, Pipeline);
         var blocks = doc.Cast<MarkdigBlock>().ToList();
         var result = new List<MdBlock>(blocks.Count);
+        string themeKey = ThemeKey(dark);
         int i = 0;
         while (i < blocks.Count)
         {
@@ -121,7 +135,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 int startPos = LineStart(text, startLine);
                 int endPos = i < blocks.Count ? LineStart(text, blocks[i].Line) : text.Length;
                 int len = Math.Max(0, endPos - startPos);
-                result.Add(new MdBlock($"flow:{FnvSpan(text, startPos, len)}", () => FlowTextBlock(flow)));
+                result.Add(new MdBlock($"{themeKey}flow:{FnvSpan(text, startPos, len)}", () => FlowTextBlock(flow)));
             }
             else
             {
@@ -129,13 +143,15 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 var factory = BuildFactory(block, text, nextLine);
                 if (factory is not null)
                 {
-                    result.Add(new MdBlock($"{BlockKind(block)}:{FnvSpan(text, BlockRawStart(text, block), BlockRawLength(text, block, nextLine))}", factory));
+                    result.Add(new MdBlock($"{themeKey}{BlockKind(block)}:{FnvSpan(text, BlockRawStart(text, block), BlockRawLength(text, block, nextLine))}", factory));
                 }
                 i++;
             }
         }
         return result;
     }
+
+    private static string ThemeKey(bool dark) => dark ? "d:" : "l:";
 
     private Func<UIElement>? BuildFactory(MarkdigBlock block, string text, int nextLine) => block switch
     {
@@ -193,11 +209,13 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
     private UIElement RenderCode(CodeBlock code)
     {
         var text = code.Lines.ToString();
+        // No explicit Foreground: unscoped tokens (plain identifiers) emit Foreground=null runs
+        // that inherit this TextBlock's brush — baking one here froze them to the build-time
+        // theme (black-on-dark after a flip). Left unset, Uno's theme walk keeps it current.
         var tb = new TextBlock
         {
             FontFamily = CodeFonts.Current,
             FontSize = 12,
-            Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
         };
