@@ -16,7 +16,7 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     inject ChatStore Store;
-    inject string Input;
+    inject ChatPage ChatP;
     string PermissionStage = "choose";
     string RejectText = "";
     // Mirrors the turn.autocontinue setting for the inline switch shown next to the Continue
@@ -252,7 +252,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task OnMessageRevertRequested(MessageItem message)
     {
         await Store.Active.RevertToMessageAsync(message);
-        Input = Store.Active.RevertPromptText;
+        ChatP.SetChatText(Store.Active.RevertPromptText);
         ForceScrollToBottom();
     }
 
@@ -264,7 +264,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task OnMessageForkRequested(MessageItem message)
     {
         await Store.ForkFromMessageAsync(message);
-        Input = Store.Active.ForkPromptText;
+        ChatP.SetChatText(Store.Active.ForkPromptText);
         ForceScrollToBottom();
     }
 

@@ -14,7 +14,7 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Services;
     using QuickMarkup.WinUI;
     inject ChatStore Store;
-    provide string Input = "";
+    provide ChatPage ChatP = `this`;
     <root>
         <Grid RowDefinitions=<>
             <RowDefinition Height=Auto />
@@ -32,7 +32,7 @@ namespace UnoVibe.Pages.Chat;
                 chatMessageList = <ChatMessageList />
             </Grid>
             <Grid Grid.Row=3>
-                <ChatComposer SendRequested+=`SendAsync` />
+                composer = <ChatComposer SendRequested+=`SendAsync` />
             </Grid>
         </Grid>
     </root>
@@ -46,12 +46,13 @@ public partial class ChatPage : Page
         _ = Store.ConnectAsync();
     }
 
-    private async Task SendAsync(string? text, SendPromptMode? mode)
+    private async Task SendAsync(string text, SendPromptMode? mode)
     {
-        var content = (text ?? Input).Trim();
+        var content = text.Trim();
         if (content.Length == 0 && Store.Active.PendingImages.Count == 0) return;
-        Input = "";
         await Store.Active.SendAsync(content, mode);
         chatMessageList.ForceScrollToBottom();
     }
+
+    public void SetChatText(string txt) => composer.SetChatText(txt);
 }

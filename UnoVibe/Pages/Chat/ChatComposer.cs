@@ -7,10 +7,9 @@ namespace UnoVibe.Pages.Chat;
 
 /// <summary>
 /// Chat page composer block: the staged-image strip, the message input (SuggestBox) with
-/// attach/stop/send buttons, and the mode / model / variant pickers row. Owns the input text
-/// two-way bound to the page's <c>Input</c> provide, the busy-state send mode sync from
-/// <see cref="SettingsStore"/>, and the suggestion providers. Raises <see cref="SendRequested"/>
-/// for the page to run the send + autoscroll.
+/// attach/stop/send buttons, and the mode / model / variant pickers row. The busy-state
+/// send mode sync from <see cref="SettingsStore"/>, and the suggestion providers.
+/// Raises <see cref="SendRequested"/> for the page to run the send + autoscroll.
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
@@ -20,7 +19,6 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.Infra.Collections;
     inject ChatStore Store;
     inject Window HostWindow;
-    inject string Input;
     inject? bool IsCompact;
     string SendMode = "";
     <setup>
@@ -58,7 +56,7 @@ namespace UnoVibe.Pages.Chat;
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                suggestBox = <SuggestBox Text<=>`Input` PlaceholderText="Message OpenCode..." IsEnabled=`Store.ActivePermission is null`
+                suggestBox = <SuggestBox PlaceholderText="Message OpenCode..." IsEnabled=`Store.ActivePermission is null`
                     PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
@@ -96,7 +94,7 @@ namespace UnoVibe.Pages.Chat;
 public partial class ChatComposer : IQuickMarkupComponent<Grid>
 {
     /// <summary>Handler for <see cref="SendRequested"/>.</summary>
-    public delegate Task SendRequestedHandler(string? text, SendPromptMode? mode);
+    public delegate Task SendRequestedHandler(string text, SendPromptMode? mode);
 
     /// <summary>Raised when the user triggers a send; the page runs the send and re-pins the autoscroll.</summary>
     public event SendRequestedHandler? SendRequested;
@@ -158,7 +156,8 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
     /// <summary>Sends with an explicit mode (the busy-state split button's primary action or a one-shot dropdown override).</summary>
     private async Task OnSendWithMode(SendPromptMode mode)
     {
-        if (SendRequested is not null) await SendRequested(Input, mode);
+        if (SendRequested is not null) await SendRequested(suggestBox.MarkupNode.Text, mode);
+        suggestBox.Clear();
     }
 
     private void OnModeChanged(object? sender, SelectionChangedEventArgs e)
@@ -175,4 +174,6 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private static string Capitalize(string? value) =>
         string.IsNullOrEmpty(value) ? "" : char.ToUpper(value[0]) + value.Substring(1);
+
+    public void SetChatText(string txt) => suggestBox.MarkupNode.Text = txt;
 }
