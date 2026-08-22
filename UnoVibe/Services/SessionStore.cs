@@ -210,7 +210,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Message failed to send");
         }
     }
 
@@ -250,7 +250,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Could not attach image");
         }
     }
 
@@ -360,7 +360,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Stop failed");
         }
     }
 
@@ -380,7 +380,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Rename failed");
         }
     }
 
@@ -455,7 +455,7 @@ public sealed partial class SessionStore
     /// server-side and blocks until its turn ends, but all progress arrives over the SSE stream,
     /// so the request is fire-and-forget (TUI parity) — the composer clears immediately and the
     /// same busy/status plumbing drives the UI as for a normal prompt. Errors (e.g. the command
-    /// vanished server-side) are surfaced via <see cref="ChatStore.ConnectionStatus"/>.
+    /// vanished server-side) are surfaced as an error toast.
     /// </summary>
     private void SendCommandNow(string name, string arguments)
     {
@@ -482,7 +482,7 @@ public sealed partial class SessionStore
             }
             catch (Exception ex)
             {
-                router.PostToUi(() => router.ConnectionStatus = $"Error: {ex.Message}");
+                router.PostToUi(() => router.ShowError(ex.Message, "Command failed"));
             }
         });
     }
@@ -503,7 +503,7 @@ public sealed partial class SessionStore
             if (!await Router.EnsureSessionAsync()) return;
             if (IsBusy)
             {
-                Router.ConnectionStatus = "Busy — wait for the current turn to finish before running a shell command.";
+                Router.ShowWarning("Wait for the current turn to finish before running a shell command.", "Session busy");
                 return;
             }
 
@@ -529,7 +529,7 @@ public sealed partial class SessionStore
                 {
                     router.PostToUi(() =>
                     {
-                        router.ConnectionStatus = $"Error: {ex.Message}";
+                        router.ShowError(ex.Message, "Shell command failed");
                         // A failed request means no run started (e.g. the server's 409
                         // concurrent-run rejection), so no session.status idle event will
                         // arrive to unstick the composer's busy state.
@@ -540,7 +540,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Shell command failed");
         }
     }
 
@@ -563,7 +563,7 @@ public sealed partial class SessionStore
                 }
                 catch (Exception ex)
                 {
-                    Router.ConnectionStatus = $"Error: {ex.Message}";
+                    Router.ShowError(ex.Message, "Queued prompt failed");
                     return;
                 }
             }
@@ -648,7 +648,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Could not load messages");
         }
     }
 
@@ -690,7 +690,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Revert failed");
         }
     }
 
@@ -720,7 +720,7 @@ public sealed partial class SessionStore
         }
         catch (Exception ex)
         {
-            Router.ConnectionStatus = $"Error: {ex.Message}";
+            Router.ShowError(ex.Message, "Unrevert failed");
         }
     }
 
@@ -1625,39 +1625,5 @@ public sealed partial class SessionStore
     public void SetVariant(string variant)
     {
         Variant = variant.Length == 0 ? "Default" : variant;
-    }
-
-    // ---------------------------------------------------------------------
-    // Dormant toast machinery retained so SessionStore mirrors ChatStore's surface;
-    // currently unused (toasts are router-global). Kept private to avoid dead code drift.
-    // ---------------------------------------------------------------------
-
-    private CancellationTokenSource? _toastCtsUnused;
-
-    /// <summary>Shows a toast, replacing any current one, and auto-dismisses it after <see cref="ToastItem.DurationMs"/>.</summary>
-    private void ShowToastUnused(ToastItem toast)
-    {
-        _toastCtsUnused?.Cancel();
-        _toastCtsUnused = null;
-        Router.CurrentToast = toast;
-        if (toast.DurationMs <= 0) return;
-
-        var cts = new CancellationTokenSource();
-        _toastCtsUnused = cts;
-        _ = DismissToastAfterUnusedAsync(toast.DurationMs, cts.Token);
-    }
-
-    private async Task DismissToastAfterUnusedAsync(int durationMs, CancellationToken ct)
-    {
-        try
-        {
-            await Task.Delay(durationMs, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        if (ct.IsCancellationRequested) return;
-        Router.DismissToast();
     }
 }

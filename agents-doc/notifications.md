@@ -6,6 +6,21 @@ or the notification polyfills under `UnoVibe/Polyfills/{Linux,MacOS}/`.
 The shared `UnoVibe.Polyfills.MacOS.ObjC` binder used by macOS notifications is also used by the
 macOS folder-picker polyfill (see [`polyfills.md`](polyfills.md)).
 
+## In-app toast overlay (a separate system)
+
+Errors and transient notices shown INSIDE the app do not go through this facade. They use the
+in-app toast surface on `ChatStore`: `ShowError(message, title)`, `ShowWarning(message, title)`,
+or `ShowToast(new ToastItem { ... })` for full control (variant "info"|"success"|"warning"|"error"
+and `DurationMs`; 0/negative = persistent). These set the reactive `CurrentToast`, which `MainPage`
+renders as a top-right card (variant-colored accent/background, ✕ button) that auto-dismisses.
+Errors must never be written to `ChatStore.ConnectionStatus` (see AGENTS.md banned patterns): that
+field carries only the connect lifecycle ("Connecting...", "Connected") plus `ConnectAsync`'s
+connect-time failures, which `ConnectPage` shows on its own status line because no toast host
+exists until `MainPage` mounts. Producers today: the SSE `tui.toast.show` event, clipboard-copy
+confirmations, MCP auth notices, and every migrated error path in `ChatStore`/`SessionStore`.
+
+## OS toast delivery (`Services/Notifications.cs`)
+
 `Services/Notifications.cs` bridges the chat sidebar indicators to native desktop notifications.
 Every public method is a platform-dispatching façade, so callers need no `#if` guards.
 

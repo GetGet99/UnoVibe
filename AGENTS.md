@@ -387,6 +387,11 @@ This applies to new and changed codes.
 
 ### `Router.ConnectionStatus` message is not for error.
 
-Don't set error message to `Router.ConnectionStatus` for failure. Its rendering is too small and user can't read it. It's just have enough space for `Connected` string.
+Don't set error message to `Router.ConnectionStatus` for failure. Its rendering is too small and
+user can't read it. It's just have enough space for `Connected` string.
 
-Instead: recommend to do toasts.
+Instead: show an in-app toast — `Router.ShowError(message, title)` for failures,
+`Router.ShowWarning(message, title)` for transient notices, or `Router.ShowToast(new ToastItem { ... })`
+for full control (variant/duration). Sole exception: connect-time failures inside `ConnectAsync`
+still write `ConnectionStatus`, which `ConnectPage` displays on its own status line (no toast host
+exists until `MainPage` mounts).

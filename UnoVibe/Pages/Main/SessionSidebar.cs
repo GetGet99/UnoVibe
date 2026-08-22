@@ -276,7 +276,7 @@ public partial class SessionSidebar : IQuickMarkupComponent
         }
         catch (Exception ex)
         {
-            Store.ConnectionStatus = $"Folder picker error: {ex.Message}";
+            Store.ShowError(ex.Message, "Folder picker failed");
         }
     }
 

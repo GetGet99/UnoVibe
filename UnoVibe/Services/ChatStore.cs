@@ -347,7 +347,7 @@ public sealed partial class ChatStore : IDisposable
 
         if (Active.SessionId.Length == 0)
         {
-            ConnectionStatus = "Error: could not create session";
+            ShowError("Could not create session");
             return false;
         }
         Active.SessionTitle = "New Chat";
@@ -455,7 +455,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Could not refresh sessions");
         }
     }
 
@@ -476,7 +476,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Could not refresh session status");
         }
     }
 
@@ -506,7 +506,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Could not refresh MCP status");
         }
     }
 
@@ -573,7 +573,7 @@ public sealed partial class ChatStore : IDisposable
                 });
                 var result = await _client.McpAuthenticateAsync(name, directory);
                 if (result.Status == "failed" && result.Error.Length > 0)
-                    ConnectionStatus = $"MCP {name} auth failed: {result.Error}";
+                    ShowError(result.Error, $"MCP {name} auth failed");
             }
             else
             {
@@ -582,7 +582,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "MCP toggle failed");
         }
         finally
         {
@@ -850,7 +850,7 @@ public sealed partial class ChatStore : IDisposable
             }
             catch (Exception ex)
             {
-                ConnectionStatus = $"Error: {ex.Message}";
+                ShowError(ex.Message, "Could not read git branch");
             }
         }
     }
@@ -1073,7 +1073,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Could not load modes/models");
         }
     }
 
@@ -1146,7 +1146,7 @@ public sealed partial class ChatStore : IDisposable
             }
             catch (Exception ex)
             {
-                ConnectionStatus = $"Error: {ex.Message}";
+                ShowError(ex.Message, "Could not open session");
             }
         }
 
@@ -1209,7 +1209,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Fork failed");
             return null;
         }
     }
@@ -1234,7 +1234,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Fork failed");
             return null;
         }
     }
@@ -1430,6 +1430,20 @@ public sealed partial class ChatStore : IDisposable
             DurationMs = duration > 0 ? (int)duration : 5000,
         });
     }
+
+    /// <summary>
+    /// Shows an error toast. The one sanctioned way to surface a failure to the user —
+    /// <see cref="ConnectionStatus"/> is reserved for the connect lifecycle ("Connecting...",
+    /// "Connected") because the sidebar footer renders it in an unreadably small strip
+    /// (see AGENTS.md "Contribution rules and banned patterns").
+    /// </summary>
+    public void ShowError(string message, string title = "Error")
+        => ShowToast(new ToastItem { Title = title, Message = message, Variant = "error", DurationMs = 8000 });
+
+    /// <summary>Shows a warning toast for transient notices that are not outright failures
+    /// (e.g. a stale permission/question card that was answered elsewhere).</summary>
+    public void ShowWarning(string message, string title = "Warning")
+        => ShowToast(new ToastItem { Title = title, Message = message, Variant = "warning", DurationMs = 6000 });
 
     /// <summary>Shows a toast, replacing any current one, and auto-dismisses it after <see cref="ToastItem.DurationMs"/>.</summary>
     public void ShowToast(ToastItem toast)
@@ -1666,11 +1680,11 @@ public sealed partial class ChatStore : IDisposable
             // elsewhere, or its turn/instance was aborted/disposed) — drop the stale card so the
             // next pending request can surface instead of a dead 404 dialog.
             RemovePermissionRequest(requestId);
-            ConnectionStatus = $"Permission no longer pending ({requestId})";
+            ShowWarning("The approval card was dismissed — the request is no longer pending.", "Permission already handled");
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Approval reply failed");
         }
     }
 
@@ -1744,7 +1758,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Could not sync questions");
         }
     }
 
@@ -1778,7 +1792,7 @@ public sealed partial class ChatStore : IDisposable
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Could not sync approvals");
         }
     }
 
@@ -1796,11 +1810,11 @@ public sealed partial class ChatStore : IDisposable
             // elsewhere, or its turn/instance was aborted/disposed) — drop the stale entry so the
             // next pending question can surface instead of a dead 404 form.
             _questionDirectories.Remove(requestId);
-            ConnectionStatus = $"Question no longer pending ({requestId})";
+            ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Question reply failed");
         }
     }
 
@@ -1815,11 +1829,11 @@ public sealed partial class ChatStore : IDisposable
         catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _questionDirectories.Remove(requestId);
-            ConnectionStatus = $"Question no longer pending ({requestId})";
+            ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");
         }
         catch (Exception ex)
         {
-            ConnectionStatus = $"Error: {ex.Message}";
+            ShowError(ex.Message, "Question dismiss failed");
         }
     }
 
