@@ -11,9 +11,10 @@ use. For the Uno TextBox key-processing quirk the focus management depends on, s
 
 **Public API:**
 `Prefixes` (default `"/@"`) and `Providers` (suggestion sources) are public members; it raises
-`SubmitRequested(sender, text)` on bare Enter (flyout closed) and offers `Clear()`; every other
-property/event (`Text`, `PlaceholderText`, `MaxHeight`, `PreviewKeyDown`, ...) forwards to the inner
-TextBox via `MarkupNode`.
+`SubmitRequested(sender, text)` on bare Enter (flyout closed), `CommandTriggered(sender, item)` when
+a built-in command row is committed, and offers `Clear()`; every other property/event (`Text`,
+`PlaceholderText`, `MaxHeight`, `PreviewKeyDown`, ...) forwards to the inner TextBox via
+`MarkupNode`.
 
 **Focus management:**
 The flyout uses `ShowMode=Transient` so it never steals focus on open, plus a `GotFocus` handler on
@@ -29,6 +30,52 @@ like `/new`) are filtered out unless the trigger is at position 0, so `/new` onl
 input starts with `/`, while skills (`/quickmarkup`) and mentions work anywhere.
 Row model in `Controls/SuggestionItem.cs`, providers in `Services/SuggestionProviders.cs`
 (`namespace UnoVibe.Controls`).
+
+## App built-in commands
+
+`BuiltInCommands` (in `Services/SuggestionProviders.cs`) is the app-level catalog — TUI parity with
+opencode's own `/new`, `/models`, etc. `BuiltInCommandSuggestionProvider` serves it locally (no
+server round-trip): rows are kind `"builtin"` (gray "built-in" badge) with a non-null
+`SuggestionItem.Action` id, and are `InputStartOnly`, so like server commands they appear only when
+`/` is the first input character.
+
+**Commit runs the action instead of inserting text.** Tab, Enter, or a mouse click on a built-in row
+clears the whole composer input and raises `SuggestBox.CommandTriggered`;
+`ChatComposer.RunBuiltInCommandAsync` dispatches on the action id:
+
+- `/agents` → opens the Mode combobox (`ComboBox.IsDropDownOpen`)
+- `/connect` → `ProviderConnectDialog.ShowAsync(Store, XamlRoot)` (the shared entry point also used
+  by the model picker's "Connect a provider…" row)
+- `/editor` → `FolderLauncher.OpenInEditor(ActiveDirectory())` — same launch as the header's code
+  icon; failures toast
+- `/mcps` → `ChatStore.RequestMcpSection()` → `SessionSidebar.RevealMcpSectionAsync`: on compact
+  windows first flips to the sidebar view, expands the MCP section (starting its status poll), and
+  focuses the MCP toggle button
+- `/models` → `ModelPicker.Open()`
+- `/new` → `Store.NewSessionAsync(Store.ActiveDirectory())` — identical to the "+" button on the
+  current session's directory group (lazy draft; created on first send)
+- `/variants` → opens the Variant combobox; warning toast when the model has no variants
+
+**Submit interception:** typed text that *is* an exact built-in invocation (`/name`, optional ignored
+arguments — TUI-style) is consumed by `ChatComposer.TryRunBuiltInTextAsync` in both submit paths
+(bare Enter + send button), so `/new hello` runs the action rather than reaching the model verbatim.
+This runs before `SendRequested`, so `SessionStore.ParseSlashCommand`/server routing never sees a
+built-in name.
+
+**Name collisions:** built-ins win. `ServerCommandSuggestionProvider` skips a server command whose
+name matches a built-in (`BuiltInCommands.IsBuiltIn`) — mirroring how the server drops a skill whose
+name is taken by a command.
+
+**Not yet implemented** (the rest of the TUI's list, deferred — revisit when adding more):
+
+- `/diff` — TUI shows a dialog of working-tree changes
+- `/exit` — quits opencode (desktop app: close window?)
+- `/help` — help/shortcut listing
+- `/move` — moves the session to another directory
+- `/sessions` — session switcher (sidebar already covers this)
+- `/skills` — skill list (already surfaced under `/` as suggestions)
+- `/status` — server/provider/MCP status summary
+- `/themes` — theme picker
 
 ## Live server data
 

@@ -248,6 +248,22 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     private readonly List<TextBox> _textBoxes = new();
     private string _oauthUrl = "";
 
+    /// <summary>
+    /// Loads and shows the connect-provider dialog in <paramref name="xamlRoot"/> (shared entry
+    /// point: the model picker's "Connect a provider…" row and the composer's /connect built-in).
+    /// No-op when not connected to a server.
+    /// </summary>
+    public static async Task ShowAsync(ChatStore store, XamlRoot xamlRoot)
+    {
+        if (store.Client is null || xamlRoot is null) return;
+        var dialog = new ProviderConnectDialog { Store = store };
+        await dialog.LoadAsync();
+
+        dialog.MarkupNode.XamlRoot = xamlRoot;
+        dialog.Completed += () => dialog.MarkupNode.Hide();
+        await dialog.MarkupNode.ShowAsync();
+    }
+
     /// <summary>Fetches the provider catalog + auth methods into the list (call once before showing).</summary>
     public async Task LoadAsync()
     {

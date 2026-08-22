@@ -88,7 +88,7 @@ namespace UnoVibe.Pages.Chat;
                     </StackPanel>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
-                        <ModelPicker ItemsSource=`Store.ModelOptions` SelectedItem=`Store.Active.SelectedModelOption`
+                        modelPicker = <ModelPicker ItemsSource=`Store.ModelOptions` SelectedItem=`Store.Active.SelectedModelOption`
                                     ModelSelected+=`OnModelSelected` />
                     </StackPanel>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
@@ -134,16 +134,18 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         SendMode = SettingsStore.SendMode.ToString();
         SettingsStore.Changed += OnSettingsChanged;
 
-        // Suggestion sources for the input box. Server-backed providers (commands, skills, files)
-        // return empty lists when the server is unreachable or has no data (no mock fallback — the
-        // box simply shows nothing); the directory is read fresh on every query so it tracks the
-        // active session.
+        // Suggestion sources for the input box. Built-in commands are local; server-backed
+        // providers (commands, skills, files) return empty lists when the server is unreachable or
+        // has no data (no mock fallback — the box simply shows nothing); the directory is read
+        // fresh on every query so it tracks the active session.
         suggestBox.Providers = new ISuggestionProvider[]
         {
+            new BuiltInCommandSuggestionProvider(),
             new ServerCommandSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
             new ServerSkillSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
             new ServerFileSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
         };
+        suggestBox.CommandTriggered += (sender, item) => RunBuiltInCommandAsync(item.Action!);
 
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
     }
@@ -231,8 +233,9 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         await ShellCommandRequested(command);
     }
 
-    /// <summary>Enter was pressed in the input box with the suggestion flyout closed — send the message
-    /// (or run the shell command when shell mode is active).</summary>
+    /// <summary>Enter was pressed in the input box with the suggestion flyout closed — run a built-in
+    /// command when the text is one (e.g. "/new" typed with the flyout dismissed), else send the
+    /// message (or run the shell command when shell mode is active).</summary>
     private async Task OnSubmitRequested(SuggestBox sender, string text)
     {
         if (ShellMode)
@@ -240,6 +243,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             await SubmitShellAsync();
             return;
         }
+        if (await TryRunBuiltInTextAsync(text)) return;
         if (SendRequested is not null) await SendRequested(text, null);
         sender.Clear();
     }
@@ -253,8 +257,75 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             await SubmitShellAsync();
             return;
         }
+        if (await TryRunBuiltInTextAsync(suggestBox.MarkupNode.Text)) return;
         if (SendRequested is not null) await SendRequested(suggestBox.MarkupNode.Text, mode);
         suggestBox.Clear();
+    }
+
+    // ── Built-in slash commands (/new /models /agents /variants /connect /editor /mcps) ──
+
+    /// <summary>
+    /// Runs the action for a built-in command row committed from the suggestion flyout
+    /// (Tab / Enter / mouse click — the box has already cleared its input).
+    /// </summary>
+    private async Task RunBuiltInCommandAsync(string name)
+    {
+        switch (name)
+        {
+            case "agents":
+                OpenCombo(modeCombo);
+                break;
+            case "connect":
+                await ProviderConnectDialog.ShowAsync(Store, MarkupNode.XamlRoot);
+                break;
+            case "editor":
+                OpenInEditor();
+                break;
+            case "mcps":
+                Store.RequestMcpSection();
+                break;
+            case "models":
+                modelPicker.Open();
+                break;
+            case "new":
+                await Store.NewSessionAsync(Store.ActiveDirectory());
+                break;
+            case "variants":
+                if (!Store.Active.HasVariants)
+                    Store.ShowWarning("The selected model has no reasoning variants.", "No variants");
+                else
+                    OpenCombo(variantCombo);
+                break;
+        }
+    }
+
+    /// <summary>Intercepts submitted text that is an exact built-in command ("/name", optional
+    /// ignored arguments) so it executes instead of reaching the model verbatim. Returns true when
+    /// the text was consumed.</summary>
+    private async Task<bool> TryRunBuiltInTextAsync(string? text)
+    {
+        if (!BuiltInCommands.TryParse(text, out var command)) return false;
+        await RunBuiltInCommandAsync(command.Name);
+        suggestBox.Clear();
+        return true;
+    }
+
+    private static void OpenCombo(ComboBox? combo)
+    {
+        if (combo is not null) combo.IsDropDownOpen = true;
+    }
+
+    /// <summary>The /editor built-in: same launch as the header's code icon, toast on failure.</summary>
+    private void OpenInEditor()
+    {
+        var error = FolderLauncher.OpenInEditor(Store.ActiveDirectory());
+        if (error is null) return;
+        Store.ShowToast(new ToastItem
+        {
+            Title = "Open folder",
+            Message = error,
+            Variant = "error",
+        });
     }
 
     private void OnModeChanged(object? sender, SelectionChangedEventArgs e)

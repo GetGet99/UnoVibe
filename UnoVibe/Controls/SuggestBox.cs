@@ -22,6 +22,8 @@ namespace UnoVibe.Controls;
 ///   - <see cref="SubmitRequested"/> — raised on bare Enter (without Shift) while the flyout is
 ///     closed; Shift+Enter always inserts a newline. Hosts decide what to do (send the message) and
 ///     call <see cref="Clear"/> to reset the box.
+///   - <see cref="CommandTriggered"/> — raised when a built-in command row is committed; the input
+///     is already cleared and the host runs the action.
 ///   - Properties/events not listed here (e.g. <c>Text</c>, <c>PlaceholderText</c>, <c>MaxHeight</c>,
 ///     <c>PreviewKeyDown</c>) are forwarded to the underlying <see cref="TextBox"/>.
 /// </summary>
@@ -95,6 +97,16 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
     /// The text at the time of the key press is passed as the second argument.
     /// </summary>
     public event SubmitHandler? SubmitRequested;
+
+    /// <summary>Handler for <see cref="CommandTriggered"/>.</summary>
+    public delegate Task CommandTriggeredHandler(SuggestBox sender, SuggestionItem item);
+
+    /// <summary>
+    /// Raised when a built-in command row (an item with a non-null <see cref="SuggestionItem.Action"/>,
+    /// e.g. <c>/new</c>) is committed via Tab, Enter or a mouse click. The box has already cleared
+    /// its whole input; the host runs the action identified by the item's <c>Action</c> id.
+    /// </summary>
+    public event CommandTriggeredHandler? CommandTriggered;
 
     private readonly ObservableCollection<SuggestionItem> _items = new();
 
@@ -273,10 +285,26 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
 
     private async Task CommitSuggestionAsync(SuggestionItem item) => CommitSuggestion(item);
 
-    /// <summary>Replaces the typed token with the suggestion's Insert text (keeps the rest of the input intact).</summary>
+    /// <summary>
+    /// Commits a suggestion: insertable rows replace the typed token with the item's
+    /// <see cref="SuggestionItem.Insert"/> text; built-in command rows (non-null
+    /// <see cref="SuggestionItem.Action"/>) clear the whole input and raise
+    /// <see cref="CommandTriggered"/> so the host executes the action.
+    /// </summary>
     private void CommitSuggestion(SuggestionItem item)
     {
         if (input is null) return;
+
+        if (item.Action is not null)
+        {
+            CloseSuggestions();
+            _ = ClearCoreAsync();
+            input.Focus(FocusState.Programmatic);
+            if (CommandTriggered is { } handler)
+                _ = handler(this, item);
+            return;
+        }
+
         var text = input.Text;
         var caret = input.SelectionStart;
         if (!Controller.TryGetQuery(text, caret, out _, out _, out var tokenStart)) return;
@@ -296,12 +324,13 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         input.Focus(FocusState.Programmatic);
     }
 
-    /// <summary>Pill color for a suggestion's kind badge: cmd = accent, skill = caution, file = success, agent = attention.</summary>
+    /// <summary>Pill color for a suggestion's kind badge: cmd = accent, skill = caution, file = success, agent = attention, built-in = neutral.</summary>
     private static Brush? KindBadgeBrush(string kind) => kind switch
     {
         "skill" => ThemeBrushes.Global.SystemCaution,
         "file" => ThemeBrushes.Global.SystemSuccess,
         "agent" => ThemeBrushes.Global.SystemAttention,
+        "builtin" => ThemeBrushes.Global.SecondaryText,
         _ => ThemeBrushes.Global.Accent,
     };
 

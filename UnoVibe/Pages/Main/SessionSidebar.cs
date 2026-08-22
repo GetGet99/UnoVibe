@@ -109,7 +109,7 @@ namespace UnoVibe.Pages.Main;
                         <ColumnDefinition />
                         <ColumnDefinition Width=Auto />
                     </> ColumnSpacing=8>
-                        <Button Padding=`new Thickness(4, 2, 4, 2)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 @Click+=`OnToggleMcpExpanded()` ToolTipService.ToolTip="MCP servers">
+                        mcpToggle = <Button Padding=`new Thickness(4, 2, 4, 2)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 @Click+=`OnToggleMcpExpanded()` ToolTipService.ToolTip="MCP servers">
                             <StackPanel Orientation=Horizontal Spacing=6>
                                 <TextBlock Text=`McpExpanded ? "▼" : "▶"` FontSize=9 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
                                 <TextBlock Text="MCP" FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` VerticalAlignment=Center />
@@ -224,6 +224,27 @@ public partial class SessionSidebar : IQuickMarkupComponent
         ;
     /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
     private const int MaxVisibleSessions = 5;
+
+    [QuickMarkupConstructor]
+    private void Ctor()
+    {
+        Init();
+        // The /mcps built-in command (fired from the chat composer) reveals this section.
+        Store.McpSectionRequested += () => _ = RevealMcpSectionAsync();
+    }
+
+    /// <summary>
+    /// Reveals the MCP section for the /mcps built-in command: on compact windows the sidebar
+    /// itself is hidden, so switch to the sidebar view first; then expand the section (starting
+    /// its status poll) and put keyboard focus on the toggle.
+    /// </summary>
+    private async Task RevealMcpSectionAsync()
+    {
+        if (IsCompact) IsSidebarView = true;
+        if (!McpExpanded) OnToggleMcpExpanded();
+        await Task.Delay(16); // let the reactive tree materialize before focusing
+        mcpToggle?.Focus(FocusState.Programmatic);
+    }
 
     private void OnSwitchSession(object sender, RoutedEventArgs e)
     {

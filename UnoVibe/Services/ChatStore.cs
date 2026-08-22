@@ -598,6 +598,12 @@ public sealed partial class ChatStore : IDisposable
     /// </summary>
     public void SetMcpPolling(bool active) => _mcpPolling = active;
 
+    /// <summary>Raised when something asks to reveal the sidebar's MCP section (the /mcps built-in command).</summary>
+    public event Action? McpSectionRequested;
+
+    /// <summary>Asks the session sidebar to expand its MCP section and focus it (no-op with no sidebar mounted).</summary>
+    public void RequestMcpSection() => McpSectionRequested?.Invoke();
+
     /// <summary>
     /// Background poll: re-fetches GET /mcp every few seconds while enabled. The server
     /// pushes no MCP status event (only mcp.tools.changed, without status), so expanded

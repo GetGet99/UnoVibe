@@ -13,6 +13,87 @@ internal static class SuggestionFilter
 }
 
 /// <summary>
+/// An app-level built-in slash command (TUI parity with opencode's own <c>/new</c>,
+/// <c>/models</c>, ...): discovered like server commands (only when <c>/</c> is the first input
+/// character) but executed entirely client-side. Committing one clears the composer and runs the
+/// action — it never inserts text or reaches the model.
+/// </summary>
+public sealed record BuiltInCommand(string Name, string Description);
+
+/// <summary>
+/// The built-in command catalog plus parsing helpers. Prototype set only — the TUI's remaining
+/// built-ins (/diff /exit /help /move /sessions /skills /status /themes) are documented as not yet
+/// implemented in agents-doc/suggest-box.md.
+/// </summary>
+public static class BuiltInCommands
+{
+    /// <summary>The catalog shown by the suggestion flyout (alphabetical, matching the TUI's list).</summary>
+    public static readonly IReadOnlyList<BuiltInCommand> All = new BuiltInCommand[]
+    {
+        new("agents", "Open the agent/mode picker"),
+        new("connect", "Connect a provider (API key or OAuth)"),
+        new("editor", "Open the current folder in your editor"),
+        new("mcps", "Show MCP servers in the sidebar"),
+        new("models", "Open the model picker"),
+        new("new", "Start a new chat in the current directory"),
+        new("variants", "Open the reasoning-variant picker"),
+    };
+
+    /// <summary>Case-insensitive lookup by name (without the leading slash).</summary>
+    public static BuiltInCommand? Find(string name) =>
+        All.FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Parses submitted composer text as a built-in command: the first token of the first line must
+    /// be <c>/name</c> for a catalog name (arguments after it are allowed but ignored, TUI-style).
+    /// Returns false when the text is not an exact built-in command invocation, so ordinary prompts
+    /// and server commands are unaffected.
+    /// </summary>
+    public static bool TryParse(string? text, out BuiltInCommand command)
+    {
+        command = default!;
+        var trimmed = text?.TrimStart();
+        if (trimmed is null || !trimmed.StartsWith('/')) return false;
+        var token = trimmed.Split(new[] { ' ', '\t', '\n', '\r' }, 2)[0];
+        var found = Find(token.Substring(1));
+        if (found is null) return false;
+        command = found;
+        return true;
+    }
+
+    /// <summary>True when a server-side command name would collide with a built-in (built-in wins).</summary>
+    public static bool IsBuiltIn(string name) => Find(name) is not null;
+}
+
+/// <summary>
+/// App built-in slash-command provider (<see cref="BuiltInCommands"/>). Local data — no server
+/// round-trip. Rows are kind "builtin" with a non-null <see cref="SuggestionItem.Action"/> id and
+/// are <see cref="SuggestionItem.InputStartOnly"/>, so they appear only when <c>/</c> is the first
+/// character; committing clears the input and runs the action instead of inserting text.
+/// </summary>
+public sealed class BuiltInCommandSuggestionProvider : ISuggestionProvider
+{
+    public char Trigger => '/';
+    public string Name => "built-in-commands";
+
+    public Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query,
+        CancellationToken ct = default)
+    {
+        IReadOnlyList<SuggestionItem> items = BuiltInCommands.All.Select(command => new SuggestionItem
+        {
+            Key = $"builtin:{command.Name}",
+            Kind = "builtin",
+            Text = "/" + command.Name,
+            Insert = "",
+            Detail = command.Description,
+            InputStartOnly = true,
+            Action = command.Name,
+        }).ToArray();
+        return Task.FromResult<IReadOnlyList<SuggestionItem>>(SuggestionFilter.Filter(items, query));
+    }
+}
+
+/// <summary>
 /// Server slash-command provider — lists every command the opencode server knows for the active
 /// directory (legacy <c>GET /command?directory=</c>, falling back to <c>GET /api/command</c>):
 /// built-ins (<c>init</c>/<c>review</c>), user-defined commands, MCP prompts, and any skill entries
@@ -51,6 +132,9 @@ public sealed class ServerCommandSuggestionProvider : ISuggestionProvider
             var items = new List<SuggestionItem>(commands.Count);
             foreach (var command in commands)
             {
+                // Built-ins own their names client-side (same rule as the server dropping a skill
+                // whose name is taken), so "/new" always runs the app action, never a user command.
+                if (BuiltInCommands.IsBuiltIn(command.Name)) continue;
                 var isSkill = command.Source == "skill";
                 var isMcp = command.Source == "mcp";
                 var display = "/" + command.Name;

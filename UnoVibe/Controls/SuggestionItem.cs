@@ -29,12 +29,21 @@ public sealed class SuggestionItem
     /// </summary>
     public bool InputStartOnly { get; init; } = false;
 
+    /// <summary>
+    /// When non-null this row is an app built-in command (kind "builtin") identified by this action
+    /// id (see <c>BuiltInCommands</c>). Committing it does NOT insert text: the whole input is
+    /// cleared, <see cref="SuggestBox.CommandTriggered"/> fires, and the host runs the action.
+    /// Insertable suggestions leave it null.
+    /// </summary>
+    public string? Action { get; init; }
+
     /// <summary>Short badge label shown next to the row text.</summary>
     public string KindLabel => Kind switch
     {
         "skill" => "skill",
         "file" => "file",
         "agent" => "agent",
+        "builtin" => "built-in",
         _ => "cmd",
     };
 }

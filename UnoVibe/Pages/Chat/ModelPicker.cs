@@ -182,15 +182,9 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
     /// </summary>
     private async Task OpenProviderDialogAsync()
     {
-        if (Store.Client is null) return;
         var xamlRoot = MarkupNode.XamlRoot;
         if (xamlRoot is null) return;
-        var dialog = new ProviderConnectDialog { Store = Store };
-        await dialog.LoadAsync();
-
-        dialog.MarkupNode.XamlRoot = xamlRoot;
-        dialog.Completed += () => dialog.MarkupNode.Hide();
-        await dialog.MarkupNode.ShowAsync();
+        await ProviderConnectDialog.ShowAsync(Store, xamlRoot);
     }
 
     private bool IsSelected(ModelOption m) =>
@@ -208,6 +202,13 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
             : ThemeBrushes.Global.CardBackground;
 
     // ── Flyout lifecycle ─────────────────────────────────────────────────────────
+
+    /// <summary>Opens the picker programmatically (the /models built-in command).</summary>
+    public void Open()
+    {
+        if (modelFlyout is { IsOpen: false } && triggerButton is not null)
+            modelFlyout.ShowAt(triggerButton);
+    }
 
     private void OnFlyoutOpened(object? sender, object e)
     {
