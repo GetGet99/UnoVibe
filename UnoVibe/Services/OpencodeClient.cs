@@ -135,6 +135,57 @@ public sealed class OpencodeClient
     }
 
     /// <summary>
+    /// Post /session/{id}/command — invokes a server-side custom command (built-in, configured,
+    /// MCP-prompt, or skill entry from <see cref="GetCommandsAsync"/>). The server expands the
+    /// command's template (<c>$ARGUMENTS</c>/<c>$1</c>.., <c>!`shell`</c>, <c>@file</c>), resolves
+    /// the command's own agent/model/subtask options, and runs the turn — this request blocks
+    /// until that turn completes, so a dedicated client without a timeout runs it (the SSE stream
+    /// reports all progress; the response mirrors the <c>prompt_async</c> events and is ignored).
+    /// Mirrors the TUI/web clients' <c>session.command</c> call (legacy route, which is the shape
+    /// current servers expose). <paramref name="modelId"/>/<paramref name="providerId"/> serialize
+    /// as the <c>"providerID/modelID"</c> string the schema expects.
+    /// </summary>
+    public async Task SendCommandAsync(string sessionId, string command, string arguments,
+        IReadOnlyList<ImageAttachment>? images = null,
+        string? agent = null, string? providerId = null, string? modelId = null, string? variant = null,
+        CancellationToken ct = default)
+    {
+        var body = new SendCommandRequest { Command = command, Arguments = arguments };
+        if (!string.IsNullOrEmpty(agent)) body.Agent = agent;
+        if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
+            body.Model = $"{providerId}/{modelId}";
+        if (!string.IsNullOrEmpty(variant) && variant != "Default") body.Variant = variant;
+        // Pending images travel as file parts, like SendPromptAsync's prompt parts.
+        if (images is { Count: > 0 })
+        {
+            body.Parts = new List<PromptPart>();
+            foreach (var image in images)
+                body.Parts.Add(new PromptPart
+                {
+                    Type = "file",
+                    Mime = image.Mime,
+                    Filename = image.FileName,
+                    Url = image.DataUrl,
+                });
+        }
+
+        using var commandHttp = new HttpClient
+        {
+            BaseAddress = Http.BaseAddress,
+            // The command's turn can run for minutes — the shared client's 100s default
+            // timeout would abort the request mid-run (harmlessly, since events drive the
+            // UI, but unused), so run it on a dedicated client with no timeout.
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        if (Http.DefaultRequestHeaders.Authorization is { } auth)
+            commandHttp.DefaultRequestHeaders.Authorization = auth;
+
+        using var response = await commandHttp.PostAsJsonAsync(
+            $"/session/{sessionId}/command", body, AppJsonContext.Default.SendCommandRequest, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
     /// Patch /session/{id} — writes a new title for the session. This is how the TUI renames a
     /// session (and is also what the server's background title generator updates under the hood).
     /// </summary>

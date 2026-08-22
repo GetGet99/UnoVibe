@@ -26,6 +26,10 @@ open settings pages to re-read on the UI thread).
   [`session-sidebar.md`](session-sidebar.md) for the sidebar's editor/folder buttons.)
 - **Send message default** (`send.mode`) — see "Send while busy" in
   [`session-state.md`](session-state.md).
+- **Expand skills via slash commands** (`command.skills`, default on) — see "Slash-command send"
+  in [`suggest-box.md`](suggest-box.md): off means skill-only `/name` text goes out as a plain
+  prompt; real commands/MCP prompts always expand, and a name matching both a command and a skill
+  runs the command.
 - **Code font** (`text.codefont`, default per-platform) — the monospaced font used only where the
   content genuinely represents code or a terminal: markdown code blocks + inline `` `code` ``,
   diff/patch bodies, tool output that is file content/terminal text (read loaded content, write/edit

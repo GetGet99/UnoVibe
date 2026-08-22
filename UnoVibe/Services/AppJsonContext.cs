@@ -19,6 +19,7 @@ namespace UnoVibe.Services;
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(CreateSessionRequest))]
 [JsonSerializable(typeof(SendPromptRequest))]
+[JsonSerializable(typeof(SendCommandRequest))]
 [JsonSerializable(typeof(UpdateSessionTitleRequest))]
 [JsonSerializable(typeof(EmptyRequest))]
 [JsonSerializable(typeof(RevertRequest))]
@@ -91,6 +92,34 @@ internal sealed class SendPromptModelRequest
     public string? ProviderID { get; set; }
 
     public string? ModelID { get; set; }
+}
+
+/// <summary>POST /session/{id}/command body — invokes a server-side custom command.</summary>
+/// <remarks>
+/// Mirrors the opencode TUI/web <c>session.command</c> payload: <c>command</c> is the name
+/// (leading <c>/</c> stripped), <c>arguments</c> the remaining text (space-joined first-line
+/// tail plus any trailing lines), <c>model</c> serializes as <c>"providerID/modelID"</c>, and
+/// <c>parts</c> carries the attached image file parts. The server expands the command's template
+/// (<c>$ARGUMENTS</c>/<c>$1</c>.., <c>!`shell`</c>, <c>@file</c>) and resolves its own
+/// agent/model/subtask options, so the client only names the command.
+/// </remarks>
+internal sealed class SendCommandRequest
+{
+    public string Command { get; set; } = "";
+
+    public string Arguments { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Agent { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Model { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Variant { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<PromptPart>? Parts { get; set; }
 }
 
 /// <summary>

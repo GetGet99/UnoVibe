@@ -49,6 +49,9 @@ the app).
 - `PATCH /session/:id` with `{ title }` — rename; this is how the TUI renames and how the server's
   title generator writes names.
 - `POST /session/:id/abort` — interrupt the running turn.
+- `POST /session/:id/command` — invoke a custom command (see "Slash-command send" in
+  [`suggest-box.md`](suggest-box.md)). Runs the whole command turn server-side and blocks
+  until it completes.
 
 ## Titles
 

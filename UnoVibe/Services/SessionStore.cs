@@ -370,6 +370,18 @@ public sealed partial class SessionStore
 
     private async Task SendPromptNowAsync(string text)
     {
+        // Slash-command send (opencode Commands): when the input starts with "/name" and the
+        // server knows that command for the active directory, route it through
+        // POST /session/{id}/command so the server expands the template ($ARGUMENTS/$1..,
+        // !`shell`, @file) and runs it with the command's own options — instead of sending the
+        // verbatim text (which the session loop does NOT expand). Unknown slash text still sends
+        // as a normal prompt, matching the TUI/web clients.
+        if (ParseSlashCommand(text) is { } cmd && await Router.IsKnownCommandAsync(cmd.Name))
+        {
+            SendCommandNow(cmd.Name, cmd.Arguments);
+            return;
+        }
+
         // Mark busy optimistically so interleaved SendAsync calls queue instead of
         // racing the HTTP call; the server's session.status busy event confirms it.
         IsBusy = true;
@@ -379,6 +391,68 @@ public sealed partial class SessionStore
         // Attachments travel with the prompt, so stage them off once the message is stored.
         PendingImages.Clear();
         PendingImageCount = 0;
+    }
+
+    /// <summary>
+    /// Parses slash-command input. Returns <c>(name, arguments)</c> when the text starts with
+    /// <c>/</c>, else null. The command name is the first line's first space-delimited token with
+    /// the leading <c>/</c> stripped; the arguments are the rest of that line (space-joined with
+    /// empty tokens preserved, so whitespace runs round-trip verbatim — no quote/escape parsing,
+    /// exactly like the TUI/web clients) plus any trailing lines. Mirrors the TUI's
+    /// <c>prompt/index.tsx</c> command parsing.
+    /// </summary>
+    private static (string Name, string Arguments)? ParseSlashCommand(string text)
+    {
+        if (string.IsNullOrEmpty(text) || text[0] != '/') return null;
+
+        var newline = text.IndexOf('\n');
+        var firstLine = newline < 0 ? text : text.Substring(0, newline);
+        var tokens = firstLine.Split(' ');
+        if (tokens.Length == 0) return null;
+
+        var name = tokens[0].TrimStart('/');
+        if (name.Length == 0) return null;
+
+        var arguments = string.Join(" ", tokens.Skip(1));
+        if (newline >= 0) arguments += "\n" + text.Substring(newline + 1);
+        return (name, arguments);
+    }
+
+    /// <summary>
+    /// Fires POST /session/{id}/command as a detached request. The endpoint runs the whole command
+    /// server-side and blocks until its turn ends, but all progress arrives over the SSE stream,
+    /// so the request is fire-and-forget (TUI parity) — the composer clears immediately and the
+    /// same busy/status plumbing drives the UI as for a normal prompt. Errors (e.g. the command
+    /// vanished server-side) are surfaced via <see cref="ChatStore.ConnectionStatus"/>.
+    /// </summary>
+    private void SendCommandNow(string name, string arguments)
+    {
+        IsBusy = true;
+        ResetTurnFlags();
+        var images = PendingImages.ToArray();
+        PendingImages.Clear();
+        PendingImageCount = 0;
+
+        // Capture the reactive values on the UI thread (Reference<T> must only be read/written
+        // there), then run the long-lived request off-thread.
+        var sessionId = SessionId;
+        var router = Router;
+        string mode = Mode;
+        string providerId = ProviderId;
+        string modelId = ModelId;
+        string variant = Variant;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await router.Client!.SendCommandAsync(sessionId, name, arguments, images,
+                    mode, providerId, modelId, variant);
+            }
+            catch (Exception ex)
+            {
+                router.PostToUi(() => router.ConnectionStatus = $"Error: {ex.Message}");
+            }
+        });
     }
 
     private bool _draining;

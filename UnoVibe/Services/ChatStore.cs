@@ -634,6 +634,69 @@ public sealed partial class ChatStore : IDisposable
         return _pendingDirectory ?? "";
     }
 
+    // ── Slash-command send detection ─────────────────────────────────────────────
+    // The composer routes "/name args" through POST /session/{id}/command (server expands the
+    // template) instead of sending the text verbatim — the same check the TUI/web clients make
+    // against their synced command list. The list is directory-scoped, so the cache is keyed to
+    // ActiveDirectory() and invalidated by directory change or a short TTL (commands can be
+    // added/edited on disk while connected).
+    //
+    // The list mixes the three command sources the server folds in (file/config commands and
+    // built-ins with source "command", MCP prompts with "mcp", skills with "skill"), so names
+    // are cached split by source. When the "Expand skills" setting (SettingsStore.ExpandSkills)
+    // is off, skill-only names fall through to a plain prompt; a name backed by a real command
+    // always routes (the server itself drops a skill whose name collides with a command —
+    // command/index.ts adds skills only for names not already taken).
+
+    private const long CommandCacheTtlMs = 5 * 60 * 1000;
+    private HashSet<string>? _commandNames;
+    private HashSet<string>? _skillNames;
+    private string _commandNamesDirectory = "";
+    private long _commandNamesFetchedMs;
+
+    /// <summary>
+    /// True when <paramref name="name"/> (the input token after the leading <c>/</c>) should be
+    /// routed as a command for the active directory: it is a server command/MCP prompt (always),
+    /// or a skill when the "Expand skills" setting is on. Fetches/cache-refreshes the command
+    /// list on a directory change or staleness; returns false when the server is unreachable so
+    /// slash text degrades to a plain prompt.
+    /// </summary>
+    public async Task<bool> IsKnownCommandAsync(string name)
+    {
+        if (_client is null || name.Length == 0) return false;
+        var directory = ActiveDirectory();
+        var now = Environment.TickCount64;
+        if (_commandNames is null || _skillNames is null || _commandNamesDirectory != directory
+            || now - _commandNamesFetchedMs > CommandCacheTtlMs)
+        {
+            try
+            {
+                var commands = await _client.GetCommandsAsync(directory);
+                _commandNames = new HashSet<string>(StringComparer.Ordinal);
+                _skillNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var command in commands)
+                {
+                    if (command.Source == "skill") _skillNames.Add(command.Name);
+                    else _commandNames.Add(command.Name);
+                }
+                _commandNamesFetchedMs = now;
+                _commandNamesDirectory = directory;
+            }
+            catch
+            {
+                _commandNames ??= new HashSet<string>(StringComparer.Ordinal);
+                _skillNames ??= new HashSet<string>(StringComparer.Ordinal);
+            }
+        }
+        if (_commandNames.Contains(name)) return true;
+        return SettingsStore.ExpandSkills && _skillNames.Contains(name);
+    }
+
+    /// <summary>Runs <paramref name="action"/> on the store's UI thread (used by background tasks
+    /// that touch reactive fields, which must only be written on the UI thread). No-op before the
+    /// store is started.</summary>
+    public void PostToUi(DispatcherQueueHandler action) => _dispatcher?.TryEnqueue(action);
+
     /// <summary>True when a session is mid-turn: its cached store says busy, or the router's status flags say so.</summary>
     public bool IsSessionBusy(string sessionId)
     {

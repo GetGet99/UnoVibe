@@ -64,11 +64,39 @@ The current dev server is 1.17.18 — older than the opencode-src checkout (1.18
 `/api/command` handler folds skills in via `Command.state`, so the `source == "skill"` mapping stays
 as a defensive branch.
 
-**No client-side command expansion:**
-the server does NOT expand `/name args` at the REST layer — UnoVibe inserts `/name ` text and sends
-it through the normal `SendAsync`/`prompt_async` path; the session loop resolves the command
-server-side. Never read `Command.Info.template` from the REST list (it can serialize as a Promise
-stub); `hints` (from `$1..$n`/`$ARGUMENTS`) exist but are unused.
+**Slash-command send (opencode Commands):**
+the server does NOT expand `/name args` inside a normal prompt — a verbatim `/name` text would reach
+the model unexpanded. So `SessionStore.SendPromptNowAsync` detects the command client-side
+(`ParseSlashCommand`, mirroring the TUI's `prompt/index.tsx`: first line, first space-delimited token,
+leading `/` stripped, remaining tokens join the arguments) and, when `Router.IsKnownCommandAsync`
+matches a name from the server's command list for the active directory, fires
+`OpencodeClient.SendCommandAsync` → legacy `POST /session/{id}/command` with
+`{ command, arguments, agent?, model: "providerID/modelID", variant?, parts? }`. The server expands
+the command's template (`$ARGUMENTS`/`$1..n`, `!`shell`, `@file`), resolves the command's own
+agent/model/subtask options, and runs the turn. The endpoint **blocks until the turn completes**, so
+the call uses a dedicated `HttpClient` with `Timeout.InfiniteTimeSpan` (the shared client's 100s
+default would abort long commands) and is **fire-and-forget** — progress comes entirely over the SSE
+stream (the response mirrors `prompt_async` events and is ignored), and the composer clears
+immediately. The command-name cache in `ChatStore` is invalidated on directory change or a 5-minute
+TTL, so edits to `commands/` show up without restarting the app (the server itself needs a restart to
+reload them — see "Known Working State"). Never read `Command.Info.template` from the REST list (it
+can serialize as a Promise stub); `hints` (from `$1..$n`/`$ARGUMENTS`) exist but are unused.
 The legacy route contract (bare arrays, full `source` field) vs the `/api/*` contract
 (wrapped `{location, data}`) is documented in
 [`opencode-server.md`](opencode-server.md) and in `OpencodeClient.cs` itself.
+
+**Skills expand through the same endpoint** — the server folds skills into the command list with
+`source == "skill"` and runs `/name` (skill) through the exact same `POST /session/{id}/command`
+handler, and it drops a skill whose name collides with a built-in/config/MCP command
+(`command/index.ts` adds skills only for names not already taken), so a command always wins a
+name conflict. UnoVibe's **Expand skills via slash commands** setting
+(`SettingsStore.ExpandSkills`, default on = TUI behavior) only affects skill-only names:
+`ChatStore.IsKnownCommandAsync` caches the command list split into real-command names vs
+skill names, returns true for a real command regardless of the setting, and consults the toggle
+before treating a skill-only name as a command — with the toggle off such text falls through to a
+plain prompt. Arguments: `SessionStore.ParseSlashCommand` mirrors the TUI — first line, first
+space-delimited token after `/` is the name, the rest of the line is space-joined **with empty
+tokens preserved** (no quote/escape parsing — `"quoted args"` stay literal), plus any trailing
+lines. The server then does its own quote-aware tokenizing for `$1..$n` placeholders
+(`/"'[^"']*"'/` tokens, leading/trailing quote trimmed — backslash escapes like `\"` are NOT
+understood) while `$ARGUMENTS` and the no-placeholder fallback append the raw arguments verbatim.
