@@ -32,7 +32,7 @@ namespace UnoVibe.Pages.Chat;
                 chatMessageList = <ChatMessageList />
             </Grid>
             <Grid Grid.Row=3>
-                composer = <ChatComposer SendRequested+=`SendAsync` />
+                composer = <ChatComposer SendRequested+=`SendAsync` ShellCommandRequested+=`SendShellCommandAsync` />
             </Grid>
         </Grid>
     </root>
@@ -51,6 +51,13 @@ public partial class ChatPage : Page
         var content = text.Trim();
         if (content.Length == 0 && Store.Active.PendingImages.Count == 0) return;
         await Store.Active.SendAsync(content, mode);
+        chatMessageList.ForceScrollToBottom();
+    }
+
+    /// <summary>Runs a shell-mode command in the session (composer "!" prefix, TUI parity).</summary>
+    private async Task SendShellCommandAsync(string command)
+    {
+        await Store.Active.SendShellAsync(command);
         chatMessageList.ForceScrollToBottom();
     }
 

@@ -52,6 +52,34 @@ tooltip track the setting live: `ChatPage` keeps the reactive `SendMode` ref syn
 the component reads `SettingsStore.SendMode` fresh for the primary click. When idle the send button
 is a plain button that sends immediately.
 
+## Shell mode ("!" prefix)
+
+Typing `!` as the entire composer input flips `ChatComposer` into **shell mode** (`ChatComposer.ShellMode`
+reactive ref): the trigger character is stripped (never enters the buffer), the input gets an accent
+border + shell placeholder, an accent "! ✕" cancel button appears by the send cluster, and the
+mode/model/variant row is replaced by a hint line. Detection watches text changes rather than keys,
+so any layout path that produces a lone `!` triggers it. Emptying the input stays in shell mode
+(Uno may deliver the programmatic clear's TextChanged asynchronously, so exit-on-empty would fire
+immediately after entry anyway); Esc, the cancel button, or submitting leaves the mode. While active,
+`/`+`@` suggestion prefixes are disabled (`SetSuggestionPrefixes`, controller rebuilt via a Providers
+re-set) so slash tokens in commands don't pop the flyout, image attach is disabled, and `SetChatText`
+(revert/fork restore) force-exits so a restored prompt can't run as a command.
+
+Submit raises `ChatComposer.ShellCommandRequested` → `ChatPage.SendShellCommandAsync` →
+`SessionStore.SendShellAsync`: ensure session, reject while busy (status-line message — the server
+409s concurrent runs anyway), optimistic `IsBusy`, then fire POST `/session/{id}/shell` detached on a
+dedicated no-timeout client (`OpencodeClient.SendShellAsync`, mirroring `SendCommandNow`) with
+`{ agent: Mode, model: {providerID, modelID}, command }`. The endpoint blocks until the command exits;
+all progress arrives over SSE — the server records the synthetic user message ("The following tool was
+executed by the user", auto-hidden by the existing synthetic-part logic in `ApplyPartUpdated`) plus an
+assistant message whose running `bash` tool part streams output via `state.metadata.output`, rendered
+by the existing `ToolViewShell`. The session goes busy for the duration, so Stop aborts the command
+(server appends a `<metadata>User aborted…</metadata>` block to the output).
+
+TUI ref: `packages/tui/src/component/prompt/index.tsx` — `!` binding at offset 0 → `store.mode = "shell"`,
+esc/backspace-at-0 bindings exit, submit calls `sdk.client.session.shell`; server:
+`session/prompt.ts` `shellImpl`.
+
 ## Turn-stop handling: Continue button + auto-continue
 
 When a turn stops, `SessionStore` decides between showing the end-of-chat **⟳ Continue** button

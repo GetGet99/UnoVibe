@@ -186,6 +186,41 @@ public sealed class OpencodeClient
     }
 
     /// <summary>
+    /// Post /session/{id}/shell — runs a shell command in the session's directory (the TUI/web
+    /// "shell mode" behind the <c>!</c> prompt prefix). The server records a user message
+    /// ("The following tool was executed by the user", synthetic) plus an assistant message with
+    /// a running <c>bash</c> tool part, streams output into that part over SSE, and returns once
+    /// the command exits — this request blocks for the whole run, so a dedicated client without
+    /// a timeout carries it (progress is driven by SSE; the <c>{info, parts}</c> response is
+    /// ignored). Mirrors the TUI's <c>sdk.client.session.shell</c>: agent names the session's
+    /// agent and model serializes as <c>{providerID, modelID}</c>. The server 409s when a turn
+    /// or shell run is already active.
+    /// </summary>
+    public async Task SendShellAsync(string sessionId, string command,
+        string? agent = null, string? providerId = null, string? modelId = null,
+        CancellationToken ct = default)
+    {
+        var body = new SendShellRequest { Command = command };
+        if (!string.IsNullOrEmpty(agent)) body.Agent = agent;
+        if (!string.IsNullOrEmpty(providerId) && !string.IsNullOrEmpty(modelId))
+            body.Model = new SendPromptModelRequest { ProviderID = providerId, ModelID = modelId };
+
+        using var shellHttp = new HttpClient
+        {
+            BaseAddress = Http.BaseAddress,
+            // A long-running command would outlive the shared client's 100s default timeout;
+            // like /command this request just waits while SSE reports progress.
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        if (Http.DefaultRequestHeaders.Authorization is { } auth)
+            shellHttp.DefaultRequestHeaders.Authorization = auth;
+
+        using var response = await shellHttp.PostAsJsonAsync(
+            $"/session/{sessionId}/shell", body, AppJsonContext.Default.SendShellRequest, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
     /// Patch /session/{id} — writes a new title for the session. This is how the TUI renames a
     /// session (and is also what the server's background title generator updates under the hood).
     /// </summary>

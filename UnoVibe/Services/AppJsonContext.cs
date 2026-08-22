@@ -20,6 +20,7 @@ namespace UnoVibe.Services;
 [JsonSerializable(typeof(CreateSessionRequest))]
 [JsonSerializable(typeof(SendPromptRequest))]
 [JsonSerializable(typeof(SendCommandRequest))]
+[JsonSerializable(typeof(SendShellRequest))]
 [JsonSerializable(typeof(UpdateSessionTitleRequest))]
 [JsonSerializable(typeof(EmptyRequest))]
 [JsonSerializable(typeof(RevertRequest))]
@@ -120,6 +121,23 @@ internal sealed class SendCommandRequest
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<PromptPart>? Parts { get; set; }
+}
+
+/// <summary>
+/// POST /session/{id}/shell body — runs a shell command in the session's directory. The
+/// server records it as a user message ("The following tool was executed by the user") plus
+/// an assistant message with a running <c>bash</c> tool part, streams the command output
+/// into that part over SSE, and this request blocks until the command exits.
+/// </summary>
+internal sealed class SendShellRequest
+{
+    public string Command { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Agent { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SendPromptModelRequest? Model { get; set; }
 }
 
 /// <summary>

@@ -487,6 +487,63 @@ public sealed partial class SessionStore
         });
     }
 
+    /// <summary>
+    /// Runs a shell command inside the session (the composer's <c>!</c> shell mode, TUI parity).
+    /// Fires POST /session/{id}/shell detached like <see cref="SendCommandNow"/>: the endpoint
+    /// blocks until the command exits while all progress — the synthetic user message, the
+    /// assistant message with a running <c>bash</c> tool part, and its streaming output —
+    /// arrives over the SSE stream and renders through the normal message plumbing. The session
+    /// goes busy for the duration (Stop aborts the command); the server 409s a concurrent run,
+    /// so a busy session surfaces an error instead of sending.
+    /// </summary>
+    public async Task SendShellAsync(string command)
+    {
+        try
+        {
+            if (!await Router.EnsureSessionAsync()) return;
+            if (IsBusy)
+            {
+                Router.ConnectionStatus = "Busy — wait for the current turn to finish before running a shell command.";
+                return;
+            }
+
+            // Mark busy optimistically so a second shell submit can't race the HTTP call;
+            // the server's session.status busy event confirms it.
+            IsBusy = true;
+            ResetTurnFlags();
+
+            // Capture the reactive values on the UI thread (Reference<T> must only be read/written
+            // there), then run the long-lived request off-thread.
+            var sessionId = SessionId;
+            var router = Router;
+            string mode = Mode;
+            string providerId = ProviderId;
+            string modelId = ModelId;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await router.Client!.SendShellAsync(sessionId, command, mode, providerId, modelId);
+                }
+                catch (Exception ex)
+                {
+                    router.PostToUi(() =>
+                    {
+                        router.ConnectionStatus = $"Error: {ex.Message}";
+                        // A failed request means no run started (e.g. the server's 409
+                        // concurrent-run rejection), so no session.status idle event will
+                        // arrive to unstick the composer's busy state.
+                        IsBusy = false;
+                    });
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Router.ConnectionStatus = $"Error: {ex.Message}";
+        }
+    }
+
     private bool _draining;
 
     /// <summary>Drains queued prompts one at a time. Called when the session goes idle.</summary>
