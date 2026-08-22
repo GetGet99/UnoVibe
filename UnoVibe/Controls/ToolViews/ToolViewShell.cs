@@ -4,7 +4,9 @@ namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
     using UnoVibe.Models;
+    using UnoVibe.Services;
     using QuickMarkup.WinUI;
+    inject ChatStore Store;
     required PartItem Part;
     bool Expanded = false;
     <setup>
@@ -12,7 +14,12 @@ namespace UnoVibe.Controls.ToolViews;
     </setup>
     <StackPanel Spacing=4>
         <Border Background=`Part.ToolStatus == "error" ? theme.SystemCriticalBackground : theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)`>
-            <ToolViewTitle Part=`Part` Text=`ToolViewShared.Shell(Part)` SemiBold=true IsShell=true />
+            <StackPanel Spacing=2>
+                if (`WorkdirLabel().Length > 0`)
+                    <TextBlock Text=`"Running in " + WorkdirLabel()` FontSize=11 Foreground=`theme.TertiaryText`
+                                TextWrapping=Wrap IsTextSelectionEnabled=true />
+                <ToolViewTitle Part=`Part` Text=`ToolViewShared.Shell(Part)` SemiBold=true Emphasized=true CodeFont=`Part.ToolCommand.Length > 0` />
+            </StackPanel>
         </Border>
         if (`Part.ShellOutput.Length > 0`)
         {
@@ -30,4 +37,18 @@ namespace UnoVibe.Controls.ToolViews;
             </Border>
     </StackPanel>
     """)]
-public partial class ToolViewShell : IQuickMarkupComponent;
+public partial class ToolViewShell : IQuickMarkupComponent
+{
+    /// <summary>
+    /// The "Running in …" label above the command: the tool's workdir relative to the
+    /// session's directory (same reference <see cref="ChatStore.ActiveDirectory"/> uses),
+    /// empty when it matches that directory. Rendered in the default font so it reads as
+    /// context, not code.
+    /// </summary>
+    private string WorkdirLabel()
+    {
+        var dir = Store.ActiveDirectory();
+        if (dir.Length == 0) dir = Store.ServerDirectory;
+        return ToolViewShared.ShellWorkdir(Part, dir);
+    }
+}

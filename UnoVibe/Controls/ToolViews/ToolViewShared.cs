@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using UnoVibe.Models;
@@ -89,8 +90,33 @@ public static class ToolViewShared
 
     public static string Shell(PartItem p) =>
         p.ToolCommand.Length > 0
-            ? "$ " + p.ToolCommand + (p.ToolWorkdir.Length > 0 ? "  (in " + p.ToolWorkdir + ")" : "")
+            ? "$ " + p.ToolCommand
             : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running command...";
+
+    /// <summary>
+    /// Workdir label for a shell tool card: the working directory relative to the session's
+    /// directory ("sub/dir"), or "" when there is nothing to show — no workdir in the input,
+    /// no known session directory, or the workdir IS the session directory. Paths outside
+    /// the session directory fall back to the raw workdir. Mirrors the TUI's
+    /// <c>workdirDisplay</c> (relative-to-location, hidden when it resolves to ".").
+    /// </summary>
+    public static string ShellWorkdir(PartItem p, string referenceDir)
+    {
+        var workdir = p.ToolWorkdir;
+        if (workdir.Length == 0 || referenceDir.Length == 0) return workdir;
+        try
+        {
+            var full = Path.IsPathRooted(workdir)
+                ? Path.GetFullPath(workdir)
+                : Path.GetFullPath(Path.Combine(referenceDir, workdir));
+            var relative = Path.GetRelativePath(Path.GetFullPath(referenceDir), full);
+            if (relative.Length == 0 || relative == ".") return ""; // same folder as the session
+            if (relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar))
+                return relative;
+        }
+        catch { }
+        return workdir;
+    }
 
     public static string Glob(PartItem p)
     {

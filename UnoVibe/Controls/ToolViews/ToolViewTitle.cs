@@ -13,7 +13,8 @@ namespace UnoVibe.Controls.ToolViews;
     required PartItem Part;
     string Text = "";
     bool SemiBold = false;
-    bool IsShell = false;
+    bool Emphasized = false;
+    bool CodeFont = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -22,8 +23,8 @@ namespace UnoVibe.Controls.ToolViews;
             <ToolBusyIndicator Part=`Part` />
             <TextBlock Text=`Text` FontSize=12
                        FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal`
-                       FontFamily=`IsShell ? CodeFonts.Current : DefaultFont`
-                       Foreground=`IsShell ? theme.PrimaryText : theme.SecondaryText`
+                       FontFamily=`CodeFont ? CodeFonts.Current : DefaultFont`
+                       Foreground=`Emphasized ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             if (`Part.Interrupted`)
                 <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(5, 1, 5, 2)` VerticalAlignment=Center>
