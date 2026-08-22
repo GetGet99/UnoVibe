@@ -380,3 +380,13 @@ The upstream source checkouts (QuickMarkup, Uno, opencode) exist only on the Lin
 a Windows dev environment does **not** have them, so don't assume those paths are available there.
 See `agents-doc/referenced-projects.md` for the paths, what each is for, and the Uno TextBox
 key-processing quirk SuggestBox works around.
+
+## CONTRIBUTION RULES AND BANNED PATTERNS
+
+This applies to new and changed codes.
+
+### `Router.ConnectionStatus` message is not for error.
+
+Don't set error message to `Router.ConnectionStatus` for failure. Its rendering is too small and user can't read it. It's just have enough space for `Connected` string.
+
+Instead: recommend to do toasts.
