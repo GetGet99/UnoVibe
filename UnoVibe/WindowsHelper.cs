@@ -24,22 +24,17 @@ static class WindowsHelper
         var picker = new Microsoft.Windows.Storage.Pickers.FolderPicker(window.AppWindow.Id);
         if (startPath.Length > 0)
             picker.SuggestedStartFolder = startPath;
-        var result = await picker.PickSingleFolderAsync();
-        return result?.Path;
-#elif DESKTOP_LINUX || DESKTOP_MACOS
+#elif DESKTOP_LINUX || (DESKTOP_MACOS && false) // MacOS currently fails, so I'd like to do this instead.
         // `FolderPicker` / `PickFolderResult` resolve to the platform polyfill registered in
         // UnoVibe/Polyfills/Linux (or MacOS) — see AGENTS.md "Polyfills".
-        var picker = new FolderPicker(window)
-        {
-            SuggestedStartFolder = startPath
-        };
-        var polyfillResult = await picker.PickSingleFolderAsync();
-        return polyfillResult?.Path;
+        var picker = new FolderPicker(window);
+        if (startPath.Length > 0)
+            picker.SuggestedStartFolder = startPath;
 #else
         var picker = new Windows.Storage.Pickers.FolderPicker();
         InitializeWithWindow(picker, window);
+#endif
         var folder = await picker.PickSingleFolderAsync();
         return folder?.Path;
-#endif
     }
 }
