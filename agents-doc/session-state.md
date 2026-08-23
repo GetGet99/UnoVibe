@@ -94,7 +94,11 @@ The auto-fired continue is silent: no completion toast and no sidebar unread/out
 (`ChatStore.ApplySessionStatus` asks `store.WillAutoContinue()` before applying an idle event and
 skips both). A streak cap of 10 consecutive auto-continues — reset by any manual send or a
 non-qualifying stop — hands control back to the manual Continue button as a runaway-loop guard.
-Aborted turns never qualify (a user Stop must not be answered with a continue).
+Aborted turns never qualify (a user Stop must not be answered with a continue). Because
+`session.status idle` can be processed before the final `message.updated` lands the abort error,
+`SessionStore` also keeps a client-side `interruptRequested` flag — set by `InterruptAsync`,
+cleared on the next confirmed running turn or session reset — that suppresses auto-continue (and,
+via `MarkInterrupted`, hides a stale Continue button) even when the aborted marker hasn't arrived.
 
 ## Revert / undo
 

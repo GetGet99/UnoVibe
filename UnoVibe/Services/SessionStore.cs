@@ -132,6 +132,15 @@ public sealed partial class SessionStore
     private bool sawRunningStatus;
 
     /// <summary>
+    /// Set when the user requests an interrupt (Stop button or an interrupt-then-send) and
+    /// cleared when the server confirms the next running turn (first non-idle status). Guards
+    /// auto-continue against the stop-signal race: session.status idle can be processed before
+    /// the final message.updated lands the MessageAbortedError marker on the assistant message,
+    /// so <see cref="LastAssistantMessageInterrupted"/> alone can miss a mid-thinking Stop.
+    /// </summary>
+    private bool interruptRequested;
+
+    /// <summary>
     /// True between an automatic continue firing and the server confirming the restarted turn
     /// with its first non-idle status event. Any further stop signal for that same stop (the
     /// server emits session.status idle and the final message.updated carrying finish in either
@@ -354,6 +363,7 @@ public sealed partial class SessionStore
     public async Task InterruptAsync()
     {
         if (SessionId.Length == 0) return;
+        interruptRequested = true;
         try
         {
             await Router.Client.AbortAsync(SessionId);
@@ -769,6 +779,7 @@ public sealed partial class SessionStore
         ForkPromptText = "";
         autoContinueStreak = 0;
         autoContinued = false;
+        interruptRequested = false;
     }
 
     /// <summary>
@@ -884,7 +895,7 @@ public sealed partial class SessionStore
             var role = info.GetStringProperty("role");
             if (role.Length > 0) message.Role = role;
             ApplyMessageStats(message, info);
-            MarkInterrupted(message, info);
+            if (MarkInterrupted(message, info)) ShowContinue = false;
             ApplyMessageError(message, info);
             // The server emits session.status idle and this final message.updated (carrying
             // finish/error) in either order; both are turn-stop signals handled uniformly
@@ -903,7 +914,7 @@ public sealed partial class SessionStore
             Agent = info.GetStringProperty("agent"),
         };
         ApplyMessageStats(message, info);
-        MarkInterrupted(message, info);
+        if (MarkInterrupted(message, info)) ShowContinue = false;
         ApplyMessageError(message, info);
         if (!AwaitingAutoContinueRun && info.TryGetProperty("finish", out _)) OnTurnCompleted();
         if (!IsBusy) HandleStoppedTurn();
@@ -912,18 +923,24 @@ public sealed partial class SessionStore
         UpdateSessionStats();
     }
 
-    /// <summary>Appends a reactive "aborted" marker part when the message carries an abort error.</summary>
-    private static void MarkInterrupted(MessageItem message, JsonElement info)
+    /// <summary>
+    /// Appends a reactive "aborted" marker part when the message carries an abort error.
+    /// Returns true when this call transitioned the message to interrupted (the marker was
+    /// newly added) — the caller uses it to drop a Continue state that was decided before the
+    /// abort error arrived (the idle/finish stop signals can precede it).
+    /// </summary>
+    private static bool MarkInterrupted(MessageItem message, JsonElement info)
     {
-        if (!IsAbortedError(info)) return;
+        if (!IsAbortedError(info)) return false;
+        if (message.Parts.Any(p => p.Type == "aborted")) return false;
         message.Interrupted = true;
-        if (message.Parts.Any(p => p.Type == "aborted")) return;
         message.Parts.Add(new PartItem
         {
             Id = $"aborted-{Guid.NewGuid():N}",
             MessageId = message.Id,
             Type = "aborted",
         });
+        return true;
     }
 
     private static bool IsAbortedError(JsonElement info)
@@ -999,12 +1016,14 @@ public sealed partial class SessionStore
         && autoContinueStreak < MaxAutoContinues
         && !AwaitingAutoContinueRun
         && !LastAssistantMessageInterrupted()
+        && !interruptRequested
         && LastAssistantMessageEndsOnThinking();
 
     /// <summary>
     /// True when this session's most recent assistant message was interrupted by the user
     /// (abort). Guards the auto-continue against a stop signal racing the aborted part: a user
-    /// Stop must never be answered with an automatic "continue".
+    /// Stop must never be answered with an automatic "continue". <see cref="interruptRequested"/>
+    /// covers the ordering where session.status idle is handled before the aborted marker lands.
     /// </summary>
     private bool LastAssistantMessageInterrupted()
     {
@@ -1029,7 +1048,7 @@ public sealed partial class SessionStore
         if (AwaitingAutoContinueRun) return;
         if (autoContinued) autoContinued = false; // the restarted turn's own stop — decide fresh
 
-        if (SettingsStore.AutoContinueOnThinking && !LastAssistantMessageInterrupted()
+        if (SettingsStore.AutoContinueOnThinking && !LastAssistantMessageInterrupted() && !interruptRequested
             && LastAssistantMessageEndsOnThinking() && autoContinueStreak < MaxAutoContinues)
         {
             autoContinued = true;
@@ -1205,7 +1224,11 @@ public sealed partial class SessionStore
         var type = status.GetStringProperty("type");
 
         IsBusy = type != "idle";
-        if (type != "idle") sawRunningStatus = true;
+        if (type != "idle")
+        {
+            sawRunningStatus = true;
+            interruptRequested = false;
+        }
 
         if (type == "retry")
         {
