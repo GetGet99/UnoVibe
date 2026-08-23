@@ -34,10 +34,15 @@ Row model in `Controls/SuggestionItem.cs`, providers in `Services/SuggestionProv
 ## App built-in commands
 
 `BuiltInCommands` (in `Services/SuggestionProviders.cs`) is the app-level catalog — TUI parity with
-opencode's own `/new`, `/models`, etc. `BuiltInCommandSuggestionProvider` serves it locally (no
-server round-trip): rows are kind `"builtin"` (gray "built-in" badge) with a non-null
-`SuggestionItem.Action` id, and are `InputStartOnly`, so like server commands they appear only when
-`/` is the first input character.
+opencode's own `/new`, `/models`, etc., plus UnoVibe-only ones. `BuiltInCommandSuggestionProvider`
+serves it locally (no server round-trip): rows are kind `"builtin"` (gray "built-in" badge) with a
+non-null `SuggestionItem.Action` id, and are `InputStartOnly`, so like server commands they appear
+only when `/` is the first input character.
+
+The provider takes an optional **availability predicate** (`Func<string, bool>`); `ChatComposer`
+passes one that hides context-dependent rows — currently only `/interrupt`, which is offered just
+while the active session is busy. Committing an unavailable one anyway still degrades gracefully
+(warning toast or no-op).
 
 **Commit runs the action instead of inserting text.** Tab, Enter, or a mouse click on a built-in row
 clears the whole composer input and raises `SuggestBox.CommandTriggered`;
@@ -46,14 +51,28 @@ clears the whole composer input and raises `SuggestBox.CommandTriggered`;
 - `/agents` → opens the Mode combobox (`ComboBox.IsDropDownOpen`)
 - `/connect` → `ProviderConnectDialog.ShowAsync(Store, XamlRoot)` (the shared entry point also used
   by the model picker's "Connect a provider…" row)
+- `/continue` → raises `SendRequested("continue")` — the same literal user message as the end-of-chat
+  ⟳ Continue card (`session-state.md`)
 - `/editor` → `FolderLauncher.OpenInEditor(ActiveDirectory())` — same launch as the header's code
   icon; failures toast
+- `/explorer` → `FolderLauncher.OpenInFileManager(ActiveDirectory())`
+- `/fork` → `ChatStore.ForkFullSessionAsync()` — same full-session fork as the header's ⇆ button
+- `/interrupt` → `SessionStore.InterruptAsync()` when busy; warning toast otherwise (contextually
+  hidden in the flyout while idle)
 - `/mcps` → `ChatStore.RequestMcpSection()` → `SessionSidebar.RevealMcpSectionAsync`: on compact
   windows first flips to the sidebar view, expands the MCP section (starting its status poll), and
   focuses the MCP toggle button
 - `/models` → `ModelPicker.Open()`
 - `/new` → `Store.NewSessionAsync(Store.ActiveDirectory())` — identical to the "+" button on the
   current session's directory group (lazy draft; created on first send)
+- `/redo` → `ChatPage.RedoLastAsync()` → `SessionStore.RedoLastMessageAsync()` + scroll to end
+- `/rename` → `ChatPage.BeginRename()` → `ChatHeader.BeginRename()`: flips the header title into
+  its inline rename TextBox and focuses/selects it; warning toast when there is no session yet
+- `/setting` → sets the injected `SettingsOpen` provided value to true — the same flag the sidebar's
+  gear button uses, so MainPage shows its settings modal overlay
+- `/terminal` → `FolderLauncher.OpenInTerminal(ActiveDirectory())`
+- `/undo` → `ChatPage.UndoLastAsync()` → `SessionStore.UndoLastMessageAsync()` + restore the undone
+  prompt into the composer + scroll to end
 - `/variants` → opens the Variant combobox; warning toast when the model has no variants
 
 **Submit interception:** typed text that *is* an exact built-in invocation (`/name`, optional ignored
@@ -67,7 +86,6 @@ name matches a built-in (`BuiltInCommands.IsBuiltIn`) — mirroring how the serv
 name is taken by a command.
 
 **Not yet implemented** (the rest of the TUI's list, deferred — revisit when adding more):
-
 - `/diff` — TUI shows a dialog of working-tree changes
 - `/exit` — quits opencode (desktop app: close window?)
 - `/help` — help/shortcut listing

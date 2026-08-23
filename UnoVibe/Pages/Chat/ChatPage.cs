@@ -23,7 +23,7 @@ namespace UnoVibe.Pages.Chat;
             <RowDefinition Height=Auto />
         </>>
             <Grid Grid.Row=0>
-                <ChatHeader />
+                header = <ChatHeader />
             </Grid>
             <Grid Grid.Row=1>
                 <ChatStatusArea />
@@ -62,4 +62,24 @@ public partial class ChatPage : Page
     }
 
     public void SetChatText(string txt) => composer.SetChatText(txt);
+
+    /// <summary>Enters the header's inline rename mode (/rename built-in command entry).</summary>
+    public void BeginRename() => header.BeginRename();
+
+    /// <summary>Undo the last exchange (/undo built-in): revert past its prompt, restore the
+    /// undone prompt text into the composer, then scroll to the end.</summary>
+    public async Task UndoLastAsync()
+    {
+        await Store.Active.UndoLastMessageAsync();
+        if (Store.Active.RevertPromptText.Length > 0)
+            composer.SetChatText(Store.Active.RevertPromptText);
+        chatMessageList.ForceScrollToBottom();
+    }
+
+    /// <summary>Restore reverted messages (/redo built-in), then scroll to the end.</summary>
+    public async Task RedoLastAsync()
+    {
+        await Store.Active.RedoLastMessageAsync();
+        chatMessageList.ForceScrollToBottom();
+    }
 }

@@ -22,6 +22,8 @@ namespace UnoVibe.Pages.Chat;
     inject ChatStore Store;
     inject Window HostWindow;
     inject? bool IsCompact;
+    inject ChatPage ChatP;
+    inject bool SettingsOpen;
     string SendMode = "";
     // Shell mode (TUI parity): "!" typed as the entire input flips the composer into shell
     // command entry; Esc, the ✕ button, or submitting leaves it again. Submit runs
@@ -134,13 +136,14 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         SendMode = SettingsStore.SendMode.ToString();
         SettingsStore.Changed += OnSettingsChanged;
 
-        // Suggestion sources for the input box. Built-in commands are local; server-backed
-        // providers (commands, skills, files) return empty lists when the server is unreachable or
-        // has no data (no mock fallback — the box simply shows nothing); the directory is read
-        // fresh on every query so it tracks the active session.
+        // Suggestion sources for the input box. Built-in commands are local (the availability
+        // predicate hides context-dependent ones like /interrupt while nothing is running);
+        // server-backed providers (commands, skills, files) return empty lists when the server is
+        // unreachable or has no data (no mock fallback — the box simply shows nothing); the
+        // directory is read fresh on every query so it tracks the active session.
         suggestBox.Providers = new ISuggestionProvider[]
         {
-            new BuiltInCommandSuggestionProvider(),
+            new BuiltInCommandSuggestionProvider(IsBuiltInAvailable),
             new ServerCommandSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
             new ServerSkillSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
             new ServerFileSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
@@ -262,7 +265,14 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         suggestBox.Clear();
     }
 
-    // ── Built-in slash commands (/new /models /agents /variants /connect /editor /mcps) ──
+    // ── Built-in slash commands (/new /models /agents /variants /connect /editor /explorer
+    //    /terminal /mcps /fork /rename /setting /interrupt /continue /undo /redo) ──
+
+    /// <summary>
+    /// Availability predicate for the built-in command flyout: context-dependent rows are hidden
+    /// when they make no sense right now (e.g. <c>/interrupt</c> only while the session runs).
+    /// </summary>
+    private bool IsBuiltInAvailable(string name) => name != "interrupt" || Store.Active.IsBusy;
 
     /// <summary>
     /// Runs the action for a built-in command row committed from the suggestion flyout
@@ -278,8 +288,25 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             case "connect":
                 await ProviderConnectDialog.ShowAsync(Store, MarkupNode.XamlRoot);
                 break;
+            case "continue":
+                // Same as the ⟳ Continue card: a literal "continue" user message the agent is
+                // instructed to treat as "pick up where you stopped".
+                if (SendRequested is not null) await SendRequested("continue", null);
+                break;
             case "editor":
-                OpenInEditor();
+                LaunchFolder(FolderLauncher.OpenInEditor);
+                break;
+            case "explorer":
+                LaunchFolder(FolderLauncher.OpenInFileManager);
+                break;
+            case "fork":
+                await Store.ForkFullSessionAsync();
+                break;
+            case "interrupt":
+                if (!Store.Active.IsBusy)
+                    Store.ShowWarning("Nothing is running right now.", "/interrupt");
+                else
+                    await Store.Active.InterruptAsync();
                 break;
             case "mcps":
                 Store.RequestMcpSection();
@@ -289,6 +316,24 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 break;
             case "new":
                 await Store.NewSessionAsync(Store.ActiveDirectory());
+                break;
+            case "redo":
+                await ChatP.RedoLastAsync();
+                break;
+            case "rename":
+                if (Store.ActiveSessionId.Length == 0)
+                    Store.ShowWarning("There is no conversation to rename yet.", "/rename");
+                else
+                    ChatP.BeginRename();
+                break;
+            case "setting":
+                SettingsOpen = true;
+                break;
+            case "terminal":
+                LaunchFolder(FolderLauncher.OpenInTerminal);
+                break;
+            case "undo":
+                await ChatP.UndoLastAsync();
                 break;
             case "variants":
                 if (!Store.Active.HasVariants)
@@ -315,10 +360,11 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         if (combo is not null) combo.IsDropDownOpen = true;
     }
 
-    /// <summary>The /editor built-in: same launch as the header's code icon, toast on failure.</summary>
-    private void OpenInEditor()
+    /// <summary>The /editor //explorer //terminal built-ins: run a <see cref="FolderLauncher"/>
+    /// open on the active directory, toast on failure.</summary>
+    private void LaunchFolder(Func<string, string?> open)
     {
-        var error = FolderLauncher.OpenInEditor(Store.ActiveDirectory());
+        var error = open(Store.ActiveDirectory());
         if (error is null) return;
         Store.ShowToast(new ToastItem
         {

@@ -112,9 +112,10 @@ and clears the marker (a `session.updated` whose info omits `revert`, synced in
 and `RevertToMessageAsync(MessageItem)` (abort-if-busy → revert → `ApplyRevertMarker`; restores the
 undone prompt (text + re-staged image attachments) into the composer via `RevertPromptText`/
 `PendingImages`) plus `UndoLastMessageAsync()`/`RedoLastMessageAsync()` mirroring the TUI.
-`UndoLastMessageAsync` currently has **no UI caller** (the chat-box Undo button was removed so users
-scroll up to a message instead) but is kept for a planned `/undo` command — delegate new callers to
-`RevertToMessageAsync`.
+The `/undo` and `/redo` built-in commands (see
+[`suggest-box.md`](suggest-box.md)) are their UI callers, routed through
+`ChatPage.UndoLastAsync()`/`RedoLastAsync()` (which also restore the composer prompt + scroll);
+the per-message ↶ revert flyout goes to `RevertToMessageAsync` directly.
 
 **Per-message revert to a specific message:**
 every user message renders a small always-visible **↶ revert icon** in an action row under its text

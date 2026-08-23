@@ -13,29 +13,39 @@ internal static class SuggestionFilter
 }
 
 /// <summary>
-/// An app-level built-in slash command (TUI parity with opencode's own <c>/new</c>,
-/// <c>/models</c>, ...): discovered like server commands (only when <c>/</c> is the first input
-/// character) but executed entirely client-side. Committing one clears the composer and runs the
-/// action — it never inserts text or reaches the model.
+/// An app-level built-in slash command (TUI parity where opencode has an equivalent —
+/// <c>/new</c>, <c>/models</c>, ... — plus UnoVibe-only ones like <c>/explorer</c>):
+/// discovered like server commands (only when <c>/</c> is the first input character) but executed
+/// entirely client-side. Committing one clears the composer and runs the action — it never inserts
+/// text or reaches the model.
 /// </summary>
 public sealed record BuiltInCommand(string Name, string Description);
 
 /// <summary>
-/// The built-in command catalog plus parsing helpers. Prototype set only — the TUI's remaining
-/// built-ins (/diff /exit /help /move /sessions /skills /status /themes) are documented as not yet
+/// The built-in command catalog plus parsing helpers. The TUI's remaining built-ins
+/// (/diff /exit /help /move /sessions /skills /status /themes) are documented as not yet
 /// implemented in agents-doc/suggest-box.md.
 /// </summary>
 public static class BuiltInCommands
 {
-    /// <summary>The catalog shown by the suggestion flyout (alphabetical, matching the TUI's list).</summary>
+    /// <summary>The catalog shown by the suggestion flyout (alphabetical).</summary>
     public static readonly IReadOnlyList<BuiltInCommand> All = new BuiltInCommand[]
     {
         new("agents", "Open the agent/mode picker"),
         new("connect", "Connect a provider (API key or OAuth)"),
+        new("continue", "Resume the turn by sending a \"continue\" message"),
         new("editor", "Open the current folder in your editor"),
+        new("explorer", "Open the current folder in the file manager"),
+        new("fork", "Fork this conversation into a new session"),
+        new("interrupt", "Interrupt the running conversation"),
         new("mcps", "Show MCP servers in the sidebar"),
         new("models", "Open the model picker"),
         new("new", "Start a new chat in the current directory"),
+        new("redo", "Restore reverted messages"),
+        new("rename", "Rename this conversation"),
+        new("setting", "Open the settings panel"),
+        new("terminal", "Open the current folder in a terminal"),
+        new("undo", "Undo the last exchange (prompt + reply)"),
         new("variants", "Open the reasoning-variant picker"),
     };
 
@@ -70,16 +80,26 @@ public static class BuiltInCommands
 /// round-trip. Rows are kind "builtin" with a non-null <see cref="SuggestionItem.Action"/> id and
 /// are <see cref="SuggestionItem.InputStartOnly"/>, so they appear only when <c>/</c> is the first
 /// character; committing clears the input and runs the action instead of inserting text.
+/// An optional availability predicate hides commands that make no sense right now (e.g.
+/// <c>/interrupt</c> only while the active session is busy) — committing one that slipped in
+/// anyway still degrades gracefully (warning toast / no-op).
 /// </summary>
 public sealed class BuiltInCommandSuggestionProvider : ISuggestionProvider
 {
+    private readonly Func<string, bool>? _isAvailable;
+
+    public BuiltInCommandSuggestionProvider(Func<string, bool>? isAvailable = null) =>
+        _isAvailable = isAvailable;
+
     public char Trigger => '/';
     public string Name => "built-in-commands";
 
     public Task<IReadOnlyList<SuggestionItem>> GetSuggestionsAsync(string query,
         CancellationToken ct = default)
     {
-        IReadOnlyList<SuggestionItem> items = BuiltInCommands.All.Select(command => new SuggestionItem
+        IReadOnlyList<SuggestionItem> items = BuiltInCommands.All
+            .Where(command => _isAvailable?.Invoke(command.Name) ?? true)
+            .Select(command => new SuggestionItem
         {
             Key = $"builtin:{command.Name}",
             Kind = "builtin",

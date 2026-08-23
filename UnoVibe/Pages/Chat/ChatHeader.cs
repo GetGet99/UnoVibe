@@ -212,6 +212,14 @@ public partial class ChatHeader : IQuickMarkupComponent<Grid>
         Init();
     }
 
+    /// <summary>Public entry into rename mode for the /rename built-in command (the pencil icon
+    /// calls <see cref="StartTitleEdit"/> directly). No-op while already editing.</summary>
+    public void BeginRename()
+    {
+        if (EditingTitle) return;
+        StartTitleEdit();
+    }
+
     private void StartTitleEdit()
     {
         TitleEdit = Store.Active.SessionTitle;
