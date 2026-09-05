@@ -18,9 +18,9 @@ partial class OpencodeClient
     /// <remarks>
     /// This API is blocking. Recommended to run in a new task.
     /// </remarks>
-    public async Task ReadEventAsync(ChannelWriter<OpencodeEvent> writer, CancellationToken ct)
+    public async Task ReadEventAsync(ChannelWriter<OpencodeEvent> writer, CancellationToken ct = default, string? directory = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/event");
+        using var request = new HttpRequestMessage(HttpMethod.Get, DirectoryUrl($"{BaseUrl}/event", directory));
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 

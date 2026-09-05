@@ -12,7 +12,7 @@ partial class OpencodeClient
             using var response = await Http.GetAsync("/global/health", ct);
             return response.IsSuccessStatusCode
                 ? Result<bool>.Success(true)
-                : Result<bool>.Failure(ApiError.Http((int)response.StatusCode, response.ReasonPhrase ?? "Unhealthy"));
+                : Result<bool>.Failure(ApiError.Http(response.StatusCode, response.ReasonPhrase ?? "Unhealthy"));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {

@@ -7,6 +7,7 @@ public sealed class AgentInfo
 {
     public string Id { get; set; } = "";
     public string Mode { get; set; } = "";
+    public string Name { get; set; } = "";
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; set; }

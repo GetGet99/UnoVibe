@@ -1,22 +1,7 @@
 namespace UnoVibe.Integration;
 
-/// <summary>
-/// Pending question request from <c>GET /question</c>.
-/// </summary>
-public sealed class QuestionRequest
-{
-    public string Id { get; set; } = "";
 
-    [JsonPropertyName("sessionID")]
-    public string SessionId { get; set; } = "";
-
-    public List<QuestionInfo> Questions { get; set; } = [];
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public QuestionToolInfo? Tool { get; set; }
-}
-
-/// <summary>One question inside a <see cref="QuestionRequest"/>.</summary>
+/// <summary>One question inside a <see cref="PendingQuestion"/>.</summary>
 public sealed class QuestionInfo
 {
     public string Question { get; set; } = "";

@@ -63,7 +63,7 @@ public sealed partial class OpencodeClient
         {
             using var response = await Http.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
-                return Result<T>.Failure(ApiError.Http((int)response.StatusCode, response.ReasonPhrase ?? "Error"));
+                return Result<T>.Failure(ApiError.Http(response.StatusCode, response.ReasonPhrase ?? "Error"));
             using var stream = await response.Content.ReadAsStreamAsync(ct);
             var value = await JsonSerializer.DeserializeAsync(stream, typeInfo, ct);
             return value is not null
@@ -83,7 +83,7 @@ public sealed partial class OpencodeClient
         {
             using var response = await Http.PostAsJsonAsync(url, input, inputTypeInfo, ct);
             if (!response.IsSuccessStatusCode)
-                return Result<TOut>.Failure(ApiError.Http((int)response.StatusCode, response.ReasonPhrase ?? "Error"));
+                return Result<TOut>.Failure(ApiError.Http(response.StatusCode, response.ReasonPhrase ?? "Error"));
             using var stream = await response.Content.ReadAsStreamAsync(ct);
             var value = await JsonSerializer.DeserializeAsync(stream, outputTypeInfo, ct);
             return value is not null

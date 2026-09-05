@@ -24,7 +24,7 @@ partial class OpencodeClient
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync(ct);
-                return Result<McpStatusInfo>.Failure(ApiError.Http((int)response.StatusCode, body));
+                return Result<McpStatusInfo>.Failure(ApiError.Http(response.StatusCode, body));
             }
             using var stream = await response.Content.ReadAsStreamAsync(ct);
             var value = await JsonSerializer.DeserializeAsync(stream, AppJsonContext.Default.McpStatusInfo, ct);

@@ -1,13 +1,18 @@
+using System.Net;
+
 namespace UnoVibe.Integration;
 
 /// <summary>
 /// Error returned by the opencode server API. Carries the HTTP status code (0 for
 /// network-level failures) and a human-readable message suitable for display.
 /// </summary>
-public readonly record struct ApiError(int StatusCode, string Message)
+public readonly record struct ApiError(HttpStatusCode StatusCode, string Message)
 {
     public static ApiError Network(string message) => new(0, message);
-    public static ApiError Http(int statusCode, string message) => new(statusCode, message);
+    public static ApiError Http(HttpStatusCode statusCode, string message) => new(statusCode, message);
+
+    public override string ToString() => DisplayMessage;
+    public string DisplayMessage => $"{(int)StatusCode}: {Message}";
 }
 
 /// <summary>
@@ -70,6 +75,21 @@ public readonly record struct Result<T>
     {
         if (IsSuccess) { value = _value!; return true; }
         value = default!;
+        return false;
+    }
+    /// <summary>
+    /// Attempts to extract the value. Returns <c>true</c> when the call succeeded and
+    /// <paramref name="value"/> is populated; returns <c>false</c> on failure.
+    /// </summary>
+    public bool TryGetValue(out T value, out ApiError error)
+    {
+        if (IsSuccess) {
+            value = _value!;
+            error = default;
+            return true;
+        }
+        value = default!;
+        error = _error;
         return false;
     }
 
