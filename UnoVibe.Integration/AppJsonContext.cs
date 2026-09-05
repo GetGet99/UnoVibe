@@ -54,6 +54,7 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(QuestionOption))]
 [JsonSerializable(typeof(QuestionToolInfo))]
 [JsonSerializable(typeof(MessageWithParts))]
+[JsonSerializable(typeof(OpencodeEvent))]
 [JsonSerializable(typeof(List<MessageWithParts>))]
 [JsonSerializable(typeof(List<AgentInfo>))]
 [JsonSerializable(typeof(List<CommandInfo>))]

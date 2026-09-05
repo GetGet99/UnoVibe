@@ -35,8 +35,8 @@ public sealed partial class OpencodeClient
         }
     }
 
-    public string BaseUrl { get; }
-    public HttpClient Http { get; }
+    string BaseUrl { get; }
+    HttpClient Http { get; }
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
