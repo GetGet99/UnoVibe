@@ -40,7 +40,7 @@ public struct ReasoningTime
     public string LoadedFiles = "";
     public string MatchCount = "";
     public string TodoJson = "";
-    public string QuestionJson = "";
+    public `List<UnoVibe.Integration.QuestionInfo>` Questions = `[]`;
     public string AnswerJson = "";
     public string PatchJson = "";
     public string QuestionRequestId = "";

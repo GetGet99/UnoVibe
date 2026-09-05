@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using System.Collections.ObjectModel;
 using UnoVibe.Models;
 using UnoVibe.Services;
+using UnoVibe.Integration;
 
 namespace UnoVibe.Pages.Chat;
 
@@ -22,6 +23,7 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
+    using UnoVibe.Integration;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -279,10 +281,9 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
         Status = "";
         try
         {
-            var list = await client.GetProvidersAsync();
-            if (list is null)
+            if (!(await client.GetProvidersAsync()).TryGetValue(out var list, out var error))
             {
-                LoadError = "Could not load providers.";
+                LoadError = $"Could not load providers.\n{error.DisplayMessage}";
                 return;
             }
             var connected = new HashSet<string>(list.Connected ?? new List<string>());
@@ -294,11 +295,10 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                 .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase);
             foreach (var row in rows) Providers.Add(row);
 
-            _methodsResult = await client.GetProviderAuthMethodsAsync();
-        }
-        catch (Exception ex)
-        {
-            LoadError = ex.Message;
+            if (!(await client.GetProviderAuthMethodsAsync()).TryGetValue(out _methodsResult, out var error1))
+            {
+                LoadError = $"Could not load provider auth methods.\n{error1}";
+            }
         }
         finally
         {
@@ -517,7 +517,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                 }
                 ProviderId = providerId;
                 ProviderName = providerId;
-                await client.SetAuthAsync(providerId, ApiKey.Trim());
+                await client.SetAuthAsync(providerId, new() { Key = ApiKey.Trim() });
                 await FinishAsync();
                 return;
             }
@@ -531,14 +531,18 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                     StatusError = true;
                     return;
                 }
-                await client.SetAuthAsync(ProviderId, ApiKey.Trim(), inputs.Count > 0 ? inputs : null);
+                await client.SetAuthAsync(ProviderId, new() { Key = ApiKey.Trim(), Metadata = inputs.Count > 0 ? inputs : null });
                 await FinishAsync();
                 return;
             }
 
             // OAuth: authorize returns the URL + whether a code is needed; the callback completes it on page 3.
-            var result = await client.AuthorizeOAuthAsync(ProviderId, MethodIndex, inputs.Count > 0 ? inputs : null);
-            if (result is null)
+            if (!(await client.AuthorizeOAuthAsync(ProviderId, new() { Method = MethodIndex, Inputs = inputs.Count > 0 ? inputs : null })).TryGetValue(out var result, out var error))
+            {
+                Status = $"Authorization failed. Try again.\n{error.DisplayMessage}";
+                StatusError = true;
+                return;
+            } else if (result is null)
             {
                 Status = "Authorization failed. Try again.";
                 StatusError = true;
@@ -577,7 +581,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                 StatusError = true;
                 return;
             }
-            await client.CompleteOAuthAsync(ProviderId, MethodIndex, OauthNeedsCode ? Code.Trim() : null);
+            await client.CompleteOAuthAsync(ProviderId, new() { Method = MethodIndex, Code = OauthNeedsCode ? Code.Trim() : null });
             await FinishAsync();
         }
         catch (Exception ex)
@@ -634,7 +638,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
             p.Id.Contains(q, StringComparison.OrdinalIgnoreCase));
     }
 
-    private Dictionary<string, ProviderAuthMethod[]> _methodsResult = new();
+    private Dictionary<string, Integration.ProviderAuthMethod[]> _methodsResult = new();
 }
 
 /// <summary>A row in the provider list: id, display name, and whether a credential is stored.</summary>

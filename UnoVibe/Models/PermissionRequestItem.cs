@@ -23,6 +23,35 @@ public partial class PermissionRequestItem
     public string ToolMessageId { get; set; } = "";
     public string ToolCallId { get; set; } = "";
 
+    public static PermissionRequestItem From(Integration.PermissionRequestItem theirs)
+    {
+        var permission = theirs.Permission;
+        var item = new PermissionRequestItem
+        {
+            Id = theirs.Id,
+            SessionId = theirs.SessionId,
+            Permission = theirs.Permission,
+            Patterns = theirs.Patterns,
+            Always = theirs.Always
+        };
+
+        if (theirs.Tool is not null)
+        {
+            item.ToolMessageId = theirs.Tool.MessageId;
+            item.ToolCallId = theirs.Tool.CallId;
+        }
+        var metadata = theirs.Metadata;
+
+        var meta = new Dictionary<string, JsonElement>();
+        if (metadata.ValueKind == JsonValueKind.Object)
+            foreach (var p in metadata.EnumerateObject()) meta[p.Name] = p.Value;
+
+        (item.Title, item.Body) = Describe(permission, meta, item.Patterns);
+
+        item.PatternsText = string.Join("\n", item.Patterns.Where(p => p.Length > 0).Select(p => "• " + p));
+        item.AlwaysText = string.Join("\n", item.Always.Where(p => p.Length > 0).Select(p => "• " + p));
+        return item;
+    }
     public static PermissionRequestItem FromJson(JsonElement request)
     {
         var permission = GetString(request, "permission");

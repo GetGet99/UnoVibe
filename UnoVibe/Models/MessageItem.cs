@@ -1,3 +1,5 @@
+using UnoVibe.Services;
+
 namespace UnoVibe.Models;
 
 public partial class MessageItem

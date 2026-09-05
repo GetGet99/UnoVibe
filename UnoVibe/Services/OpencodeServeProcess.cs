@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using UnoVibe.Integration;
 
 namespace UnoVibe.Services;
 

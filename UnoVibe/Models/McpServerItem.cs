@@ -1,12 +1,5 @@
 namespace UnoVibe.Models;
 
-/// <summary>Raw server-reported MCP status entry (name → this) from <c>GET /mcp</c>.</summary>
-public sealed record McpServerInfo
-{
-    public string Status { get; init; } = "";
-    public string Error { get; init; } = "";
-}
-
 /// <summary>
 /// An MCP server's runtime status as reported by <c>GET /mcp</c>. Status is per
 /// workspace directory (instance), not per session: all sessions in a directory

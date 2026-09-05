@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using UnoVibe.Models;
-
+using OpencodeClient = UnoVibe.Integration.OpencodeClient;
+using OpencodeEvent = UnoVibe.Integration.OpencodeEvent;
 namespace UnoVibe.Services;
 
 /// <summary>
@@ -267,14 +269,14 @@ public sealed partial class ChatStore : IDisposable
         var ct = cts.Token;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
 
-        _ = Task.Run(() => EventStreamReader.ReadAsync(_client.Http, $"{_client.BaseUrl}/event", _events.Writer, ct));
+        _ = Task.Run(() => _client.ReadEventAsync(_events.Writer, ct));
         _ = Task.Run(() => PumpAsync(ct));
         _ = Task.Run(() => McpPollLoopAsync(ct));
 
         try
         {
-            var healthy = await _client.HealthAsync(ct);
-            if (healthy)
+            var healthResult = await _client.HealthAsync(ct);
+            if (healthResult.GetOr(false))
             {
                 ConnectionStatus = "Connected";
                 if (ServeProcess is not null)
@@ -285,17 +287,20 @@ public sealed partial class ChatStore : IDisposable
                 else
                 {
                     // URL connection: fetch the server's default directory.
-                    var dir = await _client.GetDirectoryAsync(ct);
-                    if (dir is { Length: > 0 })
+                    var path = (await _client.GetPathAsync(ct)).GetOrThrow();
+                    if (path.Directory is { Length: > 0 } dir)
                     {
                         ServerDirectory = dir;
                         DisplayLabel = $"{_baseUrl} - {dir}";
                     }
                 }
             }
-            else if (_client.LastHealthStatus == System.Net.HttpStatusCode.Unauthorized)
+            else if (!healthResult.IsSuccess && healthResult.Error.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                ConnectionStatus = "Error: unauthorized - check the server password";
+                if (healthResult.Error.StatusCode is System.Net.HttpStatusCode.Unauthorized)
+                    ConnectionStatus = "Error: unauthorized - check the server password";
+                else
+                    ConnectionStatus = $"Error: {healthResult.Error.Message}";
             }
             else
             {
@@ -332,12 +337,25 @@ public sealed partial class ChatStore : IDisposable
         {
             // Lazy session creation: no title is passed (null) so the server assigns a
             // timestamped default title and auto-generates a name on the first prompt.
-            var id = await _client.CreateSessionAsync(null, _pendingDirectory, Active.Mode, Active.ProviderId, Active.ModelId, Active.Variant) ?? "";
-            _pendingDirectory = null;
-            if (id.Length > 0)
+            if (!(await _client.CreateSessionAsync(new()
             {
-                Active.SessionId = id;
-                _sessionStores[id] = Active;
+                Title = null,
+                Agent = Active.Mode,
+                Model = new()
+                {
+                    ProviderID = Active.ProviderId,
+                    Id = Active.ModelId,
+                    Variant = Active.Variant
+                },
+            }, _pendingDirectory)).TryGetValue(out var session, out var error))
+            {
+                ShowError(error, "Could not create session");
+            }
+            _pendingDirectory = null;
+            if (session.Id.Length > 0)
+            {
+                Active.SessionId = session.Id;
+                _sessionStores[session.Id] = Active;
             }
         }
         finally
@@ -389,26 +407,29 @@ public sealed partial class ChatStore : IDisposable
         {
             // Merge the default list with each opened folder's sessions (they live in separate
             // server instances), deduped by id.
-            var merged = new List<SessionInfo>();
+            var merged = new List<Integration.SessionInfo>();
             var seen = new HashSet<string>();
-            foreach (var session in await _client.ListSessionsAsync(ct))
+            if (!(await _client.ListSessionsAsync(ct)).TryGetValue(out var sessions, out var error))
+            {
+                ShowError(error, "Could not refresh sessions");
+                return;
+            }
+            foreach (var session in sessions)
             {
                 seen.Add(session.Id);
                 merged.Add(session);
             }
             foreach (var dir in _openedFolders.Keys.ToList())
             {
-                try
+                if (!(await _client.ListSessionsAsync(ct, dir)).TryGetValue(out var extra, out var error1))
                 {
-                    var extra = await _client.ListSessionsAsync(ct, dir);
-                    foreach (var session in extra)
-                    {
-                        if (seen.Add(session.Id)) merged.Add(session);
-                    }
+                    ShowError(error1, $"Could not refresh sessions for {dir}");
+                    // do not break everything
+                    continue;
                 }
-                catch
+                foreach (var session in extra)
                 {
-                    // One unreachable/unlisted folder must not break the whole refresh.
+                    if (seen.Add(session.Id)) merged.Add(session);
                 }
             }
 
@@ -430,9 +451,10 @@ public sealed partial class ChatStore : IDisposable
                 }
                 else
                 {
-                    ApplySessionFlags(session);
-                    _sessionsById[session.Id] = session;
-                    Sessions.Add(session);
+                    var sessionModel = SessionInfo.From(session);
+                    ApplySessionFlags(sessionModel);
+                    _sessionsById[session.Id] = sessionModel;
+                    Sessions.Add(sessionModel);
                 }
             }
 
@@ -466,18 +488,16 @@ public sealed partial class ChatStore : IDisposable
     /// </summary>
     public async Task RefreshSessionStatusAsync(CancellationToken ct = default)
     {
-        try
+        // Reset every session's Status first, then re-apply the server's poll — the other
+        // flag fields (unread/outcome/counters) must survive this refresh.
+        foreach (var flags in _sessionFlags.Values) flags.Status = null;
+        if (!(await _client.GetSessionStatusAsync(ct)).TryGetValue(out var statuses, out var error))
         {
-            // Reset every session's Status first, then re-apply the server's poll — the other
-            // flag fields (unread/outcome/counters) must survive this refresh.
-            foreach (var flags in _sessionFlags.Values) flags.Status = null;
-            foreach (var kv in await _client.GetSessionStatusAsync(ct)) Flags(kv.Key).Status = kv.Value;
-            foreach (var s in Sessions) ApplySessionFlags(s);
+            ShowError(error, "Could not refresh session status");
+            return;
         }
-        catch (Exception ex)
-        {
-            ShowError(ex.Message, "Could not refresh session status");
-        }
+        foreach (var kv in statuses) Flags(kv.Key).Status = kv.Value.Type;
+        foreach (var s in Sessions) ApplySessionFlags(s);
     }
 
     /// <summary>
@@ -489,25 +509,22 @@ public sealed partial class ChatStore : IDisposable
     public async Task RefreshMcpStatusAsync(CancellationToken ct = default)
     {
         var directory = ActiveDirectory();
-        try
+        if (!(await _client.GetMcpStatusAsync(directory, ct)).TryGetValue(out var status, out var error))
         {
-            var status = await _client.GetMcpStatusAsync(directory, ct);
-            ApplyMcpStatus(status);
-            _mcpDirectory = directory;
-            McpDirectory = directory.Length > 0 ? directory : "(default)";
-            var connected = status.Values.Count(s => s.Status == "connected");
-            var inactive = status.Values.Count(s => s.Status == "disabled");
-            var bad = status.Values.Count(s => s.Status is "failed" or "needs_auth" or "needs_client_registration");
-            var summaryParts = new List<string>();
-            if (connected > 0) summaryParts.Add($"{connected} active");
-            if (inactive > 0) summaryParts.Add($"{inactive} inactive");
-            if (bad > 0) summaryParts.Add($"{bad} error");
-            McpSummary = summaryParts.Count > 0 ? string.Join(", ", summaryParts) : "none";
+            ShowError(error, "Could not refresh MCP status");
+            return;
         }
-        catch (Exception ex)
-        {
-            ShowError(ex.Message, "Could not refresh MCP status");
-        }
+        ApplyMcpStatus(status);
+        _mcpDirectory = directory;
+        McpDirectory = directory.Length > 0 ? directory : "(default)";
+        var connected = status.Values.Count(s => s.Status == "connected");
+        var inactive = status.Values.Count(s => s.Status == "disabled");
+        var bad = status.Values.Count(s => s.Status is "failed" or "needs_auth" or "needs_client_registration");
+        var summaryParts = new List<string>();
+        if (connected > 0) summaryParts.Add($"{connected} active");
+        if (inactive > 0) summaryParts.Add($"{inactive} inactive");
+        if (bad > 0) summaryParts.Add($"{bad} error");
+        McpSummary = summaryParts.Count > 0 ? string.Join(", ", summaryParts) : "none";
     }
 
     /// <summary>
@@ -517,7 +534,7 @@ public sealed partial class ChatStore : IDisposable
     /// (and any in-flight toggle state) with Status/Error updated, and new ones are
     /// inserted in name order — no Clear+re-Add rebuild.
     /// </summary>
-    private void ApplyMcpStatus(Dictionary<string, McpServerInfo> status)
+    private void ApplyMcpStatus(Dictionary<string, Integration.McpStatusInfo> status)
     {
         for (var i = McpServers.Count - 1; i >= 0; i--)
         {
@@ -531,10 +548,10 @@ public sealed partial class ChatStore : IDisposable
             if (_mcpServersByName.TryGetValue(kv.Key, out var existing))
             {
                 existing.Status = kv.Value.Status;
-                existing.Error = kv.Value.Error;
+                existing.Error = kv.Value.Error ?? "";
                 continue;
             }
-            var item = new McpServerItem(Name: kv.Key, Error: kv.Value.Error) { Status = kv.Value.Status };
+            var item = new McpServerItem(Name: kv.Key, Error: kv.Value.Error ?? "") { Status = kv.Value.Status };
             _mcpServersByName[kv.Key] = item;
             var index = 0;
             while (index < McpServers.Count && StringComparer.OrdinalIgnoreCase.Compare(McpServers[index].Name, kv.Key) < 0) index++;
@@ -571,9 +588,14 @@ public sealed partial class ChatStore : IDisposable
                     Variant = "info",
                     DurationMs = 8000,
                 });
-                var result = await _client.McpAuthenticateAsync(name, directory);
-                if (result.Status == "failed" && result.Error.Length > 0)
-                    ShowError(result.Error, $"MCP {name} auth failed");
+                if (!(await _client.McpAuthenticateAsync(name, directory)).TryGetValue(out var result, out var error))
+                {
+                    ShowError(error, $"MCP {name} auth failed");
+                } else
+                {
+                    if (result.Status == "failed" && result.Error?.Length > 0)
+                        ShowError(result.Error, $"MCP {name} auth failed");
+                }
             }
             else
             {
@@ -675,24 +697,16 @@ public sealed partial class ChatStore : IDisposable
         if (_commandNames is null || _skillNames is null || _commandNamesDirectory != directory
             || now - _commandNamesFetchedMs > CommandCacheTtlMs)
         {
-            try
+            var commands = await _client.GetCommandsAsync(directory);
+            _commandNames = new HashSet<string>(StringComparer.Ordinal);
+            _skillNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var command in commands.GetOr(static () => []))
             {
-                var commands = await _client.GetCommandsAsync(directory);
-                _commandNames = new HashSet<string>(StringComparer.Ordinal);
-                _skillNames = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var command in commands)
-                {
-                    if (command.Source == "skill") _skillNames.Add(command.Name);
-                    else _commandNames.Add(command.Name);
-                }
-                _commandNamesFetchedMs = now;
-                _commandNamesDirectory = directory;
+                if (command.Source == "skill") _skillNames.Add(command.Name);
+                else _commandNames.Add(command.Name);
             }
-            catch
-            {
-                _commandNames ??= new HashSet<string>(StringComparer.Ordinal);
-                _skillNames ??= new HashSet<string>(StringComparer.Ordinal);
-            }
+            _commandNamesFetchedMs = now;
+            _commandNamesDirectory = directory;
         }
         if (_commandNames.Contains(name)) return true;
         return SettingsStore.ExpandSkills && _skillNames.Contains(name);
@@ -744,12 +758,39 @@ public sealed partial class ChatStore : IDisposable
     /// touched. Directory is only replaced when non-empty (events for known sessions always
     /// carry it).
     /// </summary>
+    private static void ApplySessionUpdate(SessionInfo existing, Integration.SessionInfo fresh)
+    {
+        Debug.Assert(existing.Id == fresh.Id);
+        existing.Title = fresh.Title;
+        if (fresh.Directory.Length > 0) existing.Directory = fresh.Directory;
+        if (fresh.Time is not null) existing.Updated = fresh.Time.Updated;
+        existing.Agent = fresh.Agent;
+        if (fresh.Model is not null)
+        {            
+            existing.ModelId = fresh.Model.Id;
+            existing.ModelProviderId = fresh.Model.ProviderId;
+            existing.ModelVariant = fresh.Model.Variant;
+        }
+        existing.Cost = fresh.Cost;
+        if (fresh.Tokens is not null)
+        {
+            existing.TokensInput = fresh.Tokens.Input;
+            existing.TokensOutput = fresh.Tokens.Output;
+            existing.TokensReasoning = fresh.Tokens.Reasoning;
+            if (fresh.Tokens.Cache is not null)
+            {                
+                existing.TokensCacheRead = fresh.Tokens.Cache.Read;
+                existing.TokensCacheWrite = fresh.Tokens.Cache.Write;
+            }
+        }
+    }
     private static void ApplySessionUpdate(SessionInfo existing, SessionInfo fresh)
     {
+        Debug.Assert(existing.Id == fresh.Id);
         existing.Title = fresh.Title;
+        if (fresh.Directory.Length > 0) existing.Directory = fresh.Directory;
         existing.Updated = fresh.Updated;
         existing.Agent = fresh.Agent;
-        if (fresh.Directory.Length > 0) existing.Directory = fresh.Directory;
         if (fresh.ModelId.Length > 0)
         {
             existing.ModelId = fresh.ModelId;
@@ -848,15 +889,14 @@ public sealed partial class ChatStore : IDisposable
     {
         foreach (var directory in directories)
         {
-            try
+            if (_groupsByDirectory.TryGetValue(directory, out var group))
             {
-                var branch = await _client.GetBranchAsync(directory);
-                if (_groupsByDirectory.TryGetValue(directory, out var group))
-                    group.Branch = branch ?? "";
-            }
-            catch (Exception ex)
-            {
-                ShowError(ex.Message, "Could not read git branch");
+                if (!(await _client.GetVCSInfoAsync(directory)).TryGetValue(out var vcs, out var error))
+                {
+                    ShowError(error, $"Could not read VCS branch for directory {directory}");
+                    continue;
+                }
+                group.Branch = vcs.Branch ?? "";
             }
         }
     }
@@ -887,8 +927,7 @@ public sealed partial class ChatStore : IDisposable
         if (_client is null || _folderStreamCts.ContainsKey(directory)) return;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_cts?.Token ?? CancellationToken.None);
         _folderStreamCts[directory] = cts;
-        var url = $"{_client.BaseUrl}/event?directory={Uri.EscapeDataString(directory)}";
-        _ = Task.Run(() => EventStreamReader.ReadAsync(_client.Http, url, _events.Writer, cts.Token));
+        _ = Task.Run(() => _client.ReadEventAsync(_events.Writer, cts.Token, directory));
     }
 
     /// <summary>
@@ -968,18 +1007,19 @@ public sealed partial class ChatStore : IDisposable
         }
         else
         {
-            ApplySessionFlags(session);
-            Sessions.Add(session);
-            _sessionsById[session.Id] = session;
+            var sessionModel = SessionInfo.From(session);
+            ApplySessionFlags(sessionModel);
+            Sessions.Add(sessionModel);
+            _sessionsById[session.Id] = sessionModel;
             // Subagents are kept in Sessions (lookup/unread) but filtered out of the sidebar
             // groups, so only a new root session needs a directory-group reconcile.
-            if (!session.IsSubagent) ReconcileDirectoryGroups();
+            if (!sessionModel.IsSubagent) ReconcileDirectoryGroups();
             ReconcileActiveSubagents();
         }
 
         // Keep any cached store (the active one included) in sync: title renames, the subagent
         // parent link, model settings, and the revert marker (the server omits "revert" on unrevert).
-        GetStore(session.Id)?.ApplySessionInfo(session, info);
+        GetStore(session.Id)?.ApplySessionInfo(SessionInfo.From(session), info);
     }
 
     /// <summary>
@@ -1014,41 +1054,8 @@ public sealed partial class ChatStore : IDisposable
         DismissToast();
     }
 
-    private static SessionInfo SessionInfoFromJson(JsonElement item)
-    {
-        var info = new SessionInfo
-        {
-            Id = item.GetStringProperty("id"),
-            Title = item.GetStringProperty("title"),
-            Directory = item.GetStringProperty("directory"),
-            ProjectId = item.GetStringProperty("projectID"),
-            Path = item.GetStringProperty("path"),
-            Agent = item.GetStringProperty("agent"),
-            ParentId = item.GetStringProperty("parentID"),
-        };
-        if (item.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.Object)
-        {
-            info.ModelId = model.GetStringProperty("id");
-            info.ModelProviderId = model.GetStringProperty("providerID");
-            info.ModelVariant = model.GetStringProperty("variant");
-        }
-        if (item.TryGetProperty("time", out var time))
-            info.Updated = time.TryGetProperty("updated", out var updated) ? updated.GetInt64() : 0;
-        if (item.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number)
-            info.Cost = cost.GetDouble();
-        if (item.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
-        {
-            info.TokensInput = tokens.GetInt64Property("input");
-            info.TokensOutput = tokens.GetInt64Property("output");
-            info.TokensReasoning = tokens.GetInt64Property("reasoning");
-            if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
-            {
-                info.TokensCacheRead = cache.GetInt64Property("read");
-                info.TokensCacheWrite = cache.GetInt64Property("write");
-            }
-        }
-        return info;
-    }
+    private static Integration.SessionInfo SessionInfoFromJson(JsonElement item)
+        => item.Deserialize(AppJsonContext.Default.SessionInfo)!;
 
     /// <summary>
     /// Refreshes the shared mode/model option lists and re-applies the active session's
@@ -1058,13 +1065,63 @@ public sealed partial class ChatStore : IDisposable
     {
         try
         {
-            var modes = await _client.GetModesAsync(ct);
+            if (!(await _client.GetAgentsAsync(ct)).TryGetValue(out var agents, out var error))
+            {
+                ShowError(error, "Could not load modes");
+                return;
+            }
             ModeOptions.Clear();
-            foreach (var mode in modes) ModeOptions.Add(mode);
+            foreach (var agent in agents)
+            {
+                if (agent.Mode != "primary") continue;
+                if (agent.Hidden) continue;
+                var name = agent.Name;
+                if (name.Length > 0 && !ModeOptions.Contains(name)) ModeOptions.Add(name);
+            }
             if (Active.Mode.Length == 0 || !ModeOptions.Contains(Active.Mode)) Active.Mode = "build";
 
-            var models = await _client.GetModelsAsync(ct);
+            if (!(await _client.GetProvidersAsync(ct)).TryGetValue(out var providers, out var error1))
+            {
+                ShowError(error1, "Could not load models");
+                return;
+            }
             ModelOptions.Clear();
+            
+            if (providers.Connected is null)
+            {
+                ShowError("Could not load models");
+                return;
+            }
+            if (providers.All is null)
+            {
+                ShowError("Could not load models");
+                return;
+            }
+            var connectedIds = new HashSet<string>(providers.Connected);
+
+            var models = new List<ModelOption>();
+
+            foreach (var provider in providers.All)
+            {
+                if (!connectedIds.Contains(provider.Id)) continue;
+                if (provider.Models is null) continue;
+                foreach (var (id, model) in provider.Models)
+                {
+                    var variants = new List<string>();
+                    if (model.Variants is null) continue;
+                    foreach (var varient in model.Variants.Keys) variants.Add(varient);
+                    var name = model.Name;
+                    models.Add(new ModelOption
+                    {
+                        ProviderId = provider.Id,
+                        Id = id,
+                        Name = model.Name.Length > 0 ? model.Name : id,
+                        Variants = [.. variants],
+                        LimitContext = model.Limit?.Context ?? 0,
+                    });
+                }
+            }
+
             foreach (var model in models) ModelOptions.Add(model);
 
             // Prefer a root session (not a subagent) when guessing the model for new chats.
@@ -1202,22 +1259,21 @@ public sealed partial class ChatStore : IDisposable
     public async Task<string?> ForkFromMessageAsync(MessageItem message)
     {
         if (Active.SessionId.Length == 0 || message is null) return null;
-        try
+        var forkedResult = await _client.ForkSessionAsync(Active.SessionId, new()
         {
-            var forked = await _client.ForkSessionAsync(Active.SessionId, message.Id);
-            if (forked is null || forked.Id.Length == 0) return null;
-
-            await SwitchSessionAsync(forked.Id);
-
-            Active.ForkPromptText = SessionStore.PromptTextFromMessage(message);
-            Active.StageImagesFromMessage(message);
-            return forked.Id;
-        }
-        catch (Exception ex)
+            MessageID = message.Id
+        });
+        if (!forkedResult.TryGetValue(out var forked, out var error))
         {
-            ShowError(ex.Message, "Fork failed");
-            return null;
+            ShowError(error, "Fork failed");
         }
+        if (forked is null || forked.Id.Length == 0) return null;
+
+        await SwitchSessionAsync(forked.Id);
+
+        Active.ForkPromptText = SessionStore.PromptTextFromMessage(message);
+        Active.StageImagesFromMessage(message);
+        return forked.Id;
     }
 
     /// <summary>
@@ -1230,19 +1286,15 @@ public sealed partial class ChatStore : IDisposable
     public async Task<string?> ForkFullSessionAsync()
     {
         if (Active.SessionId.Length == 0) return null;
-        try
+        var forkedResult = await _client.ForkSessionAsync(Active.SessionId, new());
+        if (!forkedResult.TryGetValue(out var forked, out var error))
         {
-            var forked = await _client.ForkSessionAsync(Active.SessionId);
-            if (forked is null || forked.Id.Length == 0) return null;
+            ShowError(error, "Fork failed");
+        }
+        if (forked is null || forked.Id.Length == 0) return null;
 
-            await SwitchSessionAsync(forked.Id);
-            return forked.Id;
-        }
-        catch (Exception ex)
-        {
-            ShowError(ex.Message, "Fork failed");
-            return null;
-        }
+        await SwitchSessionAsync(forked.Id);
+        return forked.Id;
     }
 
     private async Task PumpAsync(CancellationToken ct)
@@ -1436,6 +1488,15 @@ public sealed partial class ChatStore : IDisposable
             DurationMs = duration > 0 ? (int)duration : 5000,
         });
     }
+
+    /// <summary>
+    /// Shows an error toast. The one sanctioned way to surface a failure to the user —
+    /// <see cref="ConnectionStatus"/> is reserved for the connect lifecycle ("Connecting...",
+    /// "Connected") because the sidebar footer renders it in an unreadably small strip
+    /// (see AGENTS.md "Contribution rules and banned patterns").
+    /// </summary>
+    public void ShowError(Integration.ApiError message, string title = "Error")
+        => ShowError(message.DisplayMessage, title);
 
     /// <summary>
     /// Shows an error toast. The one sanctioned way to surface a failure to the user —
@@ -1677,10 +1738,14 @@ public sealed partial class ChatStore : IDisposable
         var directory = PermissionDirectory(requestId);
         try
         {
-            await _client.ReplyPermissionAsync(requestId, reply, message, directory);
+            await _client.ReplyPermissionAsync(requestId, new()
+            {
+                Reply = reply,
+                Message = message
+            }, directory);
             RemovePermissionRequest(requestId);
         }
-        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             // The request is gone server-side without a permission.replied event (answered
             // elsewhere, or its turn/instance was aborted/disposed) — drop the stale card so the
@@ -1745,20 +1810,20 @@ public sealed partial class ChatStore : IDisposable
     {
         try
         {
-            var root = await _client.GetPendingQuestionsAsync(ActiveDirectory());
-            if (root.ValueKind != JsonValueKind.Array) return;
+            if (!(await _client.GetPendingQuestionsAsync(ActiveDirectory())).TryGetValue(out var questions, out var error))
+            {
+                ShowError(error, "Could not sync questions");
+            }
 
             foreach (var flags in _sessionFlags.Values) flags.PendingQuestions = 0;
-            foreach (var question in root.EnumerateArray())
+            foreach (var question in questions)
             {
-                var sessionId = question.GetStringProperty("sessionID");
-                if (sessionId.Length == 0) continue;
-                Flags(sessionId).PendingQuestions++;
+                Flags(question.SessionId).PendingQuestions++;
 
-                var requestId = question.GetStringProperty("id");
-                if (requestId.Length > 0) _questionDirectories[requestId] = DirectoryOf(sessionId);
+                var requestId = question.Id;
+                if (requestId.Length > 0) _questionDirectories[question.Id] = DirectoryOf(question.SessionId);
 
-                GetStore(sessionId)?.AttachQuestionRequest(question);
+                GetStore(question.SessionId)?.AttachQuestionRequest(question);
             }
             RefreshSessionFlags();
         }
@@ -1781,7 +1846,12 @@ public sealed partial class ChatStore : IDisposable
     {
         try
         {
-            var requests = await _client.GetPendingPermissionsAsync(ActiveDirectory());
+            var directory = ActiveDirectory();
+            if (!(await _client.GetPendingPermissionsAsync(ActiveDirectory())).TryGetValue(out var requests, out var error))
+            {
+                ShowError(error, $"Could not sync approvals for directory {directory}");
+                return;
+            }
 
             foreach (var flags in _sessionFlags.Values) flags.PendingPermissions = 0;
             foreach (var request in requests)
@@ -1793,7 +1863,7 @@ public sealed partial class ChatStore : IDisposable
             _permissions.Clear();
             ActivePermission = null;
             foreach (var request in requests)
-                AddPermissionRequest(request);
+                AddPermissionRequest(PermissionRequestItem.From(request));
             RefreshSessionFlags();
         }
         catch (Exception ex)
@@ -1807,10 +1877,10 @@ public sealed partial class ChatStore : IDisposable
         var directory = QuestionDirectory(requestId);
         try
         {
-            await _client.ReplyQuestionAsync(requestId, answers, directory);
+            await _client.ReplyQuestionAsync(requestId, new() { Answers = answers }, directory);
             _questionDirectories.Remove(requestId);
         }
-        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             // The request is gone server-side without a question.replied event (answered
             // elsewhere, or its turn/instance was aborted/disposed) — drop the stale entry so the
@@ -1832,7 +1902,7 @@ public sealed partial class ChatStore : IDisposable
             await _client.RejectQuestionAsync(requestId, directory);
             _questionDirectories.Remove(requestId);
         }
-        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _questionDirectories.Remove(requestId);
             ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");

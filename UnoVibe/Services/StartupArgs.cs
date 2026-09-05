@@ -1,3 +1,5 @@
+using UnoVibe.Integration;
+
 namespace UnoVibe.Services;
 
 /// <summary>What the app was asked to open on the command line.</summary>

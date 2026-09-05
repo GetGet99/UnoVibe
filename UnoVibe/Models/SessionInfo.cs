@@ -71,4 +71,40 @@ public sealed partial class SessionInfo
         if (span.TotalDays < 30) return $"{(int)span.TotalDays}d";
         return $"{span.TotalDays / 30:0}mo";
     }
+    public static SessionInfo From(Integration.SessionInfo theirs)
+    {
+        SessionInfo sess = new()
+        {
+            Id = theirs.Id,
+            Title = theirs.Title,
+            Directory = theirs.Directory,
+            ProjectId = theirs.ProjectId,
+            Path = theirs.Path,
+            Agent = theirs.Agent,
+            ParentId = theirs.ParentId,
+            Cost = theirs.Cost
+        };
+        if (theirs.Model is not null)
+        {
+            sess.ModelId = theirs.Model.Id;
+            sess.ModelProviderId = theirs.Model.ProviderId;
+            sess.ModelVariant = theirs.Model.Variant;
+        }
+        if (theirs.Time is not null)
+        {
+            sess.Updated = theirs.Time.Updated;
+        }
+        if (theirs.Tokens is not null)
+        {
+            sess.TokensInput = theirs.Tokens.Input;
+            sess.TokensOutput = theirs.Tokens.Output;
+            sess.TokensReasoning = theirs.Tokens.Reasoning;
+            if (theirs.Tokens.Cache is not null)
+            {
+                sess.TokensCacheRead = theirs.Tokens.Cache.Read;
+                sess.TokensCacheWrite = theirs.Tokens.Cache.Write;
+            }
+        }
+        return sess;
+    }
 }

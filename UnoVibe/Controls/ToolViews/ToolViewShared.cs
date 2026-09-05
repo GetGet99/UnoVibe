@@ -185,24 +185,22 @@ public static class ToolViewShared
         return error.Length > 0 ? error : "Question dismissed";
     }
 
-    public static List<QuestionItem> ParseQuestions(PartItem p) => ParseQuestions(p.QuestionJson, p.AnswerJson);
+    public static List<QuestionItem> ParseQuestions(PartItem p) => ParseQuestions(p.Questions, p.AnswerJson);
 
-    public static List<QuestionItem> ParseQuestions(string questionsJson, string answersJson)
+    public static List<QuestionItem> ParseQuestions(List<Integration.QuestionInfo> questionsInfo, string answersJson)
     {
         var list = new List<QuestionItem>();
-        if (string.IsNullOrEmpty(questionsJson)) return list;
+        if (questionsInfo.Count == 0) return list;
         try
         {
             var answers = ParseAnswers(answersJson);
-            using var doc = JsonDocument.Parse(questionsJson);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
             var i = 0;
-            foreach (var el in doc.RootElement.EnumerateArray())
+            foreach (var qInfo in questionsInfo)
             {
                 var q = new QuestionItem
                 {
-                    Question = GetString(el, "question"),
-                    Header = GetString(el, "header"),
+                    Question = qInfo.Question,
+                    Header = qInfo.Header,
                     Answer = i < answers.Count ? string.Join(", ", answers[i]) : "",
                 };
                 if (q.Question.Length > 0) list.Add(q);

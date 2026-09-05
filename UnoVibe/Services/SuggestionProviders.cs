@@ -1,4 +1,4 @@
-using UnoVibe.Services;
+using UnoVibe.Integration;
 
 namespace UnoVibe.Controls;
 
@@ -146,7 +146,8 @@ public sealed class ServerCommandSuggestionProvider : ISuggestionProvider
             var client = _client();
             if (client is null) return Array.Empty<SuggestionItem>();
 
-            var commands = await client.GetCommandsAsync(_directory(), ct);
+            if (!(await client.GetCommandsAsync(_directory(), ct)).TryGetValue(out var commands))
+                return Array.Empty<SuggestionItem>();
             if (commands.Count == 0) return Array.Empty<SuggestionItem>();
 
             var items = new List<SuggestionItem>(commands.Count);
@@ -165,7 +166,7 @@ public sealed class ServerCommandSuggestionProvider : ISuggestionProvider
                     Kind = isSkill ? "skill" : "command",
                     Text = display,
                     Insert = "/" + command.Name + " ",
-                    Detail = command.Description,
+                    Detail = command.Description ?? "",
                     InputStartOnly = !isSkill,
                 });
             }
@@ -204,10 +205,11 @@ public sealed class ServerSkillSuggestionProvider : ISuggestionProvider
         try
         {
             var client = _client();
-            if (client is null) return Array.Empty<SuggestionItem>();
+            if (client is null) return [];
 
-            var skills = await client.GetSkillsAsync(_directory(), ct);
-            if (skills.Count == 0) return Array.Empty<SuggestionItem>();
+            if (!(await client.GetSkillsAsync(_directory(), ct)).TryGetValue(out var skills))
+                return [];
+            if (skills.Count == 0) return [];
 
             var items = skills.Select(skill => new SuggestionItem
             {
@@ -215,7 +217,7 @@ public sealed class ServerSkillSuggestionProvider : ISuggestionProvider
                 Kind = "skill",
                 Text = "/" + skill.Name,
                 Insert = "/" + skill.Name + " ",
-                Detail = skill.Description,
+                Detail = skill.Description ?? "",
                 InputStartOnly = false,
             }).ToList();
             return SuggestionFilter.Filter(items, query);
@@ -253,9 +255,10 @@ public sealed class ServerFileSuggestionProvider : ISuggestionProvider
         try
         {
             var client = _client();
-            if (client is null) return Array.Empty<SuggestionItem>();
+            if (client is null) return [];
 
-            var entries = await client.FindFilesAsync(query, _directory(), ct: ct);
+            if (!(await client.FindFilesAsync(query, _directory(), ct: ct)).TryGetValue(out var entries))
+                return [];
             var items = entries.Select(entry =>
             {
                 var isDirectory = entry.Type == "directory";
@@ -272,7 +275,7 @@ public sealed class ServerFileSuggestionProvider : ISuggestionProvider
         }
         catch
         {
-            return Array.Empty<SuggestionItem>();
+            return [];
         }
     }
 }

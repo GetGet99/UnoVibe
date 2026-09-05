@@ -1,6 +1,7 @@
 using UnoVibe;
 using UnoVibe.Services;
 using UnoVibe.Models;
+using UnoVibe.Integration;
 
 namespace UnoVibe.Pages.Connect;
 

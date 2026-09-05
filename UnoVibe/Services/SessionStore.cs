@@ -383,7 +383,7 @@ public sealed partial class SessionStore
         if (SessionId.Length == 0 || title.Length == 0) return;
         try
         {
-            await Router.Client.UpdateSessionTitleAsync(SessionId, title);
+            await Router.Client.UpdateSessionTitleAsync(SessionId, new() { Title = title });
             SessionTitle = title;
             var session = Router.GetSession(SessionId);
             if (session is not null) session.Title = title;
@@ -429,7 +429,17 @@ public sealed partial class SessionStore
         IsBusy = true;
         ResetTurnFlags();
         var images = PendingImages.ToArray();
-        await Router.Client.SendPromptAsync(SessionId, text, images, Mode, ProviderId, ModelId, Variant);
+        await Router.Client.SendPromptAsync(SessionId, new()
+        {
+            Parts = [ToPromptPart(text), ..images.Select(ToPromptPart)],
+            Agent = Mode,
+            Model = new()
+            {
+                ProviderID = ProviderId,
+                ModelID = ModelId
+            },
+            Variant = Variant
+        });
         // Attachments travel with the prompt, so stage them off once the message is stored.
         PendingImages.Clear();
         PendingImageCount = 0;
@@ -487,14 +497,42 @@ public sealed partial class SessionStore
         {
             try
             {
-                await router.Client!.SendCommandAsync(sessionId, name, arguments, images,
-                    mode, providerId, modelId, variant);
+                await router.Client!.SendCommandAsync(sessionId, new()
+                {
+
+                    Command = name,
+                    Arguments = arguments,
+                    Parts = images.Length is 0 ? null : [.. images.Select(ToPromptPart)],
+                    Agent = mode,
+                    Model = $"{providerId}/{modelId}",
+                    Variant = variant
+                });
             }
             catch (Exception ex)
             {
                 router.PostToUi(() => router.ShowError(ex.Message, "Command failed"));
             }
         });
+    }
+
+    private static Integration.PromptPart ToPromptPart(string text)
+    {
+        return new Integration.PromptPart
+        {
+            Type = "text",
+            Text = text
+        };
+    }
+
+    private static Integration.PromptPart ToPromptPart(ImageAttachment image)
+    {
+        return new Integration.PromptPart
+        {
+            Type = "file",
+            Mime = image.Mime,
+            Filename = image.FileName,
+            Url = image.DataUrl,
+        };
     }
 
     /// <summary>
@@ -529,11 +567,21 @@ public sealed partial class SessionStore
             string mode = Mode;
             string providerId = ProviderId;
             string modelId = ModelId;
+            
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await router.Client!.SendShellAsync(sessionId, command, mode, providerId, modelId);
+                    await router.Client!.SendShellAsync(sessionId, new()
+                    {
+                        Command = command,
+                        Agent = mode,
+                        Model = new()
+                        {
+                            ProviderID = providerId,
+                            ModelID = modelId
+                        }
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -611,12 +659,11 @@ public sealed partial class SessionStore
     {
         try
         {
-            var info = await Router.Client.GetSessionAsync(SessionId);
-            if (info is not null)
+            if ((await Router.Client.GetSessionAsync(SessionId)).TryGetValue(out var info))
             {
                 if (info.Title.Length > 0) SessionTitle = info.Title;
                 if (info.ParentId.Length > 0) ParentSessionId = info.ParentId;
-                ApplySessionSettings(info);
+                ApplySessionSettings(SessionInfo.From(info));
             }
         }
         catch
@@ -640,26 +687,22 @@ public sealed partial class SessionStore
     /// <summary>Fetches and replaces this store's message list from GET /session/:id.</summary>
     private async Task LoadMessagesAsync()
     {
-        try
+        Messages.Clear();
+        _messagesById.Clear();
+        HiddenMessages = 0;
+        if (!(await Router.Client.GetMessagesAsync(SessionId)).TryGetValue(out var messages, out var error))
         {
-            Messages.Clear();
-            _messagesById.Clear();
-            HiddenMessages = 0;
-            var root = await Router.Client.GetMessagesAsync(SessionId);
-            if (root.ValueKind != JsonValueKind.Array) return;
-            foreach (var msg in root.EnumerateArray())
-            {
-                var message = MessageFromJson(msg);
-                if (message is null) continue;
-                _messagesById[message.Id] = message;
-                AppendMessage(message);
-            }
-            UpdateSessionStats();
+            Router.ShowError(error, "Could not load messages");
+            return;
         }
-        catch (Exception ex)
+        foreach (var msg in messages)
         {
-            Router.ShowError(ex.Message, "Could not load messages");
+            var message = MessageFromJson(msg);
+            if (message is null) continue;
+            _messagesById[message.Id] = message;
+            AppendMessage(message);
         }
+        UpdateSessionStats();
     }
 
     /// <summary>
@@ -693,7 +736,7 @@ public sealed partial class SessionStore
         {
             if (IsBusy) await Router.Client.AbortAsync(SessionId);
 
-            await Router.Client.RevertAsync(SessionId, message.Id);
+            await Router.Client.RevertAsync(SessionId, new() { MessageID = message.Id });
 
             RestorePromptFromMessage(message);
             ApplyRevertMarker(message.Id);
@@ -725,7 +768,7 @@ public sealed partial class SessionStore
                 return;
             }
 
-            await Router.Client.RevertAsync(SessionId, next.Id);
+            await Router.Client.RevertAsync(SessionId, new() { MessageID = next.Id });
             ApplyRevertMarker(next.Id);
         }
         catch (Exception ex)
@@ -850,9 +893,13 @@ public sealed partial class SessionStore
         attachment.Preview = await ImageAttachment.DecodeAsync(attachment.Bytes);
     }
 
-    private static MessageItem? MessageFromJson(JsonElement msg)
+    private static MessageItem? MessageFromJson(Integration.MessageWithParts msg)
     {
-        if (!msg.TryGetProperty("info", out var info) || info.GetStringProperty("id").Length == 0) return null;
+        if (msg.Info is null) return null;
+        var info = msg.Info.Value;
+        var parts = msg.Parts;
+
+        if (info.GetStringProperty("id").Length == 0) return null;
         var item = new MessageItem
         {
             Id = info.GetStringProperty("id"),
@@ -860,9 +907,9 @@ public sealed partial class SessionStore
             Agent = info.GetStringProperty("agent"),
         };
         ApplyMessageStats(item, info);
-        if (msg.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
+        if (parts is not null)
         {
-            foreach (var part in parts.EnumerateArray())
+            foreach (var part in parts)
             {
                 if (part.GetStringProperty("type") is "step-start" or "step-finish") continue;
                 var p = PartFromJson(part);
@@ -1269,18 +1316,18 @@ public sealed partial class SessionStore
     /// (requestIDs only exist in the live question.asked event and the server's in-memory
     /// pending map, not in the persisted message parts).
     /// </summary>
-    internal void AttachQuestionRequest(JsonElement question)
+    internal void AttachQuestionRequest(Integration.PendingQuestion question)
     {
-        if (!question.TryGetProperty("tool", out var tool)) return;
-        var messageId = tool.GetStringProperty("messageID");
-        var callId = tool.GetStringProperty("callID");
+        if (question.Tool is null) return;
+        var messageId = question.Tool.MessageId;
+        var callId = question.Tool.CallId;
         if (messageId.Length == 0 || callId.Length == 0) return;
         if (!_messagesById.TryGetValue(messageId, out var message)) return;
 
         var part = message.Parts.FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
         if (part is null || part.QuestionRequestId.Length > 0) return;
 
-        AttachQuestion(part, question.GetStringProperty("id"), question);
+        AttachQuestion(part, question.Id, question);
     }
 
     /// <summary>Applies a live <c>question.asked</c> event to this session's tool part.</summary>
@@ -1306,8 +1353,18 @@ public sealed partial class SessionStore
         part.QuestionRequestId = requestId;
         if (properties.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
         {
-            part.QuestionJson = JsonSerializer.Serialize(questions, AppJsonContext.Default.JsonElement);
-            PopulateQuestionForm(part, questions);
+            part.Questions = questions.Deserialize(AppJsonContext.Default.ListQuestionInfo)!;
+            PopulateQuestionForm(part, part.Questions);
+        }
+    }
+
+    private static void AttachQuestion(PartItem part, string requestId, Integration.PendingQuestion properties)
+    {
+        part.QuestionRequestId = requestId;
+        if (properties.Questions is not null)
+        {
+            part.Questions = properties.Questions;
+            PopulateQuestionForm(part, properties.Questions);
         }
     }
 
@@ -1339,29 +1396,26 @@ public sealed partial class SessionStore
         }
     }
 
-    private static void PopulateQuestionForm(PartItem item, JsonElement questions)
+    private static void PopulateQuestionForm(PartItem item, List<Integration.QuestionInfo> questions)
     {
         item.QuestionForm.Clear();
-        foreach (var q in questions.EnumerateArray())
+        foreach (var q in questions)
         {
             var form = new QuestionFormItem
             {
-                Question = q.GetStringProperty("question"),
-                Header = q.GetStringProperty("header"),
-                AllowCustom = q.GetBoolProperty("custom", true),
-                Multiple = q.GetBoolProperty("multiple", false),
+                Question = q.Question,
+                Header = q.Header,
+                AllowCustom = q.Custom,
+                Multiple = q.Multiple,
             };
 
-            if (q.TryGetProperty("options", out var options) && options.ValueKind == JsonValueKind.Array)
+            foreach (var opt in q.Options)
             {
-                foreach (var opt in options.EnumerateArray())
+                form.Options.Add(new QuestionOptionItem
                 {
-                    form.Options.Add(new QuestionOptionItem
-                    {
-                        Label = opt.GetStringProperty("label"),
-                        Description = opt.GetStringProperty("description"),
-                    });
-                }
+                    Label = opt.Label,
+                    Description = opt.Description,
+                });
             }
 
             item.QuestionForm.Add(form);
@@ -1429,8 +1483,8 @@ public sealed partial class SessionStore
                     item.TodoJson = JsonSerializer.Serialize(todos, AppJsonContext.Default.JsonElement);
                 if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
                 {
-                    item.QuestionJson = JsonSerializer.Serialize(questions, AppJsonContext.Default.JsonElement);
-                    PopulateQuestionForm(item, questions);
+                    item.Questions = questions.Deserialize(AppJsonContext.Default.ListQuestionInfo)!;
+                    PopulateQuestionForm(item, item.Questions);
                 }
             }
             if (state.TryGetProperty("output", out var output))

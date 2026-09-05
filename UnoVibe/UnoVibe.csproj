@@ -58,6 +58,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../UnoVibe.Integration/UnoVibe.Integration.csproj" />
     <PackageReference Include="Markdig" />
     <PackageReference Include="ColorCode.Core" />
   </ItemGroup>
