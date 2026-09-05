@@ -13,4 +13,5 @@
     <Platform Solution="Debug|x86" Project="x86" />
     <Deploy />
   </Project>
+  <Project Path="UnoVibe.Integration/UnoVibe.Integration.csproj" />
 </Solution>

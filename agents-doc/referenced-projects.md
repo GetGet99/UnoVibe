@@ -23,5 +23,5 @@ have them cloned, so don't assume these paths (or the answers they give) are ava
   and `BeforeTextChanging` cancel (`_blockStrayTextChange`, gated by `_programmaticTextChange`)
   for consumed Enter/Tab keys. (Used by `SuggestBox` — see
   [`suggest-box.md`](suggest-box.md)).
-- **opencode source**: `/mnt/LinuxProgramData/tmp/opencode/opencode-src/`
+- **opencode source**: `/mnt/Data/Codes/.GitHubClone/opencode/`
   — server API/auth reference. Auth lives in `packages/opencode/src/server/auth.ts`.

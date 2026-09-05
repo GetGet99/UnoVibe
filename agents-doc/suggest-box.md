@@ -127,7 +127,7 @@ Skills appear from both providers and are deduped by `Key` (`skill:<name>`) in
 deep-object location param is sent as `location%5Bdirectory%5D=<escaped>`.
 The current dev server is 1.17.18 — older than the opencode-src checkout (1.18.11) whose
 `/api/command` handler folds skills in via `Command.state`, so the `source == "skill"` mapping stays
-as a defensive branch.
+as a defensive branch. (Note: this fact is no longer true as user now checks out on 1.17.18)
 
 **Slash-command send (opencode Commands):**
 the server does NOT expand `/name args` inside a normal prompt — a verbatim `/name` text would reach
