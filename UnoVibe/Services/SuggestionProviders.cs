@@ -146,7 +146,7 @@ public sealed class ServerCommandSuggestionProvider : ISuggestionProvider
             var client = _client();
             if (client is null) return Array.Empty<SuggestionItem>();
 
-            if (!(await client.GetCommandsAsync(_directory(), ct)).TryGetValue(out var commands))
+            if (!(await client.GetCommandsAsync(_directory(), ct)).TryGetData(out var commands))
                 return Array.Empty<SuggestionItem>();
             if (commands.Count == 0) return Array.Empty<SuggestionItem>();
 
@@ -207,7 +207,7 @@ public sealed class ServerSkillSuggestionProvider : ISuggestionProvider
             var client = _client();
             if (client is null) return [];
 
-            if (!(await client.GetSkillsAsync(_directory(), ct)).TryGetValue(out var skills))
+            if (!(await client.GetSkillsAsync(_directory(), ct)).TryGetData(out var skills))
                 return [];
             if (skills.Count == 0) return [];
 
@@ -257,7 +257,7 @@ public sealed class ServerFileSuggestionProvider : ISuggestionProvider
             var client = _client();
             if (client is null) return [];
 
-            if (!(await client.FindFilesAsync(query, _directory(), ct: ct)).TryGetValue(out var entries))
+            if (!(await client.FindFilesAsync(query, _directory(), ct: ct)).TryGetData(out var entries))
                 return [];
             var items = entries.Select(entry =>
             {

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using UnoVibe.Models;
+using static UnoVibe.Integration.ResultExtension;
 using OpencodeClient = UnoVibe.Integration.OpencodeClient;
 using OpencodeEvent = UnoVibe.Integration.OpencodeEvent;
 namespace UnoVibe.Services;
@@ -700,7 +701,7 @@ public sealed partial class ChatStore : IDisposable
             var commands = await _client.GetCommandsAsync(directory);
             _commandNames = new HashSet<string>(StringComparer.Ordinal);
             _skillNames = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var command in commands.GetOr(static () => []))
+            foreach (var command in commands.GetDataOr(static () => []))
             {
                 if (command.Source == "skill") _skillNames.Add(command.Name);
                 else _commandNames.Add(command.Name);

@@ -96,3 +96,62 @@ public readonly record struct Result<T>
     public static Result<T> Success(T value) => new(value, default, true);
     public static Result<T> Failure(ApiError error) => new(default, error, false);
 }
+
+public static class ResultExtension
+{
+    extension<T>(Result<APIEntryResponse<T>> result)
+    {
+        public T GetDataOrThrow() => result.GetOrThrow().Data;
+
+        /// <summary>Returns the value on success; returns input value on failure.</summary>
+        public T GetDataOr(T valueOnFailure)
+        {
+            if (result.TryGetData(out var data))
+            {
+                return data;
+            }
+            return valueOnFailure;
+        }
+
+        /// <summary>Returns the value on success; calls input delegate and return value on failure.</summary>
+        public T GetDataOr(Func<T> valueCreatorOnFailure)
+        {
+            if (result.TryGetData(out var data))
+            {
+                return data;
+            }
+            return valueCreatorOnFailure();
+        }
+
+        /// <summary>Returns the value on success; returns default(T) on failure.</summary>
+        public T? GetDataOrDefault()
+        {
+            if (result.TryGetData(out var data))
+            {
+                return data;
+            }
+            return default;
+        }
+        public bool TryGetData(out T data)
+        {
+            if (result.TryGetValue(out var value))
+            {
+                data = value.Data;
+                return true;
+            }
+            data = default!;
+            return false;
+        }
+
+        public bool TryGetData(out T data, out ApiError error)
+        {
+            if (result.TryGetValue(out var value, out error))
+            {
+                data = value.Data;
+                return true;
+            }
+            data = default!;
+            return false;
+        }
+    }
+}
