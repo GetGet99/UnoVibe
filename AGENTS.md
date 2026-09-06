@@ -44,6 +44,11 @@ that code, and keep it up to date alongside AGENTS.md (see "Contribution guideli
   unhandled events, and serve flags/port probing.
   _Read before_ working on `OpencodeClient`, `ChatStore.Apply`, SSE event handling,
   permissions/questions, MCP, or `ServeProcess`.
+- **`agents-doc/integration.md`** — `UnoVibe.Integration` conventions: the one-partial-class =
+  one-endpoint rule, dumb API logic (no post-processing), proper C# models instead of
+  `JsonElement`, referencing the opencode source for ins/outs, and the `Result<T>` pattern.
+  _Read before_ adding or modifying API endpoints, request/response DTOs, or
+  `AppJsonContext` registrations.
 - **`agents-doc/session-state.md`** — client-side per-session state: the ChatStore/SessionStore
   split, send-while-busy modes + the send-mode button, interrupt, revert/undo + the per-message
   revert flyout, image attachments, fork (per-message + full), auto-retry + continue cards, and
