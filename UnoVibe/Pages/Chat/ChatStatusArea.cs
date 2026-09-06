@@ -39,11 +39,7 @@ namespace UnoVibe.Pages.Chat;
                                         @Click+=`await Store.SwitchSessionAsync(s.Id)`
                                         ToolTipService.ToolTip=`s.Title`>
                                     <StackPanel Orientation=Horizontal Spacing=6>
-                                        <Grid Width=14 Height=14 VerticalAlignment=Center>
-                                            <AppSymbolIcon Symbol=`SubagentAttentionSymbol(s)` FontSize=10 Foreground=`theme.SystemAttention` Visibility=`s.NeedsAttention ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <ProgressRing Width=12 Height=12 IsActive=`s.IsBusy` Visibility=`!s.NeedsAttention && s.IsBusy ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <AppSymbolIcon Symbol=`SubagentOutcomeSymbol(s)` FontSize=10 Foreground=`SubagentOutcomeBrush(s)` Visibility=`!s.NeedsAttention && !s.IsBusy && s.Outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                        </Grid>
+                                        <SessionIndicator State=`s.State` />
                                         <TextBlock Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                     </StackPanel>
                                 </Button>
@@ -62,23 +58,4 @@ public partial class ChatStatusArea : IQuickMarkupComponent<StackPanel>
     {
         Init();
     }
-
-    /// <summary>Icon for a subagent chip's turn outcome: check = success, X = error, stop = interrupted.</summary>
-    private static Symbol SubagentOutcomeSymbol(SessionInfo s) => s.Outcome switch
-    {
-        "error" => Symbol.Cancel,
-        "interrupted" => Symbol.Stop,
-        _ => Symbol.Accept,
-    };
-
-    /// <summary>Color for <see cref="SubagentOutcomeSymbol"/>: green success, red error, caution interrupted.</summary>
-    private static Brush? SubagentOutcomeBrush(SessionInfo s) => s.Outcome switch
-    {
-        "error" => ThemeBrushes.Global.SystemCritical,
-        "interrupted" => ThemeBrushes.Global.SystemCaution,
-        _ => ThemeBrushes.Global.SystemSuccess,
-    };
-
-    /// <summary>Glyph for a pending question/approval on a subagent chip: shield for a permission, question mark for a question.</summary>
-    private static Symbol SubagentAttentionSymbol(SessionInfo s) => s.AttentionKind == "permission" ? Symbol.Permissions : Symbol.Help;
 }

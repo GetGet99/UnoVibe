@@ -732,11 +732,9 @@ public sealed partial class ChatStore : IDisposable
         session.IsBusy = flags?.Status is not (null or "idle");
         session.IsUnread = flags?.Unread ?? false;
         session.IsRead = flags?.Read ?? true;
-        session.Outcome = flags?.Outcome ?? "";
-        session.NeedsAttention = SessionNeedsAttention(session.Id);
-        session.AttentionKind = flags?.PendingPermissions > 0 ? "permission"
-            : flags?.PendingQuestions > 0 ? "question"
-            : "";
+        session.Outcome = flags?.Outcome ?? ChatOutcome.None;
+        session.IsPendingQuestion = (flags?.PendingQuestions ?? 0) > 0;
+        session.IsPendingPermission = (flags?.PendingPermissions ?? 0) > 0;
     }
 
     private bool SessionNeedsAttention(string sessionId)
@@ -1927,8 +1925,8 @@ public sealed partial class ChatStore : IDisposable
         // of Unread. Set on view / "Mark as read", cleared on background completion / "Mark as
         // unread". Defaults to true so a brand-new session starts read.
         public bool Read = true;
-        // How the last finished turn ended: ""/success/error/interrupted.
-        public string Outcome = "";
+        // How the last finished turn ended
+        public ChatOutcome Outcome;
         // Pending question.asked not yet replied/rejected.
         public int PendingQuestions;
         // Pending permission.asked not yet replied.

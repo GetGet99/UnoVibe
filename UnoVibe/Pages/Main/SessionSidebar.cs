@@ -81,13 +81,7 @@ namespace UnoVibe.Pages.Main;
                                         <ColumnDefinition />
                                         <ColumnDefinition Width=Auto />
                                     </>>
-                                        <Grid Width=14 Margin=`new Thickness(0, 0, 6, 0)` VerticalAlignment=Center>
-                                            <AppSymbolIcon Symbol=`AttentionSymbol(s)` FontSize=10 Foreground=`theme.SystemAttention` Visibility=`s.NeedsAttention ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <ProgressRing Width=12 Height=12 IsActive=`s.IsBusy` Visibility=`!s.NeedsAttention && s.IsBusy ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <AppSymbolIcon Symbol=`OutcomeSymbol(s)` FontSize=10 Foreground=`OutcomeBrush(s)` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsRead && !s.IsBusy && s.Outcome.Length > 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <Border Width=6 Height=6 CornerRadius=`new CornerRadius(3)` Background=`theme.SystemAttention` Visibility=`!s.NeedsAttention && s.IsUnread && !s.IsRead && !s.IsBusy && s.Outcome.Length == 0 ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                            <AppSymbolIcon Symbol=Message FontSize=10 Foreground=`theme.TertiaryText` Visibility=`!s.NeedsAttention && !s.IsBusy && (s.IsRead || !s.IsUnread) ? Visibility.Visible : Visibility.Collapsed` HorizontalAlignment=Center VerticalAlignment=Center />
-                                        </Grid>
+                                        <SessionIndicator State=`s.State` Margin=`new Thickness(0, 0, 6, 0)` />
                                         <TextBlock Grid.Column=1 Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                         <TextBlock Grid.Column=2 Text=`s.TimeLabel` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
                                     </Grid>
@@ -357,25 +351,6 @@ public partial class SessionSidebar : IQuickMarkupComponent
         m.Status == "failed" || m.Status == "needs_client_registration"
             ? $"{m.StatusLabel}: {m.Error}"
             : m.StatusLabel;
-
-    /// <summary>Icon for an unread session's turn outcome: check = success, X = error, stop = interrupted.</summary>
-    private static Symbol OutcomeSymbol(SessionInfo s) => s.Outcome switch
-    {
-        "error" => Symbol.Cancel,
-        "interrupted" => Symbol.Stop,
-        _ => Symbol.Accept,
-    };
-
-    /// <summary>Color for <see cref="OutcomeSymbol"/>: green success, red error, caution interrupted.</summary>
-    private static Brush? OutcomeBrush(SessionInfo s) => s.Outcome switch
-    {
-        "error" => ThemeBrushes.Global.SystemCritical,
-        "interrupted" => ThemeBrushes.Global.SystemCaution,
-        _ => ThemeBrushes.Global.SystemSuccess,
-    };
-
-    /// <summary>Glyph for a pending question/approval: shield for a permission, question mark for a question.</summary>
-    private static Symbol AttentionSymbol(SessionInfo s) => s.AttentionKind == "permission" ? Symbol.Permissions : Symbol.Help;
 
     /// <summary>
     /// Path relative to the connected server's directory via <see cref="PathDisplay.Relative"/>.

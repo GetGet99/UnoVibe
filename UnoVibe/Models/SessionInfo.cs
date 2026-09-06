@@ -1,3 +1,4 @@
+using UnoVibe.Services;
 namespace UnoVibe.Models;
 
 /// <summary>
@@ -9,6 +10,7 @@ namespace UnoVibe.Models;
 /// determines grouping and only changes when a session genuinely moves.
 /// </summary>
 [QuickMarkup("""
+    using UnoVibe.Services;
     public string Title = "";
     public long Updated;
     public string Agent = "";
@@ -36,18 +38,28 @@ namespace UnoVibe.Models;
     // the unread indicator (outcome check mark / dot) even though IsUnread still holds the value.
     // Toggled by the sidebar context menu ("Mark as unread" / "Mark as read").
     public bool IsRead = true;
-    // Client-side: how the last finished turn ended, one of "" (unknown), "success", "error", "interrupted".
-    // Derived from the last assistant message's info.error/finish; selects the sidebar icon + color.
-    public string Outcome = "";
-    // Client-side: a question is asked or an approval is pending for this session and the user
-    // hasn't answered it yet. Overrides the busy spinner in the sidebar (mirrors the web client's
-    // needsAttention) and shows a distinct glyph.
-    public bool NeedsAttention;
-    // Which kind of attention is pending: "permission" (approval needed), "question", or "" when none.
-    public string AttentionKind = "";
+
+    SessionState State => `ResolveState()`;
+    ChatOutcome Outcome;
+    bool IsPendingQuestion;
+    bool IsPendingPermission;
     """)]
 public sealed partial class SessionInfo
 {
+    SessionState ResolveState()
+    {
+        if (IsBusy) return SessionState.Working;
+        if (IsPendingPermission) return SessionState.PendingPermission;
+        if (IsPendingQuestion) return SessionState.PendingQuestion;
+        if (IsRead) return SessionState.None;
+        return Outcome switch
+        {
+            ChatOutcome.Success => SessionState.Success,
+            ChatOutcome.Interrupted => SessionState.Interrupted,
+            ChatOutcome.Error => SessionState.Error,
+            _ or ChatOutcome.None => SessionState.None
+        };
+    }
     public string Id { get; set; } = "";
     public string Directory { get; set; } = "";
     public string ProjectId { get; set; } = "";

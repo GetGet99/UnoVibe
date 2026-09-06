@@ -10,12 +10,14 @@ namespace UnoVibe.Pages.Main;
 /// Also hosts the top-right toast overlay (from <c>tui.toast.show</c> events).
 /// </summary>
 [QuickMarkup("""
+    using UnoVibe.Integration;
     using UnoVibe.Services;
     using UnoVibe.Pages.Chat;
     using UnoVibe.Models;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     provide ChatStore Store = `null!`;
+    provide OpencodeClient Opencode = `null!`;
     provide Window HostWindow = `null!`;
     provide bool SettingsOpen = false;
     provide bool IsCompact = false;
@@ -29,6 +31,7 @@ namespace UnoVibe.Pages.Main;
     Visibility ChatVisibility => `!IsCompact || !IsSidebarView ? Visibility.Visible : Visibility.Collapsed`;
     <setup>
         Store = store;
+        Opencode = store.Client;
         HostWindow = hostWindow;
         var theme = ThemeBrushes.Global;
     </setup>

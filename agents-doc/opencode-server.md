@@ -142,17 +142,21 @@ context menu can re-show it without losing state. **Right-clicking a sidebar ses
 `ContextFlyout` `MenuFlyout` with **Mark as unread / Mark as read**
 (`ChatStore.SetSessionRead`, which also asserts `IsUnread` on mark-as-unread so the dot shows even
 for a session with no finished turn). A new background completion clears `Read` again so the
-indicator reappears. The turn outcome (`SessionInfo.Outcome`:
-`success`/`error`/`interrupted`) is derived client-side from the background session's last assistant
-`message.updated` `info.error` (`MessageAbortedError` → interrupted, any other error → error,
-none → success; mirrors the web client's `rows.ts` logic) and drives the sidebar icon (✓/✕/■)
-+ color.
+indicator reappears. The turn outcome (`SessionInfo.Outcome`, a `ChatOutcome` enum:
+`Success`/`Error`/`Interrupted`/`None`) is derived client-side from the background session's last
+assistant `message.updated` `info.error` (`MessageAbortedError` → Interrupted, any other error → Error,
+none → Success; mirrors the web client's `rows.ts` logic) and drives the sidebar icon (✓/✕/■)
++ color via the computed `SessionInfo.State` (`SessionState` enum, resolved in
+`SessionInfo.ResolveState()`).
 
-Pending attention (`SessionInfo.NeedsAttention`/`AttentionKind`) is tracked per-session from
-`permission.asked/replied` and `question.asked/replied/rejected` counts
-(`SessionFlags.PendingPermissions`/`PendingQuestions`, seeded at connect + switch via
-`SyncPending*Async` from `GET /permission` + `GET /question`) and shows a `Permissions`/`Help` glyph
-in `SystemAttention` that **overrides** the busy spinner (mirrors the web client's `needsAttention`).
+Pending attention is tracked per-session via `SessionInfo.IsPendingPermission` and
+`SessionInfo.IsPendingQuestion` booleans, set from `permission.asked/replied` and
+`question.asked/replied/rejected` counts (`SessionFlags.PendingPermissions`/`PendingQuestions`,
+seeded at connect + switch via `SyncPending*Async` from `GET /permission` + `GET /question`).
+`SessionInfo.ResolveState()` returns `SessionState.PendingPermission` or
+`SessionState.PendingQuestion` accordingly, which **overrides** the busy spinner (mirrors the web
+client's `needsAttention`). The `SessionIndicator` control (`Controls/SessionIndicator.cs`) renders
+the appropriate glyph/color for each `SessionState` value.
 
 **Inline question form** (`ToolViewQuestion`/`ToolViewQuestionItem`):
 - Submits via `POST /question/:requestID/reply`

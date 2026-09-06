@@ -997,15 +997,14 @@ public sealed partial class SessionStore
     }
 
     /// <summary>
-    /// Classifies how an assistant message's turn ended: "success" (no error), "interrupted"
-    /// (<c>MessageAbortedError</c> — user stopped it), or "error" (any other error). Mirrors
-    /// the opencode web client's turn-outcome logic (rows.ts interrupted/error detection).
+    /// Classifies how an assistant message's turn ended. Mirrors the opencode web client's
+    /// turn-outcome logic (rows.ts interrupted/error detection).
     /// </summary>
-    internal static string ClassifyMessageOutcome(JsonElement info)
+    internal static ChatOutcome ClassifyMessageOutcome(JsonElement info)
     {
         if (!info.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object)
-            return "success";
-        return error.GetStringProperty("name") == "MessageAbortedError" ? "interrupted" : "error";
+            return ChatOutcome.Success;
+        return error.GetStringProperty("name") == "MessageAbortedError" ? ChatOutcome.Interrupted : ChatOutcome.Error;
     }
 
     /// <summary>

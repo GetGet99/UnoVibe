@@ -89,20 +89,19 @@ internal static class Notifications
     /// the registered-window set is used as a fallback.
     /// </param>
     /// <param name="session">The finished session (falls back to a generic label when null).</param>
-    /// <param name="outcome">"" (unknown), "success", "error" or "interrupted".</param>
     /// <param name="visibleWhenFocused">
     /// True when this event is already visible in the chat while the app is focused (the active
     /// session), so the toast is suppressed then — background-session completions always toast.
     /// </param>
-    public static void NotifyCompleted(Window? window, SessionInfo? session, string outcome, bool visibleWhenFocused)
+    public static void NotifyCompleted(Window? window, SessionInfo? session, ChatOutcome outcome, bool visibleWhenFocused)
     {
         if (!ShouldShow(window, visibleWhenFocused)) return;
         var title = DisplayTitle(session);
         var (heading, body) = outcome switch
         {
-            "success" => ("Agent task completed", title),
-            "error" => ("Agent reported an error", title),
-            "interrupted" => ("Agent turn interrupted", title),
+            ChatOutcome.Success => ("Agent task completed", title),
+            ChatOutcome.Error => ("Agent reported an error", title),
+            ChatOutcome.Interrupted => ("Agent turn interrupted", title),
             _ => ("Agent finished", title),
         };
         Show(heading, body);
