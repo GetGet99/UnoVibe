@@ -70,8 +70,8 @@ short-circuits future auto-naming because the title no longer matches `isDefault
 
 The `task` tool spawns a child session whose `SessionInfo` carries a `parentID`
 (field `SessionInfo.ParentId`; `IsSubagent` = `ParentId` non-empty).
-`ChatStore` keeps subagent `SessionInfo`s in `Sessions` (needed for `SwitchSessionAsync` lookup +
-unread tracking) but **filters them out of `ReconcileDirectoryGroups`**, so they never appear in the
+`ChatStore` keeps subagent `SessionInfo`s in `Sessions` (needed for `SwitchSessionAsync` lookup)
+but **filters them out of `ReconcileDirectoryGroups`**, so they never appear in the
 sidebar — mirroring the TUI (`parentID === undefined` filter).
 
 Entry point is the tool call itself:
@@ -134,20 +134,16 @@ session-filtered in `Apply` — `ChatStore` tracks per-session busy state (`Sess
 catch sessions already busy before the SSE stream attached (the server only emits status on
 transitions).
 
-Unread (`SessionInfo.IsUnread`, a client-side concept — the server has no read/unread tracking) is
-set when a *background* session's turn completes (`session.status` → idle while not active). The
-value is deliberately **kept** when the session is opened — viewing sets the separate `IsRead` flag
-(`SessionInfo.IsRead` / `SessionFlags.Read`), which merely *suppresses* the indicator, so the sidebar
-context menu can re-show it without losing state. **Right-clicking a sidebar session** opens a
-`ContextFlyout` `MenuFlyout` with **Mark as unread / Mark as read**
-(`ChatStore.SetSessionRead`, which also asserts `IsUnread` on mark-as-unread so the dot shows even
-for a session with no finished turn). A new background completion clears `Read` again so the
-indicator reappears. The turn outcome (`SessionInfo.Outcome`, a `ChatOutcome` enum:
-`Success`/`Error`/`Interrupted`/`None`) is derived client-side from the background session's last
-assistant `message.updated` `info.error` (`MessageAbortedError` → Interrupted, any other error → Error,
-none → Success; mirrors the web client's `rows.ts` logic) and drives the sidebar icon (✓/✕/■)
-+ color via the computed `SessionInfo.State` (`SessionState` enum, resolved in
-`SessionInfo.ResolveState()`).
+Background session activity: when a *background* session's turn completes (`session.status` → idle
+while not active), `ChatStore` sets `IsRead = false` on the session's `SessionHead` and records the
+turn outcome (`SessionHead.Outcome`, a `ChatOutcome` enum: `Success`/`Error`/`Interrupted`/`None`,
+derived from the last assistant `message.updated` `info.error`). Viewing the session sets
+`IsRead = true`, which suppresses the indicator. **Right-clicking a sidebar session** opens a
+`ContextFlyout` `MenuFlyout` with **Mark as unread / Mark as read** (directly toggles
+`SessionHead.IsRead`). The indicator is resolved by `SessionHead.ResolveState()` → `SessionState`
+enum: if `IsRead` is true the state is `None` (no indicator); otherwise the outcome maps to
+`Success`/`Interrupted`/`Error`. The `SessionIndicator` control (`Controls/SessionIndicator.cs`)
+renders the appropriate glyph/color for each `SessionState` value.
 
 Pending attention is tracked per-session via `SessionInfo.IsPendingPermission` and
 `SessionInfo.IsPendingQuestion` booleans, set from `permission.asked/replied` and

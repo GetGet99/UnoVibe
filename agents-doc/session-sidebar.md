@@ -2,8 +2,8 @@
 
 Reference for `SessionSidebar` and the sidebar state kept in `ChatStore`.
 **Read this file when** editing `SessionSidebar`, `ReconcileDirectoryGroups`, folder actions,
-the connection-details flyout, or the session/busy/unread indicators.
-Session flags (busy/unread/outcome/state) are *derived* from server events — see the
+the connection-details flyout, or the session/busy/outcome indicators.
+Session flags (busy/outcome/state) are *derived* from server events — see the
 "Status / errors" section of [`opencode-server.md`](opencode-server.md); the MCP section's
 server API + toggle mapping is also there.
 
@@ -14,7 +14,7 @@ server API + toggle mapping is also there.
 > `ReconcileSessionCollection` (Remove/Insert/Move, reference-identity) and reorders groups
 > with `ObservableCollection.Move`, and `ReconcileActiveSubagents` does the same for the chat
 > page's subagent strip. Per-session sidebar flags (`_sessionFlags`, keyed by session id) stay
-> the authoritative store for busy/unread/outcome/pending-attention because SSE can fire for sessions
+> the authoritative store for busy/outcome/pending-attention because SSE can fire for sessions
 > not yet in the list (subagent permission races, background outcome before listing).
 
 ## Git branch in the sidebar

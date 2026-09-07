@@ -1157,9 +1157,7 @@ public sealed partial class ChatStore : IDisposable
         // it — the server only emits status on transitions).
         if (store.SessionId.Length > 0) store.IsBusy = IsSessionBusy(sessionId);
 
-        // Viewing the session now; mark it read. The underlying unread value is deliberately kept
-        // (not cleared) — IsRead merely suppresses the sidebar indicator, so the context menu's
-        // "Mark as unread" can re-show it without any lost state.
+        // Viewing the session now; mark it read so the sidebar indicator is suppressed.
         known?.Head.IsRead = true;
 
         ReconcileActiveSubagents();

@@ -33,7 +33,7 @@ open settings pages to re-read on the UI thread).
 - **Auto-continue on thinking stop** (`turn.autocontinue`, default off) — see "Turn-stop handling"
   in [`session-state.md`](session-state.md): when enabled, a turn that stops with the chat ending
   on an unfinished Thinking (reasoning) part gets a `continue` prompt sent automatically instead of
-  surfacing the Continue button, silently (no completion toast, no sidebar unread/check mark).
+  surfacing the Continue button, silently (no completion toast, no sidebar indicator).
 - **Code font** (`text.codefont`, default per-platform) — the monospaced font used only where the
   content genuinely represents code or a terminal: markdown code blocks + inline `` `code` ``,
   diff/patch bodies, tool output that is file content/terminal text (read loaded content, write/edit

@@ -90,7 +90,7 @@ part, firing that same continue automatically (`HandleStoppedTurn`). Stop signal
 `session.status idle` and/or the final `message.updated` carrying finish — arrive in either order,
 are handled uniformly (`HandleStoppedTurn` from both sites), and echoes of an already-auto-continued
 stop are ignored until the server confirms the restarted turn with its first non-idle status event.
-The auto-fired continue is silent: no completion toast and no sidebar unread/outcome check mark
+The auto-fired continue is silent: no completion toast and no sidebar indicator
 (`ChatStore.ApplySessionStatus` asks `store.WillAutoContinue()` before applying an idle event and
 skips both). A streak cap of 10 consecutive auto-continues — reset by any manual send or a
 non-qualifying stop — hands control back to the manual Continue button as a runaway-loop guard.
@@ -190,7 +190,7 @@ re-raises `MessageView.ForkRequested` → `ChatPage.OnMessageForkRequested` →
 Unlike revert there's **no confirmation flyout** (fork is non-destructive — it creates a new session).
 
 `ChatStore.ForkFromMessageAsync(MessageItem)` calls `ForkSessionAsync(_sessionId, message.Id)`, then
-`SwitchSessionAsync(forked.Id)` (loads the copied history, clears unread/status), then restores the
+`SwitchSessionAsync(forked.Id)` (loads the copied history, resets IsRead), then restores the
 forked-at message's prompt into the composer via the plain `ForkPromptText` field (set from
 `PromptTextFromMessage`) + `StageImagesFromMessage` for re-staged attachments — the user
 edits/continues from there, matching the TUI/web fork-navigate-with-prompt flow.

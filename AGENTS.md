@@ -56,7 +56,7 @@ that code, and keep it up to date alongside AGENTS.md (see "Contribution guideli
   _Read before_ editing chat send/revert/fork/autoscroll behavior or `SessionStore`.
 - **`agents-doc/session-sidebar.md`** — the sidebar: no-rebuild model, directory groups + git
   branch, folder actions, the Open Folder button, the connection-details flyout, and the
-  session/busy/unread indicators.
+  session/busy/outcome indicators.
   _Read before_ editing `SessionSidebar` or sidebar state in `ChatStore`.
 - **`agents-doc/quickmarkup.md`** — QuickMarkup gotchas (Init(), reactivity, keyed foreach,
   two-way binding), version notes, and the skill location.
