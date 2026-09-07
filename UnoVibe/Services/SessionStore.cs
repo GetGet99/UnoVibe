@@ -386,7 +386,7 @@ public sealed partial class SessionStore
             await Router.Client.UpdateSessionTitleAsync(SessionId, new() { Title = title });
             SessionTitle = title;
             var session = Router.GetSession(SessionId);
-            if (session is not null) session.Title = title;
+            session?.Head.Title = title;
         }
         catch (Exception ex)
         {
@@ -643,7 +643,7 @@ public sealed partial class SessionStore
         if (known is not null)
         {
             ApplySessionSettings(known);
-            if (known.Title.Length > 0) SessionTitle = known.Title;
+            if (known.Head.Title.Length > 0) SessionTitle = known.Head.Title;
             if (known.ParentId.Length > 0) ParentSessionId = known.ParentId;
         }
         else
@@ -1374,7 +1374,7 @@ public sealed partial class SessionStore
     /// </summary>
     internal void ApplySessionInfo(SessionInfo session, JsonElement info)
     {
-        if (session.Title.Length > 0) SessionTitle = session.Title;
+        if (session.Head.Title.Length > 0) SessionTitle = session.Head.Title;
         if (session.ParentId.Length > 0) ParentSessionId = session.ParentId;
         if (session.ModelId.Length > 0)
         {

@@ -67,25 +67,9 @@ namespace UnoVibe.Pages.Main;
                             {
                                 <TextBlock Text="No sessions yet" FontSize=11 Foreground=`theme.TertiaryText` Margin=`new Thickness(0, 6, 0, 0)` />
                             }
-                            foreach (var s in `group.IsExpanded ? group.Sessions.Reactive : group.Sessions.Reactive.Take(MaxVisibleSessions)`; `s.Id`)
+                            foreach (var s in `group.IsExpanded ? group.Sessions.Reactive : group.Sessions.Reactive.Take(MaxVisibleSessions)`; `s.Head.Id`)
                             {
-                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 6, 8, 6)` HorizontalAlignment=Stretch HorizontalContentAlignment=Left CommandParameter=`s.Id` Click+=`(sender, e) => OnSwitchSession(sender, e)` Background=`Store.ActiveSessionId == s.Id ? theme.ControlFill : transparent` ContextFlyout=sessionMenu = <MenuFlyout Placement=BottomEdgeAlignedRight>
-                                        if (`s.IsRead`) {
-                                            <MenuFlyoutItem Text="Mark as unread" CommandParameter=`s.Id` Click+=`(sender, e) => OnMarkUnread(sender, e)` />
-                                        } else {
-                                            <MenuFlyoutItem Text="Mark as read" CommandParameter=`s.Id` Click+=`(sender, e) => OnMarkRead(sender, e)` />
-                                        }
-                                    </MenuFlyout>>
-                                    <Grid ColumnDefinitions=<>
-                                        <ColumnDefinition Width=Auto />
-                                        <ColumnDefinition />
-                                        <ColumnDefinition Width=Auto />
-                                    </>>
-                                        <SessionIndicator State=`s.State` Margin=`new Thickness(0, 0, 6, 0)` />
-                                        <TextBlock Grid.Column=1 Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                        <TextBlock Grid.Column=2 Text=`s.TimeLabel` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
-                                    </Grid>
-                                </Button>
+                                <SessionButton Session=`s.Head` />
                             }
                             if (`group.Sessions.Reactive.Count > MaxVisibleSessions`)
                             {

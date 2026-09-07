@@ -191,7 +191,7 @@ internal static class Notifications
     /// <summary>Session display name, mapping the server's default titles to "New Chat".</summary>
     private static string DisplayTitle(SessionInfo? session)
     {
-        var title = session?.Title ?? "";
+        var title = session?.Head.Title ?? "";
         if (title.Length == 0) return "UnoVibe chat";
         if (title.StartsWith("New session - ") || title.StartsWith("Child session - "))
             return "New Chat";

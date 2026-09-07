@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using UnoVibe.Services;
 namespace UnoVibe.Models;
 
@@ -11,8 +12,6 @@ namespace UnoVibe.Models;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
-    public string Title = "";
-    public long Updated;
     public string Agent = "";
     // The server only includes a "model" object when a model is configured for the session; on
     // machines with no/limited providers it omits it (or sends null), so these must default to ""
@@ -27,41 +26,17 @@ namespace UnoVibe.Models;
     public long TokensCacheRead;
     public long TokensCacheWrite;
     public long TokensTotal => `TokensInput + TokensOutput + TokensReasoning + TokensCacheRead + TokensCacheWrite`;
-    public string TimeLabel => `FormatTimeLabel(Updated)`;
-    // Server-driven: a turn is in progress (session.status busy/retry). Drives the sidebar spinner.
-    public bool IsBusy;
+
     // Client-side: a turn finished in a session whose result we haven't acknowledged yet. This is
     // the underlying "value" — it is NOT deleted when the session is viewed (IsRead just suppresses
     // the indicator), so the sidebar context menu can re-flag it as unread later.
     public bool IsUnread;
-    // Client-side: set when the session is viewed or explicitly marked read. When true it suppresses
-    // the unread indicator (outcome check mark / dot) even though IsUnread still holds the value.
-    // Toggled by the sidebar context menu ("Mark as unread" / "Mark as read").
-    public bool IsRead = true;
-
-    SessionState State => `ResolveState()`;
-    ChatOutcome Outcome;
-    bool IsPendingQuestion;
-    bool IsPendingPermission;
     """)]
 public sealed partial class SessionInfo
 {
-    SessionState ResolveState()
-    {
-        if (IsBusy) return SessionState.Working;
-        if (IsPendingPermission) return SessionState.PendingPermission;
-        if (IsPendingQuestion) return SessionState.PendingQuestion;
-        if (IsRead) return SessionState.None;
-        return Outcome switch
-        {
-            ChatOutcome.Success => SessionState.Success,
-            ChatOutcome.Interrupted => SessionState.Interrupted,
-            ChatOutcome.Error => SessionState.Error,
-            _ or ChatOutcome.None => SessionState.None
-        };
-    }
-    public string Id { get; set; } = "";
-    public string Directory { get; set; } = "";
+    public SessionHead Head { get; private set; }
+    public string Id => Head.Id;
+    public string Directory => Head.Directory;
     public string ProjectId { get; set; } = "";
     public string Path { get; set; } = "";
     /// <summary>ID of the parent session when this is a subagent session (spawned by a <c>task</c> tool call), else "".</summary>
@@ -69,27 +44,21 @@ public sealed partial class SessionInfo
     /// <summary>True when this session is a subagent (its server info carries a parentID).</summary>
     public bool IsSubagent => ParentId.Length > 0;
 
-    // QuickMarkup Computed<string> (backing field TimeLabelComp): reads the reactive `Updated`
-    // field, so it caches and re-evaluates automatically whenever Updated changes — the sidebar's
-    // `s.TimeLabel` binding updates without any manual rebuild.
-    private static string FormatTimeLabel(long updated)
+    [QuickMarkupConstructor]
+    [MemberNotNull(nameof(Head))]
+    void Ctor(string id, string directory)
     {
-        if (updated <= 0) return "";
-        var elapsed = DateTimeOffset.Now.ToUnixTimeMilliseconds() - updated;
-        var span = TimeSpan.FromMilliseconds(elapsed);
-        if (span.TotalMinutes < 1) return "now";
-        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m";
-        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h";
-        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d";
-        return $"{span.TotalDays / 30:0}mo";
+        Head = new(id, directory);
     }
+
     public static SessionInfo From(Integration.SessionInfo theirs)
     {
-        SessionInfo sess = new()
+        SessionInfo sess = new(theirs.Id, theirs.Directory)
         {
-            Id = theirs.Id,
-            Title = theirs.Title,
-            Directory = theirs.Directory,
+            Head =
+            {
+                Title = theirs.Title  
+            },
             ProjectId = theirs.ProjectId,
             Path = theirs.Path,
             Agent = theirs.Agent,
@@ -104,7 +73,7 @@ public sealed partial class SessionInfo
         }
         if (theirs.Time is not null)
         {
-            sess.Updated = theirs.Time.Updated;
+            sess.Head.Updated = theirs.Time.Updated;
         }
         if (theirs.Tokens is not null)
         {

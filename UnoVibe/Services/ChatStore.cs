@@ -729,12 +729,12 @@ public sealed partial class ChatStore : IDisposable
     private void ApplySessionFlags(SessionInfo session)
     {
         var flags = _sessionFlags.GetValueOrDefault(session.Id);
-        session.IsBusy = flags?.Status is not (null or "idle");
+        session.Head.IsBusy = flags?.Status is not (null or "idle");
         session.IsUnread = flags?.Unread ?? false;
-        session.IsRead = flags?.Read ?? true;
-        session.Outcome = flags?.Outcome ?? ChatOutcome.None;
-        session.IsPendingQuestion = (flags?.PendingQuestions ?? 0) > 0;
-        session.IsPendingPermission = (flags?.PendingPermissions ?? 0) > 0;
+        session.Head.IsRead = flags?.Read ?? true;
+        session.Head.Outcome = flags?.Outcome ?? ChatOutcome.None;
+        session.Head.IsPendingQuestion = (flags?.PendingQuestions ?? 0) > 0;
+        session.Head.IsPendingPermission = (flags?.PendingPermissions ?? 0) > 0;
     }
 
     private bool SessionNeedsAttention(string sessionId)
@@ -760,9 +760,9 @@ public sealed partial class ChatStore : IDisposable
     private static void ApplySessionUpdate(SessionInfo existing, Integration.SessionInfo fresh)
     {
         Debug.Assert(existing.Id == fresh.Id);
-        existing.Title = fresh.Title;
-        if (fresh.Directory.Length > 0) existing.Directory = fresh.Directory;
-        if (fresh.Time is not null) existing.Updated = fresh.Time.Updated;
+        Debug.Assert(existing.Directory == fresh.Directory);
+        existing.Head.Title = fresh.Title;
+        if (fresh.Time is not null) existing.Head.Updated = fresh.Time.Updated;
         existing.Agent = fresh.Agent;
         if (fresh.Model is not null)
         {            
@@ -782,26 +782,6 @@ public sealed partial class ChatStore : IDisposable
                 existing.TokensCacheWrite = fresh.Tokens.Cache.Write;
             }
         }
-    }
-    private static void ApplySessionUpdate(SessionInfo existing, SessionInfo fresh)
-    {
-        Debug.Assert(existing.Id == fresh.Id);
-        existing.Title = fresh.Title;
-        if (fresh.Directory.Length > 0) existing.Directory = fresh.Directory;
-        existing.Updated = fresh.Updated;
-        existing.Agent = fresh.Agent;
-        if (fresh.ModelId.Length > 0)
-        {
-            existing.ModelId = fresh.ModelId;
-            existing.ModelProviderId = fresh.ModelProviderId;
-            existing.ModelVariant = fresh.ModelVariant;
-        }
-        existing.Cost = fresh.Cost;
-        existing.TokensInput = fresh.TokensInput;
-        existing.TokensOutput = fresh.TokensOutput;
-        existing.TokensReasoning = fresh.TokensReasoning;
-        existing.TokensCacheRead = fresh.TokensCacheRead;
-        existing.TokensCacheWrite = fresh.TokensCacheWrite;
     }
 
     /// <summary>
@@ -826,8 +806,8 @@ public sealed partial class ChatStore : IDisposable
             .GroupBy(s => s.Directory))
         {
             var dir = g.Key.Length == 0 ? "(unknown)" : g.Key;
-            var sessions = g.OrderByDescending(s => s.Updated).ToList();
-            sortKey[dir] = sessions.Count > 0 ? sessions[0].Updated : 0;
+            var sessions = g.OrderByDescending(s => s.Head.Updated).ToList();
+            sortKey[dir] = sessions.Count > 0 ? sessions[0].Head.Updated : 0;
             var group = _groupsByDirectory.TryGetValue(dir, out var existing)
                 ? existing
                 : _groupsByDirectory[dir] = new DirectoryGroup { Directory = dir };
@@ -952,7 +932,7 @@ public sealed partial class ChatStore : IDisposable
         var sessionId = Active.SessionId;
         var desired = sessionId.Length == 0
             ? new List<SessionInfo>()
-            : Sessions.Where(s => s.ParentId == sessionId).OrderByDescending(s => s.Updated).ToList();
+            : Sessions.Where(s => s.ParentId == sessionId).OrderByDescending(s => s.Head.Updated).ToList();
         ReconcileSessionCollection(ActiveSubagents, desired);
         SubagentCount = ActiveSubagents.Count;
     }
@@ -1189,7 +1169,7 @@ public sealed partial class ChatStore : IDisposable
         // (not cleared) — IsRead merely suppresses the sidebar indicator, so the context menu's
         // "Mark as unread" can re-show it without any lost state.
         Flags(sessionId).Read = true;
-        if (known is not null) known.IsRead = true;
+        known?.Head.IsRead = true;
 
         ReconcileActiveSubagents();
 
@@ -1242,7 +1222,7 @@ public sealed partial class ChatStore : IDisposable
         var item = GetSession(sessionId);
         if (item is not null)
         {
-            item.IsRead = read;
+            item.Head.IsRead = read;
             if (!read) item.IsUnread = true;
         }
     }
@@ -1579,7 +1559,7 @@ public sealed partial class ChatStore : IDisposable
             var item = GetSession(sessionId);
             if (item is not null)
             {
-                item.IsBusy = type != "idle";
+                item.Head.IsBusy = type != "idle";
                 // A turn finished in a session we aren't looking at → flag it unread, with the
                 // outcome already tracked from the turn's final message.updated. The Read flag is
                 // cleared so the indicator actually shows (IsRead may have been set by a prior
@@ -1589,8 +1569,8 @@ public sealed partial class ChatStore : IDisposable
                     flags.Unread = true;
                     flags.Read = false;
                     item.IsUnread = true;
-                    item.IsRead = false;
-                    item.Outcome = flags.Outcome;
+                    item.Head.IsRead = false;
+                    item.Head.Outcome = flags.Outcome;
                 }
                 // Turn finished → native toast. Background-session completions always toast (the
                 // sidebar dot alone is easy to miss); the active session's completion is visible
