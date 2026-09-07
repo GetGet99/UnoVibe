@@ -22,9 +22,9 @@ namespace UnoVibe.Pages.Main;
         Background=`Store.ActiveSessionId == Session.Id ? theme.ControlFill : transparent`
         ContextFlyout=<MenuFlyout Placement=BottomEdgeAlignedRight>
         if (`Session.IsRead`) {
-            <MenuFlyoutItem Text="Mark as unread" @Click+=`Store.SetSessionRead(Session.Id, read: false)` />
+            <MenuFlyoutItem Text="Mark as unread" @Click+=`Session.IsRead = false` />
         } else {
-            <MenuFlyoutItem Text="Mark as read" @Click+=`Store.SetSessionRead(Session.Id, read: true)` />
+            <MenuFlyoutItem Text="Mark as read" @Click+=`Session.IsRead = true` />
         }
     </MenuFlyout>>
         <Grid ColumnDefinitions=<>

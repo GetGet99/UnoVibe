@@ -233,22 +233,6 @@ public partial class SessionSidebar : IQuickMarkupComponent
         _ = Store.SwitchSessionAsync(id);
     }
 
-    /// <summary>
-    /// Right-click context-menu actions: "Mark as unread" / "Mark as read". The session id is
-    /// carried by the <see cref="MenuFlyoutItem.CommandParameter"/> and resolved from the sender.
-    /// </summary>
-    private void OnMarkUnread(object sender, RoutedEventArgs e)
-    {
-        if ((sender as MenuFlyoutItem)?.CommandParameter is not string id) return;
-        Store.SetSessionRead(id, read: false);
-    }
-
-    private void OnMarkRead(object sender, RoutedEventArgs e)
-    {
-        if ((sender as MenuFlyoutItem)?.CommandParameter is not string id) return;
-        Store.SetSessionRead(id, read: true);
-    }
-
     private void OnToggleShowMore(object sender, RoutedEventArgs e)
     {
         if ((sender as Button)?.CommandParameter is not string directory) return;

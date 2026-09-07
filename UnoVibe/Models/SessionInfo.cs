@@ -26,11 +26,6 @@ namespace UnoVibe.Models;
     public long TokensCacheRead;
     public long TokensCacheWrite;
     public long TokensTotal => `TokensInput + TokensOutput + TokensReasoning + TokensCacheRead + TokensCacheWrite`;
-
-    // Client-side: a turn finished in a session whose result we haven't acknowledged yet. This is
-    // the underlying "value" — it is NOT deleted when the session is viewed (IsRead just suppresses
-    // the indicator), so the sidebar context menu can re-flag it as unread later.
-    public bool IsUnread;
     """)]
 public sealed partial class SessionInfo
 {

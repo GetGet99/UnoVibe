@@ -725,22 +725,14 @@ public sealed partial class ChatStore : IDisposable
         return _sessionFlags.GetValueOrDefault(sessionId)?.Status is not (null or "idle");
     }
 
-    /// <summary>Copies the reactive busy/unread/outcome/attention flags from the session's state entry onto a session item.</summary>
+    /// <summary>Copies the reactive busy/outcome/attention flags from the session's state entry onto a session item.</summary>
     private void ApplySessionFlags(SessionInfo session)
     {
         var flags = _sessionFlags.GetValueOrDefault(session.Id);
         session.Head.IsBusy = flags?.Status is not (null or "idle");
-        session.IsUnread = flags?.Unread ?? false;
-        session.Head.IsRead = flags?.Read ?? true;
         session.Head.Outcome = flags?.Outcome ?? ChatOutcome.None;
         session.Head.IsPendingQuestion = (flags?.PendingQuestions ?? 0) > 0;
         session.Head.IsPendingPermission = (flags?.PendingPermissions ?? 0) > 0;
-    }
-
-    private bool SessionNeedsAttention(string sessionId)
-    {
-        var flags = _sessionFlags.GetValueOrDefault(sessionId);
-        return flags is not null && (flags.PendingQuestions > 0 || flags.PendingPermissions > 0);
     }
 
     /// <summary>Re-applies the reactive per-session flags to every sidebar item (after counters change).</summary>
@@ -1168,7 +1160,6 @@ public sealed partial class ChatStore : IDisposable
         // Viewing the session now; mark it read. The underlying unread value is deliberately kept
         // (not cleared) — IsRead merely suppresses the sidebar indicator, so the context menu's
         // "Mark as unread" can re-show it without any lost state.
-        Flags(sessionId).Read = true;
         known?.Head.IsRead = true;
 
         ReconcileActiveSubagents();
@@ -1205,26 +1196,6 @@ public sealed partial class ChatStore : IDisposable
     {
         if (Active.ParentSessionId.Length == 0) return;
         await SwitchSessionAsync(Active.ParentSessionId);
-    }
-
-    /// <summary>
-    /// Sets a session's explicit read flag from the sidebar context menu. "Mark as unread"
-    /// (<paramref name="read"/> false) also asserts the underlying unread value so the indicator
-    /// shows even for a session with no finished turn yet; "Mark as read" only flips the flag and
-    /// keeps the value (so it can be re-shown later without losing the recorded outcome).
-    /// </summary>
-    public void SetSessionRead(string sessionId, bool read)
-    {
-        if (sessionId.Length == 0) return;
-        var flags = Flags(sessionId);
-        flags.Read = read;
-        if (!read) flags.Unread = true;
-        var item = GetSession(sessionId);
-        if (item is not null)
-        {
-            item.Head.IsRead = read;
-            if (!read) item.IsUnread = true;
-        }
     }
 
     /// <summary>
@@ -1560,15 +1531,12 @@ public sealed partial class ChatStore : IDisposable
             if (item is not null)
             {
                 item.Head.IsBusy = type != "idle";
-                // A turn finished in a session we aren't looking at → flag it unread, with the
-                // outcome already tracked from the turn's final message.updated. The Read flag is
-                // cleared so the indicator actually shows (IsRead may have been set by a prior
-                // view or a manual "Mark as read").
+                // A turn finished in a session we aren't looking at → clear the read flag so the
+                // indicator shows (IsRead may have been set by a prior view or a manual
+                // "Mark as read"). The outcome is already tracked from the turn's final
+                // message.updated.
                 if (!autoContinuing && type == "idle" && sessionId != Active.SessionId)
                 {
-                    flags.Unread = true;
-                    flags.Read = false;
-                    item.IsUnread = true;
                     item.Head.IsRead = false;
                     item.Head.Outcome = flags.Outcome;
                 }
@@ -1898,13 +1866,6 @@ public sealed partial class ChatStore : IDisposable
         // Last-known session.status type (null until a status event/poll reports one);
         // anything other than "idle" is busy.
         public string? Status;
-        // Client-side "turn finished but not acknowledged yet" — the underlying value. Kept even
-        // after the session is read (only Read flips), so "mark as unread" can re-show it.
-        public bool Unread;
-        // Client-side explicit read flag: when true it suppresses the unread indicator regardless
-        // of Unread. Set on view / "Mark as read", cleared on background completion / "Mark as
-        // unread". Defaults to true so a brand-new session starts read.
-        public bool Read = true;
         // How the last finished turn ended
         public ChatOutcome Outcome;
         // Pending question.asked not yet replied/rejected.

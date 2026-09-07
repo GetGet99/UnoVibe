@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace UnoVibe.Services;
 
 [QuickMarkup("""
-    bool IsRead = true;
+    bool IsRead = true; // client driven
     string Title = "";
 
     long Updated;
