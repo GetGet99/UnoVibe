@@ -1,8 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
-using UnoVibe.Integration;
+using UnoVibe.Integration.Events;
 using UnoVibe.Models;
-using UnoVibe.Services;
 
 namespace UnoVibe.Providers;
 
@@ -24,16 +22,14 @@ public partial class ToastService
         Event.RegisterTuiToastShow(null, ApplyToastShow);
     }
 
-    private void ApplyToastShow(string _, JsonElement properties)
+    private void ApplyToastShow(string _, TuiToastShowEvent e)
     {
-        var variant = properties.GetStringProperty("variant");
-        var duration = properties.GetInt64Property("duration");
         Show(new ToastItem
         {
-            Title = properties.GetStringProperty("title"),
-            Message = properties.GetStringProperty("message"),
-            Variant = variant.Length > 0 ? variant : "info",
-            DurationMs = duration > 0 ? (int)duration : 5000,
+            Title = e.Title ?? "Opencode TUI Message",
+            Message = e.Message,
+            Variant = e.Variant,
+            DurationMs = (int) e.Duration,
         });
     }
     private CancellationTokenSource? _toastCts;

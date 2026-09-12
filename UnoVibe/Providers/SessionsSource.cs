@@ -3,6 +3,7 @@ using System.Text.Json;
 using QuickMarkup.Infra.Collections;
 using UnoVibe.Helpers;
 using UnoVibe.Integration;
+using UnoVibe.Integration.Events;
 using UnoVibe.Models;
 using UnoVibe.Services;
 
@@ -137,19 +138,41 @@ partial class SessionsSource
         return UpsertSession(newSession);
     }
 
-    void MessageUpdated(string _1, JsonElement properties)
+    async void MessageUpdated(string _1, MessageUpdatedEvent e)
     {
-        var id = properties.GetStringProperty("sessionID");
-        var sessId = new SessionId(id);
+        var sessId = new SessionId(e.SessionId);
         // Feed the sidebar outcome tracker for assistant message completions. The last
         // update for a turn carries its definitive outcome (error/finish/cost/tokens).
-        if (properties.TryGetProperty("info", out var info) && info.GetStringProperty("role") == "assistant")
-            sessions[sessId]?.Outcome = MessageJsonHelper.ClassifyMessageOutcome(info);
-        if (info.TryGetProperty("finish", out _))
+        if (e.Info is not AssistantMessageInfo assistent)
+            return;
+        var outcome = MessageJsonHelper.ClassifyMessageOutcome(assistent);
+        
+        sessions[sessId]?.Outcome = outcome;
+        if (assistent.Finish is not null)
         {
-            // var m = MessageJsonHelper.PartFromJson(info);
-            // var message = m.Interrupted || m.Parts.Any(p => p.Type == "aborted");
-            if (!(Chatbox(sessId)?.TurnStopAction(false, false) ?? false)) // TODO: Fill in proper value than false, false
+            var meetsContinueCriteria = outcome is not ChatOutcome.Interrupted;
+
+            if (meetsContinueCriteria)
+            {
+                try
+                {
+                    var message = (await Opencode.GetMessageAsync(sessId, assistent.Id)).GetOrThrow();
+                    if (message.Parts is { Count: > 0 } parts)
+                    {
+                        var lastPart = parts[^1];
+                        // Ended on thinking — auto-continue to get the actual response.
+                        meetsContinueCriteria = lastPart is ReasoningPart;
+                    }
+                }
+                catch
+                {
+                    // Best-effort: if the fetch fails, fall back to no auto-continue.
+                    meetsContinueCriteria = false;
+                }
+            }
+            var meetsAutoContinueCriteria = meetsContinueCriteria;
+
+            if (!(Chatbox(sessId)?.TurnStopAction(meetsContinueCriteria, meetsAutoContinueCriteria) ?? false))
             {
                 if (sessions.TryGetValue(sessId, out var head))
                 {
@@ -161,13 +184,9 @@ partial class SessionsSource
             }
         }
     }
-    void UpsertSession(string _1, JsonElement properties)
+    void UpsertSession(string _1, SessionCrudEvent properties)
     {
-        if (!properties.TryGetProperty("info", out var info)) return;
-        var sessInfo = info.Deserialize(AppJsonContext.Default.SessionInfo);
-        if (sessInfo is null) return;
-
-        UpsertSession(sessInfo);
+        UpsertSession(properties.Info);
     }
     SessionHead UpsertSession(Integration.SessionInfo sessInfo)
     {
@@ -191,12 +210,9 @@ partial class SessionsSource
     /// Applies a <c>session.deleted</c> event: removes the session from the sidebar and the
     /// store cache immediately, and clears the active view if the deleted session was active.
     /// </summary>
-    private void DeleteSession(string _1, JsonElement properties)
+    private void DeleteSession(string _1, SessionCrudEvent properties)
     {
-        var id = properties.GetStringProperty("sessionID");
-        if (id.Length == 0) return;
-
-        var sessId = new SessionId(id);
+        var sessId = new SessionId(properties.SessionId);
 
         if (ActiveSessionId == sessId)
             ActiveSessionId = null;

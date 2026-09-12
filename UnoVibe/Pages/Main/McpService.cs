@@ -1,4 +1,5 @@
 using UnoVibe.Integration;
+using UnoVibe.Integration.Events;
 using UnoVibe.Models;
 using UnoVibe.Providers;
 
@@ -44,7 +45,7 @@ class McpService
         _ = Task.Run(() => McpPollLoopAsync());
         _ = RefreshMcpStatusAsync();
     }
-    void McpToolsChangedHandler(string d, System.Text.Json.JsonElement _1)
+    void McpToolsChangedHandler(string d, McpToolsChangedEvent _1)
     {
         if (d == Directory) _ = RefreshMcpStatusAsync();
     }

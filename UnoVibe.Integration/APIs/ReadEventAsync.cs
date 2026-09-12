@@ -6,6 +6,9 @@ namespace UnoVibe.Integration;
 /// An event received on the SSE stream. The payload <c>Properties</c> is kept as
 /// JSON so the store can parse each event type as needed (the OpenAPI spec does not
 /// describe the SSE payloads, so these are hand-defined from the server schema).
+/// Use <c>JsonSerializer.Deserialize(evt.Properties.GetRawText(), AppJsonContext.Default.XxxEvent)</c>
+/// with the appropriate event model type from <see cref="UnoVibe.Integration.Events"/> to get
+/// a strongly-typed payload.
 /// </summary>
 public sealed class OpencodeEvent
 {

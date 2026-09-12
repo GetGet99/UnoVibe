@@ -1,6 +1,9 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
 using UnoVibe.Integration;
+using UnoVibe.Integration.Events;
+using UnoVibe.Services;
 
 namespace UnoVibe.Providers;
 
@@ -66,91 +69,88 @@ class EventSource
             // nothing to unregister
         }
     }
+    private void UnregisterDelegate(string? directory, string eventType, Delegate handler)
+        => Unregister(directory, eventType, delegateMapping[handler]);
     public void Register(string directory) => SubscribeToDirectory(directory);
-    public void RegisterMessageUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "message.updated", handler);
-    public void RegisterMessagePartUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "message.part.updated", handler);
-    public void RegisterMessagePartDelta(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "message.part.delta", handler);
-    public void RegisterMessagePartRemoved(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "message.part.removed", handler);
-    public void RegisterMessageRemoved(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "message.removed", handler);
-    public void RegisterSessionCreated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.created", handler);
-    public void RegisterSessionStatus(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.status", handler);
-    public void RegisterSessionUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.updated", handler);
-    public void RegisterSessionDeleted(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.deleted", handler);
-    // TODO: properties { sessionID?, error }; surface server-side session errors.
-    public void RegisterSessionError(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.error", handler);
-    // TODO: properties { sessionID, diff }; show file diffs produced by the session.
-    public void RegisterSessionDiff(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.diff", handler);
-    // TODO: properties { sessionID }; deprecated — superseded by session.status {type:"idle"}.
-    public void RegisterSessionIdle(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.idle", handler);
-    // TODO: properties { sessionID }; mark the session as compacted.
-    public void RegisterSessionCompacted(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "session.compacted", handler);
-    public void RegisterQuestionAsked(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "question.asked", handler);
-    public void RegisterQuestioReplied(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "question.replied", handler);
-    public void RegisterQuestionRejected(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "question.rejected", handler);
-    public void RegisterPermissionAsked(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "permission.asked", handler);
-    public void RegisterPermissionReplied(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "permission.replied", handler);
-    // TODO: properties { file }; the agent edited a file on disk.
-    public void RegisterFileEdited(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "file.edited", handler);
-    // TODO: properties { file, event: "add"|"change"|"unlink" }.
-    public void RegisterFileWatcherUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "file.watcher.updated", handler);
-    // The git branch changed in a workspace. The payload only carries { branch }
-    // (no directory), so refresh every sidebar directory group's branch label.
-    public void RegisterVcsBranchUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "vcs.branch.updated", handler);
-    // TODO: the todo list changed; the TUI renders it inline.
-    public void RegisterTodoUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "todo.updated", handler);
-    // TODO: LSP status changed; properties {}.
-    public void RegisterLspUpdated(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "lsp.updated", handler);
-    // TODO: a custom command was executed server-side.
-    public void RegisterCommandExecuted(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "command.executed", handler);
-    // An MCP server's tool set changed (or its connection closed). The server
-    // doesn't push a status event for connect/disconnect, so re-poll GET /mcp.
-    public void RegisterMcpToolsChanged(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "mcp.tools.changed", handler);
-    // TODO: an MCP browser-open attempt failed.
-    public void RegisterMcpBrowserOpenFailed(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "mcp.browser.open.failed", handler);
-    // TODO: first event on the /event stream ({}); could drive connection state.
-    public void RegisterServerConnected(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "server.connected", handler);
-    // TODO: sent every 10s ({}) to keep the stream alive; ignoring is fine.
+    public void RegisterMessageUpdated(string? directory, Action<string, MessageUpdatedEvent> handler)
+        => Register(directory, EventTypes.MessageUpdated, MakeHandler(handler, AppJsonContext.Default.MessageUpdatedEvent));
+    public void RegisterMessagePartUpdated(string? directory, Action<string, MessagePartUpdatedEvent> handler)
+        => Register(directory, EventTypes.MessagePartUpdated, MakeHandler(handler, AppJsonContext.Default.MessagePartUpdatedEvent));
+    public void RegisterMessagePartDelta(string? directory, Action<string, MessagePartDeltaEvent> handler)
+        => Register(directory, EventTypes.MessagePartDelta, MakeHandler(handler, AppJsonContext.Default.MessagePartDeltaEvent));
+    public void RegisterMessagePartRemoved(string? directory, Action<string, MessagePartRemovedEvent> handler)
+        => Register(directory, EventTypes.MessagePartRemoved, MakeHandler(handler, AppJsonContext.Default.MessagePartRemovedEvent));
+    public void RegisterMessageRemoved(string? directory, Action<string, MessageRemovedEvent> handler)
+        => Register(directory, EventTypes.MessageRemoved, MakeHandler(handler, AppJsonContext.Default.MessageRemovedEvent));
+    public void RegisterSessionCreated(string? directory, Action<string, SessionCrudEvent> handler)
+        => Register(directory, EventTypes.SessionCreated, MakeHandler(handler, AppJsonContext.Default.SessionCrudEvent));
+    public void RegisterSessionStatus(string? directory, Action<string, SessionStatusEvent> handler)
+        => Register(directory, EventTypes.SessionStatus, MakeHandler(handler, AppJsonContext.Default.SessionStatusEvent));
+    public void RegisterSessionUpdated(string? directory, Action<string, SessionCrudEvent> handler)
+        => Register(directory, EventTypes.SessionUpdated, MakeHandler(handler, AppJsonContext.Default.SessionCrudEvent));
+    public void RegisterSessionDeleted(string? directory, Action<string, SessionCrudEvent> handler)
+        => Register(directory, EventTypes.SessionDeleted, MakeHandler(handler, AppJsonContext.Default.SessionCrudEvent));
+    public void RegisterSessionError(string? directory, Action<string, SessionErrorEvent> handler)
+        => Register(directory, EventTypes.SessionError, MakeHandler(handler, AppJsonContext.Default.SessionErrorEvent));
+    public void RegisterSessionDiff(string? directory, Action<string, SessionDiffEvent> handler)
+        => Register(directory, EventTypes.SessionDiff, MakeHandler(handler, AppJsonContext.Default.SessionDiffEvent));
+    public void RegisterSessionIdle(string? directory, Action<string, SessionIdleEvent> handler)
+        => Register(directory, EventTypes.SessionIdle, MakeHandler(handler, AppJsonContext.Default.SessionIdleEvent));
+    public void RegisterSessionCompacted(string? directory, Action<string, SessionCompactedEvent> handler)
+        => Register(directory, EventTypes.SessionCompacted, MakeHandler(handler, AppJsonContext.Default.SessionCompactedEvent));
+    public void RegisterQuestionAsked(string? directory, Action<string, QuestionAskedEvent> handler)
+        => Register(directory, EventTypes.QuestionAsked, MakeHandler(handler, AppJsonContext.Default.QuestionAskedEvent));
+    public void RegisterQuestionReplied(string? directory, Action<string, QuestionRepliedEvent> handler)
+        => Register(directory, EventTypes.QuestionReplied, MakeHandler(handler, AppJsonContext.Default.QuestionRepliedEvent));
+    public void RegisterQuestionRejected(string? directory, Action<string, QuestionRejectedEvent> handler)
+        => Register(directory, EventTypes.QuestionRejected, MakeHandler(handler, AppJsonContext.Default.QuestionRejectedEvent));
+    public void RegisterPermissionAsked(string? directory, Action<string, PermissionAskedEvent> handler)
+        => Register(directory, EventTypes.PermissionAsked, MakeHandler(handler, AppJsonContext.Default.PermissionAskedEvent));
+    public void RegisterPermissionReplied(string? directory, Action<string, PermissionRepliedEvent> handler)
+        => Register(directory, EventTypes.PermissionReplied, MakeHandler(handler, AppJsonContext.Default.PermissionRepliedEvent));
+    public void RegisterFileEdited(string? directory, Action<string, FileEditedEvent> handler)
+        => Register(directory, EventTypes.FileEdited, MakeHandler(handler, AppJsonContext.Default.FileEditedEvent));
+    public void RegisterFileWatcherUpdated(string? directory, Action<string, FileWatcherUpdatedEvent> handler)
+        => Register(directory, EventTypes.FileWatcherUpdated, MakeHandler(handler, AppJsonContext.Default.FileWatcherUpdatedEvent));
+    public void RegisterVcsBranchUpdated(string? directory, Action<string, VcsBranchUpdatedEvent> handler)
+        => Register(directory, EventTypes.VcsBranchUpdated, MakeHandler(handler, AppJsonContext.Default.VcsBranchUpdatedEvent));
+    public void RegisterTodoUpdated(string? directory, Action<string, TodoUpdatedEvent> handler)
+        => Register(directory, EventTypes.TodoUpdated, MakeHandler(handler, AppJsonContext.Default.TodoUpdatedEvent));
+    public void RegisterLspUpdated(string? directory, Action<string, LspUpdatedEvent> handler)
+        => Register(directory, EventTypes.LspUpdated, MakeHandler(handler, AppJsonContext.Default.LspUpdatedEvent));
+    public void RegisterCommandExecuted(string? directory, Action<string, CommandExecutedEvent> handler)
+        => Register(directory, EventTypes.CommandExecuted, MakeHandler(handler, AppJsonContext.Default.CommandExecutedEvent));
+    public void RegisterMcpToolsChanged(string? directory, Action<string, McpToolsChangedEvent> handler)
+        => Register(directory, EventTypes.McpToolsChanged, MakeHandler(handler, AppJsonContext.Default.McpToolsChangedEvent));
+    public void RegisterMcpBrowserOpenFailed(string? directory, Action<string, McpBrowserOpenFailedEvent> handler)
+        => Register(directory, EventTypes.McpBrowserOpenFailed, MakeHandler(handler, AppJsonContext.Default.McpBrowserOpenFailedEvent));
+    public void RegisterServerConnected(string? directory, Action<string, ServerConnectedEvent> handler)
+        => Register(directory, EventTypes.ServerConnected, MakeHandler(handler, AppJsonContext.Default.ServerConnectedEvent));
+    // Heartbeat has no typed model — synthetic event with empty properties.
     public void RegisterServerHeartbeat(string? directory, Action<string, JsonElement> handler)
         => Register(directory, "server.heartbeat", handler);
-    // TODO: the server instance was disposed ({}); the stream ends after this event.
-    public void RegisterServerInstanceDisposed(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "server.instance.disposed", handler);
-    // TUI command plumbing (server → client commands; relevant only if adopting them)
-    public void RegisterTuiToastShow(string? directory, Action<string, JsonElement> handler)
-        => Register(directory, "tui.toast.show", handler);
+    public void RegisterServerInstanceDisposed(string? directory, Action<string, ServerInstanceDisposedEvent> handler)
+        => Register(directory, EventTypes.ServerInstanceDisposed, MakeHandler(handler, AppJsonContext.Default.ServerInstanceDisposedEvent));
+    public void RegisterTuiToastShow(string? directory, Action<string, TuiToastShowEvent> handler)
+        => Register(directory, EventTypes.TuiToastShow, MakeHandler(handler, AppJsonContext.Default.TuiToastShowEvent));
     
     // An MCP server's tool set changed (or its connection closed). The server
     // doesn't push a status event for connect/disconnect, so re-poll GET /mcp.
-    public void UnregisterMcpToolsChanged(string? directory, Action<string, JsonElement> handler)
-        => Unregister(directory, "mcp.tools.changed", handler);
-    // TODO: an MCP browser-open attempt failed.
+    public void UnregisterMcpToolsChanged(string? directory, Action<string, McpToolsChangedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.McpToolsChanged, handler);
+
+    Action<string, JsonElement> MakeHandler<T>(Action<string, T> handler, JsonTypeInfo<T> typeInfo)
+    {
+        if (!delegateMapping.TryGetValue(handler, out var mapped))
+        {
+            delegateMapping[handler] = mapped = (dir, json) =>
+            {
+                handler(dir, json.Deserialize(typeInfo)!);
+            };
+        }
+        return mapped;
+    }
+    readonly Dictionary<Delegate, Action<string, JsonElement>> delegateMapping = [];
 
     void Apply(OpencodeEvent evt)
     {
