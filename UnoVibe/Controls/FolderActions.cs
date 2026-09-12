@@ -12,9 +12,11 @@ namespace UnoVibe.Controls;
 [QuickMarkup("""
     using UnoVibe.Services;
     using UnoVibe.Models;
+    using UnoVibe.Providers;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
-    inject ChatStore Store;
+    inject SessionsSource Sessions;
+    inject ToastService Toasts;
     inject? bool IsSidebarView;
     required string Directory;
     bool ShowFileManager = false;
@@ -52,7 +54,7 @@ public partial class FolderActions : IQuickMarkupComponent
     {
         // Small-screen view switching: a new session lands in its chat view.
         IsSidebarView = false;
-        _ = Store.NewSessionAsync(Directory);
+        Sessions.PrepareNewSession(Directory);
     }
 
     /// <summary>Runs a folder-launch action and surfaces failures as a toast.</summary>
@@ -60,7 +62,7 @@ public partial class FolderActions : IQuickMarkupComponent
     {
         var error = action(Directory);
         if (error is null) return;
-        Store.ShowToast(new ToastItem
+        Toasts.Show(new ToastItem
         {
             Title = "Open folder",
             Message = error,

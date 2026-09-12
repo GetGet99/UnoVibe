@@ -1,9 +1,13 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Models;
 
 [QuickMarkup("""
     bool IsRead = true; // client driven
+    
+    string Directory = `null!`;
+
     string Title = "";
 
     long Updated;
@@ -14,11 +18,17 @@ namespace UnoVibe.Services;
     bool IsPendingQuestion;
     bool IsPendingPermission;
     SessionState State => `ResolveState()`;
+
+    // Refers to selected values
+    ChatParameters ChatParams = `new()`;
     """)]
 public partial class SessionHead
 {
-    public string Id { get; private set; }
-    public string Directory { get; private set; }
+    public SessionId Id { get; private set; }
+    /// <summary>ID of the parent session when this is a subagent session (spawned by a <c>task</c> tool call), else "".</summary>
+    public SessionId? ParentId { get; set; }
+    /// <summary>True when this session is a subagent (its server info carries a parentID).</summary>
+    public bool IsSubagent => ParentId is not null;
     SessionState ResolveState()
     {
         if (IsBusy) return SessionState.Working;
@@ -36,7 +46,7 @@ public partial class SessionHead
 
     [QuickMarkupConstructor]
     [MemberNotNull(nameof(Id), nameof(Directory))]
-    void Ctor(string id, string directory)
+    void Ctor(SessionId id, string directory)
     {
         Id = id;
         Directory = directory;
@@ -56,22 +66,39 @@ public partial class SessionHead
         if (span.TotalDays < 30) return $"{(int)span.TotalDays}d";
         return $"{span.TotalDays / 30:0}mo";
     }
-}
 
-public enum SessionState
-{
-    None,
-    Working,
-    PendingQuestion,
-    PendingPermission,
-    Success,
-    Error,
-    Interrupted
-}
-public enum ChatOutcome
-{
-    None,
-    Success,
-    Error,
-    Interrupted
+    public static SessionHead From(Integration.SessionInfo theirs)
+    {
+        SessionHead sess = new(new(theirs.Id), theirs.Directory)
+        {
+            Title = theirs.Title,
+            ChatParams = {
+                Agent = theirs.Agent,
+            }
+        };
+        if (theirs.Model is {} model)
+        {
+            sess.ChatParams.Model = new(model.ProviderId, model.Id);
+            sess.ChatParams.Variant = model.Variant;
+        }
+        if (theirs.Time is not null) sess.Updated = theirs.Time.Updated;
+        return sess;
+    }
+
+    public void ApplyUpdateFrom(Integration.SessionInfo fresh)
+    {
+        Debug.Assert(Id == fresh.Id);
+        Directory = fresh.Directory;
+        Title = fresh.Title;
+        if (fresh.Model is {} model)
+        {
+            ChatParams.Model = new(model.ProviderId, model.Id);
+            ChatParams.Variant = model.Variant;
+        } else
+        {
+            ChatParams.Model = null;
+            ChatParams.Variant = null;
+        }
+        if (fresh.Time is not null) Updated = fresh.Time.Updated;
+    }
 }

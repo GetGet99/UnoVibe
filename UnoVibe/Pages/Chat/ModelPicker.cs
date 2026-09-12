@@ -20,28 +20,32 @@ namespace UnoVibe.Pages.Chat;
 ///     and scrolled into view; arrow keys move the highlight, Enter picks it, Escape dismisses.
 ///   - Rows show the model name + provider; the active model gets an accent tint + a check glyph.
 ///
-/// API: bind <see cref="ItemsSource"/> (the full model list) and <see cref="SelectedItem"/>
-/// (one-way display/state), then handle <see cref="ModelSelected"/> to apply the pick.
+/// API: bind <see cref="Models.ModelOptions"/> (the full model list) and <see cref="SelectedModel"/>
+/// (one-way display/state), then handle <see cref="OnModelSelected"/> to apply the pick.
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Models;
     using UnoVibe.Controls;
+    using UnoVibe.Integration;
+    using UnoVibe.Providers;
     using UnoVibe.Services;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     using Microsoft.UI.Xaml.Controls.Primitives;
-    public `ObservableCollection<ModelOption>` ItemsSource = `new()`;
-    public ModelOption? SelectedItem = null;
+    private Model? SelectedModel => `Sessions.Head(Sessions.ActiveSessionId)?.Model`;
+    private string SelectedModelNameOrDefaultHint => `SelectedModel is not {} model ? "Select model" : Models.ModelOptions[model].Name`;
     public double FontSize = 12;
-    inject ChatStore Store;
-    inject? bool IsCompact;
+    inject SessionsSource Sessions;
+    inject OpencodeClient Opencode;
+    inject ToastService Toasts;
+    inject ModelsProvider Models;
+    inject bool IsCompact;
     string Query = "";
     int HighlightIndex = -1;
     // Filtered model list — reactive to both the source collection and the query string.
-    `IEnumerable<ModelOption>` FilteredModels => `FilterModels(ItemsSource.Reactive, Query)`;
-    bool EmptyModels => `ItemsSource.Reactive.Count == 0`;
+    `IEnumerable<ModelOption>` FilteredModels => `FilterModels(Models.ModelOptions, Query)`;
     // Hint shown when there is nothing to pick ("No models available" / "No models match ...").
-    string EmptyHint => `EmptyModels ? "No models available" : (Query.Trim().Length > 0 && !FilteredModels.Any() ? $"No models match \"{Query.Trim()}\"" : "")`;
+    string EmptyHint => `Models.ModelOptions.Count == 0 ? "No models available" : (Query.Trim().Length > 0 && !FilteredModels.Any() ? $"No models match \"{Query.Trim()}\"" : "")`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -49,7 +53,7 @@ namespace UnoVibe.Pages.Chat;
         <Grid MinWidth=`IsCompact ? 120 : 200` MaxWidth=300 Height=28>
             triggerButton = <Button HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(12,  0, 12,  0)` CornerRadius=4
                     HorizontalContentAlignment=Stretch VerticalContentAlignment=Center
-                    ToolTipService.ToolTip=`SelectedItem?.Name ?? "Select model"`
+                    ToolTipService.ToolTip=`SelectedModelNameOrDefaultHint`
                     Flyout=modelFlyout = <Flyout Placement=Bottom Opened+=`OnFlyoutOpened` Closed+=`OnFlyoutClosed`>
                 <Border MinWidth=340 MaxWidth=460 Padding=8 CornerRadius=8>
                     <StackPanel Spacing=6>
@@ -106,7 +110,7 @@ namespace UnoVibe.Pages.Chat;
                     <ColumnDefinition />
                     <ColumnDefinition Width=Auto />
                 </>>
-                    <TextBlock Text=`SelectedItem?.Name ?? "Select model"` FontSize=`FontSize` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                    <TextBlock Text=`SelectedModelNameOrDefaultHint` FontSize=`FontSize` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                     <FontIcon Glyph=`((char)0xE70D).ToString()` FontSize=12 Grid.Column=1 VerticalAlignment=Center Margin=`new Thickness(12, 0, 2, 0)` Foreground=`theme.SecondaryText` />
                 </Grid>
             </Button>
@@ -118,8 +122,19 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
     /// <summary>Fixed row height in the model list; the scroll-to-selected math relies on it.</summary>
     private const double RowHeight = 34;
 
-    /// <summary>Raised when the user picks a model from the list. The subscriber applies it (SessionStore.SetModel).</summary>
-    public event Action<ModelOption>? ModelSelected;
+
+    void OnModelSelected(ModelOption model)
+    {
+        var head = Sessions.Head(Sessions.ActiveSessionId);
+        
+        // TODO: on empty session what to do
+        if (head is null) return;
+
+        if (model == Sessions.Head(Sessions.ActiveSessionId)?.ChatParams.Model) return;
+        head.ChatParams.Model = Model.From(model);
+        if (!model.Variants.Contains(head.ChatParams.Variant))
+            head.ChatParams.Variant = null;
+    }
 
     // Uno workaround state (same issue as SuggestBox): a handled Up/Down in the search TextBox still
     // moves the caret via Uno's unconditional OnPostKeyDown processing; cancelling the stray move in
@@ -134,9 +149,9 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
         {
             BasedOn = (Style)
 #if WASDK
-            App.Current.Resources["DefaultFlyoutPresenterStyle"]
+            Application.Current.Resources["DefaultFlyoutPresenterStyle"]
 #else
-            App.Current.Resources["DefaultFlyoutPresenter"]
+            Application.Current.Resources["DefaultFlyoutPresenter"]
 #endif
             ,
             Setters =
@@ -165,7 +180,7 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
     private void SelectModel(ModelOption m)
     {
         if (modelFlyout is { IsOpen: true }) modelFlyout.Hide();
-        ModelSelected?.Invoke(m);
+        OnModelSelected(m);
     }
 
     /// <summary>Hides the flyout (buttons inside a Flyout don't auto-dismiss) and opens the connect dialog.</summary>
@@ -184,11 +199,10 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
     {
         var xamlRoot = MarkupNode.XamlRoot;
         if (xamlRoot is null) return;
-        await ProviderConnectDialog.ShowAsync(Store, xamlRoot);
+        await ProviderConnectDialog.ShowAsync(Opencode, Toasts, Models, xamlRoot);
     }
 
-    private bool IsSelected(ModelOption m) =>
-        SelectedItem is { } s && s.ProviderId == m.ProviderId && s.Id == m.Id;
+    private bool IsSelected(ModelOption m) => SelectedModel == m;
 
     private Brush? RowBackground(ModelOption m, int index) =>
         IsSelected(m)
@@ -232,11 +246,13 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
 
     private int IndexOfSelected()
     {
-        if (SelectedItem is not { } sel) return -1;
+        // technically concept of index is incorrect if it is operation on Set
+        // but well it works as of now
+        if (SelectedModel is not { } sel) return -1;
         var idx = 0;
         foreach (var m in FilteredModels)
         {
-            if (m.ProviderId == sel.ProviderId && m.Id == sel.Id) return idx;
+            if (m == sel) return idx;
             idx++;
         }
         return -1;

@@ -1,6 +1,5 @@
 using UnoVibe.Services;
-using UnoVibe.Models;
-using Windows.ApplicationModel.DataTransfer;
+using QuickMarkup.Infra.Collections;
 
 namespace UnoVibe.Pages.Main;
 
@@ -9,18 +8,20 @@ namespace UnoVibe.Pages.Main;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
+    using UnoVibe.Providers;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
-    inject ChatStore Store;
+    inject SessionsSource Sessions;
+    inject EventSource Events;
+    inject ToastService Toasts;
     inject Window HostWindow;
     inject bool SettingsOpen;
     inject? bool IsCompact;
     inject? bool IsSidebarView;
-    bool McpExpanded = false;
-    bool ShowPassword = false;
+    inject OpencodeConnection Connection;
     <setup>
         var theme = ThemeBrushes.Global;
         var transparent = new SolidColorBrush(Colors.Transparent);
@@ -44,7 +45,7 @@ namespace UnoVibe.Pages.Main;
                             </StackPanel>
                         </Button>
                     }
-                    foreach (var group in `Store.DirectoryGroups`; `group.Directory`)
+                    foreach (var group in `Sessions.SessionSidebar`; `group.Directory`)
                     {
                         <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
                             <Grid ColumnDefinitions=<>
@@ -53,7 +54,7 @@ namespace UnoVibe.Pages.Main;
                             </> ColumnSpacing=4>
                                 <StackPanel Orientation=Horizontal Spacing=4>
                                     <TextBlock Text=`DisplayPath(group.Directory)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                    if (`group.Branch.Length > 0`)
+                                    if (`group.Branch is null`)
                                     {
                                         <TextBlock Text=`$"⎇ {group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                     }
@@ -63,66 +64,27 @@ namespace UnoVibe.Pages.Main;
                                     <FolderActions Directory=`group.Directory` />
                                 </Grid>
                             </Grid>
-                            if (`group.Sessions.Reactive.Count == 0`)
+                            if (`group.Sessions.Count == 0`)
                             {
                                 <TextBlock Text="No sessions yet" FontSize=11 Foreground=`theme.TertiaryText` Margin=`new Thickness(0, 6, 0, 0)` />
                             }
-                            foreach (var s in `group.IsExpanded ? group.Sessions.Reactive : group.Sessions.Reactive.Take(MaxVisibleSessions)`; `s.Head.Id`)
+                            foreach (var s in `ShowMoreDirectories.Contains(group.Directory) ? group.Sessions : group.Sessions.Take(MaxVisibleSessions)`; `s.Head.Id`)
                             {
                                 <SessionButton Session=`s.Head` />
                             }
-                            if (`group.Sessions.Reactive.Count > MaxVisibleSessions`)
+                            if (`group.Sessions.Count > MaxVisibleSessions`)
                             {
-                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 4, 8, 4)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 CommandParameter=`group.Directory` Click+=`(sender, e) => OnToggleShowMore(sender, e)`>
-                                    <TextBlock Text=`group.IsExpanded ? "Show less" : $"Show more ({group.Sessions.Reactive.Count - MaxVisibleSessions})"` FontSize=11 Foreground=`theme.SecondaryText` />
+                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 4, 8, 4)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 @Click+=`OnToggleShowMore(group.Directory)`>
+                                    <TextBlock Text=`group.IsExpanded ? "Show less" : $"Show more ({group.Sessions.Count - MaxVisibleSessions})"` FontSize=11 Foreground=`theme.SecondaryText` />
                                 </Button>
                             }
                         </StackPanel>
                     }
                 </StackPanel>
             </ScrollViewer>
-            <Border Grid.Row=1 Padding=`new Thickness(12, 8, 12, 8)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
-                <StackPanel Spacing=6>
-                    <Grid ColumnDefinitions=<>
-                        <ColumnDefinition />
-                        <ColumnDefinition Width=Auto />
-                    </> ColumnSpacing=8>
-                        mcpToggle = <Button Padding=`new Thickness(4, 2, 4, 2)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 @Click+=`OnToggleMcpExpanded()` ToolTipService.ToolTip="MCP servers">
-                            <StackPanel Orientation=Horizontal Spacing=6>
-                                <TextBlock Text=`McpExpanded ? "▼" : "▶"` FontSize=9 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
-                                <TextBlock Text="MCP" FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                                <TextBlock Text=`Store.McpSummary` FontSize=10 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
-                            </StackPanel>
-                        </Button>
-                        <Button Grid.Column=1 Padding=`new Thickness(6, 3, 6, 3)` @Click+=`_ = Store.RefreshMcpStatusAsync()` ToolTipService.ToolTip="Refresh MCP status" Visibility=`McpExpanded ? Visibility.Visible : Visibility.Collapsed`>
-                            <AppSymbolIcon Symbol=Refresh FontSize=11 />
-                        </Button>
-                    </Grid>
-                    if (`McpExpanded`)
-                    {
-                        <ScrollViewer MaxHeight=200 VerticalScrollBarVisibility=Auto>
-                            <StackPanel Spacing=6>
-                                foreach (var m in `Store.McpServers`; `m.Name`)
-                                {
-                                    <Grid ColumnDefinitions=<>
-                                        <ColumnDefinition Width=Auto />
-                                        <ColumnDefinition />
-                                        <ColumnDefinition Width=Auto />
-                                    </> ColumnSpacing=8>
-                                        <Border Width=10 Height=10 CornerRadius=`new CornerRadius(5)` Background=`McpDot(m)` VerticalAlignment=Center ToolTipService.ToolTip=`m.Error` />
-                                        <StackPanel Grid.Column=1 VerticalAlignment=Center>
-                                            <TextBlock Text=`m.Name` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` />
-                                            <TextBlock Text=`McpStatusDetail(m)` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
-                                        </StackPanel>
-                                        <Button Grid.Column=2 Padding=`new Thickness(8, 4, 8, 4)` FontSize=11 Content=`m.ToggleLabel` IsEnabled=`!m.Connecting` CommandParameter=`m.Name` Click+=`(sender, e) => OnToggleMcp(sender, e)` />
-                                    </Grid>
-                                }
-                            </StackPanel>
-                        </ScrollViewer>
-                        <TextBlock Text=`$"Directory: {Store.McpDirectory}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` />
-                    }
-                </StackPanel>
-            </Border>
+
+            <McpStatusView />
+            
             <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
                 <Grid ColumnDefinitions=<>
                     <ColumnDefinition />
@@ -132,57 +94,16 @@ namespace UnoVibe.Pages.Main;
                     <ColumnDefinition Width=Auto />
                 </>>
                     <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                    <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" Click+=`(sender, e) => OnOpenFolder(sender, e)`>
+                    <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" @Click+=`OpenFolderAndStartSessionAsync()`>
                         <AppSymbolIcon Symbol=Folder FontSize=11 />
                     </Button>
-                    <Button Grid.Column=2 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" Click+=`(sender, e) => OnNewWindow(sender, e)`>
+                    <Button Grid.Column=2 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" @Click+=`App.CreateWindow()`>
                         <AppSymbolIcon Symbol=NewWindow FontSize=11 />
                     </Button>
                     <Button Grid.Column=3 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Settings" @Click+=`SettingsOpen = true`>
                         <AppSymbolIcon Symbol=Setting FontSize=11 />
                     </Button>
-                    <Button Grid.Column=4 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Connection details" Flyout=connectionFlyout = <Flyout Placement=Top @Closed+=`ShowPassword = false`>
-                        <StackPanel Spacing=10 MinWidth=320 MaxWidth=400>
-                            <TextBlock Text="Connection" FontSize=13 FontWeight=`FontWeights.SemiBold` />
-                            <Grid ColumnSpacing=8 ColumnDefinitions=<>
-                                <ColumnDefinition Width=Auto />
-                                <ColumnDefinition />
-                                <ColumnDefinition Width=Auto />
-                            </>>
-                                <TextBlock Text="Directory" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                                <TextBlock Grid.Column=1 Text=`Store.ServerDirectory` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Store.ServerDirectory` />
-                                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` ToolTipService.ToolTip="Copy directory" @Click+=`CopyToClipboard("Directory", Store.ServerDirectory)`>
-                                    <AppSymbolIcon Symbol=Copy FontSize=11 />
-                                </Button>
-                            </Grid>
-                            <Grid ColumnSpacing=8 ColumnDefinitions=<>
-                                <ColumnDefinition Width=Auto />
-                                <ColumnDefinition />
-                                <ColumnDefinition Width=Auto />
-                            </>>
-                                <TextBlock Text="Server" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                                <TextBlock Grid.Column=1 Text=`Store.ConnectionUrl` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Store.ConnectionUrl` />
-                                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` ToolTipService.ToolTip="Copy URL" @Click+=`CopyToClipboard("URL", Store.ConnectionUrl)`>
-                                    <AppSymbolIcon Symbol=Copy FontSize=11 />
-                                </Button>
-                            </Grid>
-                            <Grid ColumnSpacing=8 ColumnDefinitions=<>
-                                <ColumnDefinition Width=Auto />
-                                <ColumnDefinition />
-                                <ColumnDefinition Width=Auto />
-                                <ColumnDefinition Width=Auto />
-                            </>>
-                                <TextBlock Text="Password" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                                <TextBlock Grid.Column=1 Text=`ShowPassword ? Store.ConnectionPassword : MaskPassword(Store.ConnectionPassword)` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`ShowPassword ? Store.ConnectionPassword : "Hidden — click the eye to reveal"` />
-                                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`Store.ConnectionPassword.Length > 0 ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip=`ShowPassword ? "Hide password" : "Show password"` @Click+=`ShowPassword = !ShowPassword`>
-                                    <AppSymbolIcon Symbol=View FontSize=11 />
-                                </Button>
-                                <Button Grid.Column=3 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`Store.ConnectionPassword.Length > 0 ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip="Copy password" @Click+=`CopyToClipboard("Password", Store.ConnectionPassword)`>
-                                    <AppSymbolIcon Symbol=Copy FontSize=11 />
-                                </Button>
-                            </Grid>
-                        </StackPanel>
-                    </Flyout>>
+                    <Button Grid.Column=4 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Connection details" Flyout=<ConnectionFlyout />>
                         <AppSymbolIcon Symbol=More FontSize=11 />
                     </Button>
                 </Grid>
@@ -192,54 +113,25 @@ namespace UnoVibe.Pages.Main;
     """)]
 public partial class SessionSidebar : IQuickMarkupComponent
 {
+    ReactiveSet<string> ShowMoreDirectories = [];
     Thickness SessionSidebarBorder =>
 #if WASDK
         // WASDK title bar have the same mica color as body so would make sense to have top border too
-        new Thickness(0, 1, 1, 0)
+        new(0, 1, 1, 0)
 #else
-        new Thickness(0, 0, 1, 0)
+        new(0, 0, 1, 0)
 #endif
         ;
     /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
     private const int MaxVisibleSessions = 5;
 
-    [QuickMarkupConstructor]
-    private void Ctor()
+    private void OnToggleShowMore(string directory)
     {
-        Init();
-        // The /mcps built-in command (fired from the chat composer) reveals this section.
-        Store.McpSectionRequested += () => _ = RevealMcpSectionAsync();
+        // if unable to remove, then add it!
+        // yes this is toggle logic
+        if (!ShowMoreDirectories.Remove(directory))
+            ShowMoreDirectories.Add(directory);
     }
-
-    /// <summary>
-    /// Reveals the MCP section for the /mcps built-in command: on compact windows the sidebar
-    /// itself is hidden, so switch to the sidebar view first; then expand the section (starting
-    /// its status poll) and put keyboard focus on the toggle.
-    /// </summary>
-    private async Task RevealMcpSectionAsync()
-    {
-        if (IsCompact) IsSidebarView = true;
-        if (!McpExpanded) OnToggleMcpExpanded();
-        await Task.Delay(16); // let the reactive tree materialize before focusing
-        mcpToggle?.Focus(FocusState.Programmatic);
-    }
-
-    private void OnSwitchSession(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.CommandParameter is not string id) return;
-        // Small-screen view switching: tapping a session leaves the sidebar view and shows its chat.
-        IsSidebarView = false;
-        if (id == Store.CurrentSessionId) return;
-        _ = Store.SwitchSessionAsync(id);
-    }
-
-    private void OnToggleShowMore(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.CommandParameter is not string directory) return;
-        Store.ToggleDirectoryExpanded(directory);
-    }
-
-    private void OnOpenFolder(object sender, RoutedEventArgs e) => _ = OpenFolderAndStartSessionAsync();
 
     /// <summary>
     /// Opens a folder picker and starts a new session in the picked folder. The session is
@@ -249,79 +141,22 @@ public partial class SessionSidebar : IQuickMarkupComponent
     {
         try
         {
-            var path = await WindowsHelper.PickFolderAsync(HostWindow, Store.ServerDirectory);
+            var path = await WindowsHelper.PickFolderAsync(HostWindow, Connection.ServerDirectory);
             if (path is not null)
             {
-                await Store.NewSessionAsync(path);
+                Sessions.PrepareNewSession(path);
                 // Small-screen view switching: opening a folder lands in its new chat view.
                 IsSidebarView = false;
             }
         }
         catch (Exception ex)
         {
-            Store.ShowError(ex.Message, "Folder picker failed");
+            Toasts.ShowError(ex.Message, "Folder picker failed");
         }
     }
-
-    private void OnNewWindow(object sender, RoutedEventArgs e) => UnoVibe.App.CreateWindow();
-
-    /// <summary>
-    /// Renders the connection password while hidden: a fixed-width bullet mask, or "None"
-    /// when the server has no password. The real value is never shown by default.
-    /// </summary>
-    private static string MaskPassword(string password) =>
-        password.Length == 0 ? "None" : "••••••••";
-
-    /// <summary>Copies a connection value to the system clipboard and confirms with a toast.</summary>
-    private void CopyToClipboard(string label, string text)
-    {
-        var data = new DataPackage();
-        data.SetText(text);
-        Clipboard.SetContent(data);
-        Store.ShowToast(new ToastItem
-        {
-            Title = "Copied",
-            Message = $"{label} copied to clipboard.",
-            Variant = "success",
-        });
-    }
-
-    private void OnToggleMcp(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.CommandParameter is not string name) return;
-        _ = Store.ToggleMcpAsync(name);
-    }
-
-    /// <summary>
-    /// Expands/collapses the MCP section. Expansion starts the background status poll and
-    /// refreshes immediately; collapsing stops the poll (the store's one-shot refresh on
-    /// connect/session-switch/toggle still applies).
-    /// </summary>
-    private void OnToggleMcpExpanded()
-    {
-        McpExpanded = !McpExpanded;
-        Store.SetMcpPolling(McpExpanded);
-        if (McpExpanded) _ = Store.RefreshMcpStatusAsync();
-    }
-
-    /// <summary>Sidebar status-dot color for an MCP server.</summary>
-    private static Brush? McpDot(McpServerItem m) => m.Status switch
-    {
-        "connected" => ThemeBrushes.Global.SystemSuccess,
-        "failed" => ThemeBrushes.Global.SystemCritical,
-        "needs_auth" => ThemeBrushes.Global.SystemCaution,
-        "needs_client_registration" => ThemeBrushes.Global.SystemCritical,
-        _ => ThemeBrushes.Global.TertiaryText,
-    };
-
-    /// <summary>Detail line under an MCP server name: status label, plus the error when present.</summary>
-    private static string McpStatusDetail(McpServerItem m) =>
-        m.Status == "failed" || m.Status == "needs_client_registration"
-            ? $"{m.StatusLabel}: {m.Error}"
-            : m.StatusLabel;
 
     /// <summary>
     /// Path relative to the connected server's directory via <see cref="PathDisplay.Relative"/>.
     /// </summary>
-    private string DisplayPath(string fullPath) => PathDisplay.Relative(fullPath, Store.ServerDirectory);
+    private string DisplayPath(string fullPath) => PathDisplay.Relative(fullPath, Connection.ServerDirectory);
 }

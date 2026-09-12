@@ -11,12 +11,14 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
+    using UnoVibe.Providers;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
-    inject ChatStore Store;
-    inject ChatPage ChatP;
+    inject UIService UIs;
+    inject SessionsSource Sessions;
+    inject OpencodeConnection Connection;
     string PermissionStage = "choose";
     string RejectText = "";
     // Mirrors the turn.autocontinue setting for the inline switch shown next to the Continue
@@ -27,7 +29,7 @@ namespace UnoVibe.Pages.Chat;
     </setup>
     <root>
         <Grid>
-            scrollHost = <ScrollViewer>
+            scrollHost = <StickyScrollViewer>
                 messagePanel = <StackPanel Padding=16>
                     if (`Store.Active.HiddenMessages > 0`)
                         <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10,  8, 10,  8)` Margin=`new Thickness(0, 0, 0, 8)`>
@@ -111,52 +113,41 @@ namespace UnoVibe.Pages.Chat;
                         </Border>
                     }
                 </StackPanel>
-            </ScrollViewer>
+            </StickyScrollViewer>
             if (`Store.Active.Messages.Reactive.Count == 0`)
                 <StackPanel HorizontalAlignment=Center VerticalAlignment=Center Padding=`new Thickness(16, 0, 16, 0)` Spacing=6 IsHitTestVisible=false>
                     <AppSymbolIcon Symbol=Folder FontSize=22 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
-                    <TextBlock Text=`NewChatPath()` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
-                               TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=520 ToolTipService.ToolTip=`Store.ActiveDirectory().Length > 0 ? Store.ActiveDirectory() : Store.ServerDirectory` />
+                    <TextBlock Text=`PathDisplay.Relative(Sessions.ActiveSessionDirectory, Connection.ServerDirectory)` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
+                               TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=520 ToolTipService.ToolTip=`Sessions.ActiveSessionDirectory` />
                 </StackPanel>
         </Grid>
     </root>
     """)]
 public partial class ChatMessageList : IQuickMarkupComponent<Grid>
 {
-    /// <summary>
-    /// True while the user is pinned to the bottom of the message list; follow-the-stream
-    /// autoscroll only runs in this state. Set by <see cref="OnScrollViewChanged"/> from any
-    /// scroll (scrolling away from the bottom disables it, reaching the bottom re-enables it),
-    /// and re-pinned by <see cref="ForceScrollToBottom"/> on explicit app actions (send,
-    /// continue, undo, redo, permission).
-    /// </summary>
-    private bool _stickToBottom = true;
-
-    /// <summary>Pixels from the very bottom that still count as "at the bottom" for stickiness.</summary>
-    private const double StickToBottomThreshold = 40;
 
     /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
     private DispatcherQueue? dispatcher;
 
     /// <summary>
     /// The SessionStore whose Messages collection this component is currently hooked to. Hooking
-    /// tracks the router's Active store so a session switch re-wires the CollectionChanged
-    /// handler (and part hooks) to the newly-active store's collection.
+    /// tracks the router's Active StoreToUpdate so a session switch re-wires the CollectionChanged
+    /// handler (and part hooks) to the newly-active StoreToUpdate's collection.
     /// </summary>
     private SessionStore? _hookedStore;
 
     [QuickMarkupConstructor]
     private void Ctor()
     {
+        UIs.ScrollChatToBottomRequested += scrollHost.ForceScrollToBottom;
         Init();
 
-        scrollHost.ViewChanged += OnScrollViewChanged;
         // Scrolling keyed off the message panel's laid-out size: SizeChanged fires after the
         // frame's layout pass, so ScrollableHeight reflects the freshly-rendered content
         // (new session messages, streaming parts). Scrolling earlier — right when a message is
         // added to the collection — targets a stale ScrollableHeight of 0 and leaves the
         // viewport at the top.
-        messagePanel.SizeChanged += (_, _) => ScrollToBottom();
+        messagePanel.SizeChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
         // Messages live on the active SessionStore, which swaps on every session switch
         // (router keeps one cached store per session). Re-hook the CollectionChanged handler
         // and part hooks whenever the router's Active store changes.
@@ -198,7 +189,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task ScrollToPermissionAsync()
     {
         await Task.Yield();
-        ForceScrollToBottom();
+        scrollHost.ForceScrollToBottom();
     }
 
     private void HookActiveStore()
@@ -210,7 +201,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         foreach (var message in _hookedStore.Messages) HookParts(message);
         // The markup foreach re-renders with the new collection; re-pin so the freshly-loaded
         // history autoscrolls into view.
-        _stickToBottom = true;
+        scrollHost.ForceScrollToBottom();
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -218,14 +209,14 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         // A full list rebuild (session switch / new session / configure) restarts pinned to
         // the bottom; the freshly-loaded messages then autoscroll into view.
         if (e.Action == NotifyCollectionChangedAction.Reset)
-            _stickToBottom = true;
+            scrollHost.ForceScrollToBottom();
         if (e.NewItems is not null)
             foreach (MessageItem message in e.NewItems) HookParts(message);
-        ScrollToBottom();
+        scrollHost.ScrollToBottomIfStick();
     }
 
     private void HookParts(MessageItem message) =>
-        message.Parts.CollectionChanged += (_, _) => ScrollToBottom();
+        message.Parts.CollectionChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
 
     /// <summary>
     /// Resumes a turn that stopped with an error. Sends a "continue" user message — the agent
@@ -235,14 +226,14 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task ContinueAsync()
     {
         await Store.Active.SendAsync("continue");
-        ForceScrollToBottom();
+        scrollHost.ForceScrollToBottom();
     }
 
     /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
     private async Task RedoLastMessageAsync()
     {
         await Store.Active.RedoLastMessageAsync();
-        ForceScrollToBottom();
+        scrollHost.ForceScrollToBottom();
     }
 
     /// <summary>
@@ -252,20 +243,8 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task OnMessageRevertRequested(MessageItem message)
     {
         await Store.Active.RevertToMessageAsync(message);
-        ChatP.SetChatText(Store.Active.RevertPromptText);
-        ForceScrollToBottom();
-    }
-
-    /// <summary>
-    /// Fork the conversation at a specific user message (web/TUI parity): create a new session
-    /// containing the history up to that message, switch to it, restore the forked-at message's
-    /// prompt into the composer, then scroll to the end.
-    /// </summary>
-    private async Task OnMessageForkRequested(MessageItem message)
-    {
-        await Store.ForkFromMessageAsync(message);
-        ChatP.SetChatText(Store.Active.ForkPromptText);
-        ForceScrollToBottom();
+        Sessions.EnsureChatbox(Sessions.ActiveSessionId!).ReplaceFromMessage(message);
+        scrollHost.ForceScrollToBottom();
     }
 
     private async Task AllowPermissionOnceAsync()
@@ -292,55 +271,4 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     }
 
     private void CancelPermission() => PermissionStage = "choose";
-
-    /// <summary>
-    /// The active chat's folder, shown as a centered empty-state label in the chat body while
-    /// there are no messages so the user knows which directory the session belongs to. Resolves
-    /// the session's directory (or the pending folder for an unsaved draft), falling back to the
-    /// server's directory, then displays it relative to the server directory — the same
-    /// reference point the sidebar uses — via the shared <see cref="PathDisplay"/> helper.
-    /// </summary>
-    private string NewChatPath()
-    {
-        var dir = Store.ActiveDirectory();
-        if (dir.Length == 0) dir = Store.ServerDirectory;
-        if (dir.Length == 0) return "";
-        return PathDisplay.Relative(dir, Store.ServerDirectory);
-    }
-
-    /// <summary>
-    /// Follow-the-stream autoscroll: only runs while the user is pinned to the bottom, so a
-    /// manual scroll-up leaves the viewport alone until the user scrolls back down to the
-    /// bottom. The primary trigger is <c>messagePanel.SizeChanged</c>, which fires after the
-    /// frame's layout pass — the moment ScrollableHeight reflects the newly-rendered content.
-    /// </summary>
-    private void ScrollToBottom()
-    {
-        if (scrollHost is null || !_stickToBottom) return;
-        scrollHost.ChangeView(null, scrollHost.ScrollableHeight, null, true);
-    }
-
-    /// <summary>
-    /// Explicit app-action scroll (send, continue, undo/redo, permission): re-pins the view
-    /// to the bottom regardless of the user's current position, then autoscrolls.
-    /// </summary>
-    public void ForceScrollToBottom()
-    {
-        if (scrollHost is null) return;
-        _stickToBottom = true;
-        ScrollToBottom();
-    }
-
-    /// <summary>
-    /// Tracks whether the user is pinned to the bottom. Every ViewChanged event is honored
-    /// (including intermediate drag/inertia frames) so a scroll-up disables autoscroll
-    /// immediately and a scroll-down to the bottom re-enables it. Our own programmatic
-    /// scrolls use ChangeView with disableAnimation, which raises exactly one
-    /// non-intermediate event at the bottom, so they never falsely unpin.
-    /// </summary>
-    private void OnScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
-    {
-        if (scrollHost is null) return;
-        _stickToBottom = scrollHost.ScrollableHeight - scrollHost.VerticalOffset <= StickToBottomThreshold;
-    }
 }

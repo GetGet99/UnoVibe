@@ -7,8 +7,15 @@ namespace UnoVibe.Integration;
 /// JSON so the store can parse each event type as needed (the OpenAPI spec does not
 /// describe the SSE payloads, so these are hand-defined from the server schema).
 /// </summary>
-public sealed record OpencodeEvent(string? Id, string Type, JsonElement Properties);
+public sealed class OpencodeEvent
+{
+    public string? Id { get; set; }
+    public required string Type { get; set; }
+    public required JsonElement Properties { get; set; }
 
+    [JsonIgnore]
+    public string? Directory {get; set; } // client owned
+}
 
 partial class OpencodeClient
 {
@@ -39,7 +46,11 @@ partial class OpencodeClient
             try
             {
                 var evt = JsonSerializer.Deserialize(payload, AppJsonContext.Default.OpencodeEvent);
-                if (evt is not null) await writer.WriteAsync(evt, ct);
+                if (evt is not null)
+                {
+                    evt.Directory = directory;
+                    await writer.WriteAsync(evt, ct);
+                }
             }
             catch (JsonException)
             {

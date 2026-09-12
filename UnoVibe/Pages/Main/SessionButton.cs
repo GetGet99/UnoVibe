@@ -4,11 +4,12 @@ namespace UnoVibe.Pages.Main;
     using UnoVibe.Services;
     using UnoVibe.Models;
     using UnoVibe.Controls;
+    using UnoVibe.Providers;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     required SessionHead Session;
-    inject ChatStore Store;
+    inject SessionsSource Sessions;
     inject? bool IsSidebarView;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -18,8 +19,8 @@ namespace UnoVibe.Pages.Main;
         Margin=`new Thickness(0, 4, 0, 0)`
         Padding=`new Thickness(8, 6, 8, 6)`
         HorizontalAlignment=Stretch HorizontalContentAlignment=Left
-        @Click+=`SwitchSession()`
-        Background=`Store.ActiveSessionId == Session.Id ? theme.ControlFill : transparent`
+        @Click+=`IsSidebarView = false; Sessions.ActiveSessionId = Session.Id`
+        Background=`Sessions.ActiveSessionId == Session.Id ? theme.ControlFill : transparent`
         ContextFlyout=<MenuFlyout Placement=BottomEdgeAlignedRight>
         if (`Session.IsRead`) {
             <MenuFlyoutItem Text="Mark as unread" @Click+=`Session.IsRead = false` />
@@ -38,12 +39,4 @@ namespace UnoVibe.Pages.Main;
         </Grid>
     </Button>
     """)]
-partial class SessionButton : IQuickMarkupComponent
-{
-    void SwitchSession()
-    {
-        IsSidebarView = false;
-        if (Session.Id != Store.CurrentSessionId)
-            _ = Store.SwitchSessionAsync(Session.Id);
-    }
-}
+partial class SessionButton : IQuickMarkupComponent;

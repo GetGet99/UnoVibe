@@ -11,10 +11,11 @@ namespace UnoVibe.Controls.ToolViews;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Models;
+    using UnoVibe.Providers;
     using UnoVibe.Services;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
+    inject SessionsSource Sessions;
     required PartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -23,7 +24,7 @@ namespace UnoVibe.Controls.ToolViews;
             Padding=`new Thickness(10,  8, 10,  8)` HorizontalAlignment=Left MaxWidth=680 Margin=`new Thickness(0, 2, 0, 2)`
             IsEnabled=`Part.ToolSessionId.Length > 0`
             ToolTipService.ToolTip=`Part.ToolSessionId.Length > 0 ? "Open the subagent session" : "Waiting for the subagent session…"`
-            @Click+=`await OpenAsync()`>
+            @Click+=`Sessions.ActiveSession = new(Part.ToolSessionId)`>
         <Grid ColumnSpacing=8 ColumnDefinitions=<>
             <ColumnDefinition Width=Auto />
             <ColumnDefinition />
@@ -54,11 +55,4 @@ namespace UnoVibe.Controls.ToolViews;
         </Grid>
     </Button>
     """)]
-public partial class ToolViewTask : IQuickMarkupComponent
-{
-    private async Task OpenAsync()
-    {
-        if (Part.ToolSessionId.Length == 0) return;
-        await Store.SwitchSessionAsync(Part.ToolSessionId);
-    }
-}
+public partial class ToolViewTask : IQuickMarkupComponent;

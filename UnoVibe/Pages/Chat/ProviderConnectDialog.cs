@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using UnoVibe.Models;
 using UnoVibe.Services;
 using UnoVibe.Integration;
+using UnoVibe.Providers;
 
 namespace UnoVibe.Pages.Chat;
 
@@ -17,7 +18,7 @@ namespace UnoVibe.Pages.Chat;
 /// provider *definitions* still live in opencode.json, so a custom ("Other") provider id saves
 /// its key the same way and a toast tells the user to configure it in the config to use it.
 ///
-/// API: set <see cref="Store"/>, await <see cref="LoadAsync"/>, then set <c>MarkupNode.XamlRoot</c>
+/// API: set <see cref="OpencodeClient"/>, await <see cref="LoadAsync"/>, then set <c>MarkupNode.XamlRoot</c>
 /// and <c>ShowAsync()</c> — the component's root <em>is</em> the <see cref="ContentDialog"/>.
 /// Close it from <see cref="Completed"/>.
 /// </summary>
@@ -240,8 +241,10 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     /// <summary>Raised after a credential is stored (and the model options refreshed) — hide and close the dialog.</summary>
     public event Action? Completed;
 
-    /// <summary>Router store that owns the client plus the model-option refresh + toast surfaces.</summary>
-    public ChatStore? Store { get; set; }
+    OpencodeClient Client { get; set; }
+
+    ToastService Toasts { get; set; }
+    ModelsProvider Models { get; set; }
 
     // Current method's prompt definition and the collected answers.
     private AuthPrompt[] _prompts = Array.Empty<AuthPrompt>();
@@ -255,10 +258,9 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     /// point: the model picker's "Connect a provider…" row and the composer's /connect built-in).
     /// No-op when not connected to a server.
     /// </summary>
-    public static async Task ShowAsync(ChatStore store, XamlRoot xamlRoot)
+    public static async Task ShowAsync(OpencodeClient client, ToastService toastService, ModelsProvider models, XamlRoot xamlRoot)
     {
-        if (store.Client is null || xamlRoot is null) return;
-        var dialog = new ProviderConnectDialog { Store = store };
+        var dialog = new ProviderConnectDialog { Client = client, Toasts = toastService, Models = models };
         await dialog.LoadAsync();
 
         dialog.MarkupNode.XamlRoot = xamlRoot;
@@ -269,19 +271,12 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     /// <summary>Fetches the provider catalog + auth methods into the list (call once before showing).</summary>
     public async Task LoadAsync()
     {
-        if (Store?.Client is not { } client)
-        {
-            LoadError = "Not connected to a server.";
-            Loading = false;
-            return;
-        }
-
         Loading = true;
         LoadError = null;
         Status = "";
         try
         {
-            if (!(await client.GetProvidersAsync()).TryGetValue(out var list, out var error))
+            if (!(await Client.GetProvidersAsync()).TryGetValue(out var list, out var error))
             {
                 LoadError = $"Could not load providers.\n{error.DisplayMessage}";
                 return;
@@ -295,7 +290,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                 .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase);
             foreach (var row in rows) Providers.Add(row);
 
-            if (!(await client.GetProviderAuthMethodsAsync()).TryGetValue(out _methodsResult, out var error1))
+            if (!(await Client.GetProviderAuthMethodsAsync()).TryGetValue(out _methodsResult, out var error1))
             {
                 LoadError = $"Could not load provider auth methods.\n{error1}";
             }
@@ -499,13 +494,6 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
         StatusError = false;
         try
         {
-            if (Store?.Client is not { } client)
-            {
-                Status = "Not connected to a server.";
-                StatusError = true;
-                return;
-            }
-
             if (IsCustom)
             {
                 var providerId = CustomId.Trim().Replace("^@ai-sdk/", "");
@@ -517,7 +505,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                 }
                 ProviderId = providerId;
                 ProviderName = providerId;
-                await client.SetAuthAsync(providerId, new() { Key = ApiKey.Trim() });
+                await Client.SetAuthAsync(providerId, new() { Key = ApiKey.Trim() });
                 await FinishAsync();
                 return;
             }
@@ -531,13 +519,13 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
                     StatusError = true;
                     return;
                 }
-                await client.SetAuthAsync(ProviderId, new() { Key = ApiKey.Trim(), Metadata = inputs.Count > 0 ? inputs : null });
+                await Client.SetAuthAsync(ProviderId, new() { Key = ApiKey.Trim(), Metadata = inputs.Count > 0 ? inputs : null });
                 await FinishAsync();
                 return;
             }
 
             // OAuth: authorize returns the URL + whether a code is needed; the callback completes it on page 3.
-            if (!(await client.AuthorizeOAuthAsync(ProviderId, new() { Method = MethodIndex, Inputs = inputs.Count > 0 ? inputs : null })).TryGetValue(out var result, out var error))
+            if (!(await Client.AuthorizeOAuthAsync(ProviderId, new() { Method = MethodIndex, Inputs = inputs.Count > 0 ? inputs : null })).TryGetValue(out var result, out var error))
             {
                 Status = $"Authorization failed. Try again.\n{error.DisplayMessage}";
                 StatusError = true;
@@ -575,13 +563,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
         StatusError = false;
         try
         {
-            if (Store?.Client is not { } client)
-            {
-                Status = "Not connected to a server.";
-                StatusError = true;
-                return;
-            }
-            await client.CompleteOAuthAsync(ProviderId, new() { Method = MethodIndex, Code = OauthNeedsCode ? Code.Trim() : null });
+            await Client.CompleteOAuthAsync(ProviderId, new() { Method = MethodIndex, Code = OauthNeedsCode ? Code.Trim() : null });
             await FinishAsync();
         }
         catch (Exception ex)
@@ -615,10 +597,10 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     {
         try
         {
-            if (Store is { Client: not null }) await Store.RefreshSettingsAsync();
+            await Models.RefreshModelsAsync();
         }
         catch { /* The connect already succeeded; a failed refresh shouldn't undo it. */ }
-        Store?.ShowToast(new ToastItem
+        Toasts.Show(new ToastItem
         {
             Message = $"Connected to {ProviderName}",
             Variant = "success",

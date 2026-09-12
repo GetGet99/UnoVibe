@@ -10,25 +10,36 @@ namespace UnoVibe.Pages.Chat;
 /// attach/stop/send buttons, and the mode / model / variant pickers row. The busy-state
 /// send mode sync from <see cref="SettingsStore"/>, and the suggestion providers.
 /// Raises <see cref="SendRequested"/> for the page to run the send + autoscroll, and
-/// <see cref="ShellCommandRequested"/> for shell-mode submits ("!" prefix).
+/// <see cref="SendShellCommandAsync"/> for shell-mode submits ("!" prefix).
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
     using UnoVibe.Models;
+    using UnoVibe.Providers;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
-    inject ChatStore Store;
     inject Window HostWindow;
     inject? bool IsCompact;
     inject ChatPage ChatP;
     inject bool SettingsOpen;
+    inject SessionId? ActiveSessionId;
+    inject SessionsSource Sessions;
+    inject `UnoVibe.Integration.OpencodeClient` Opencode;
+    inject ToastService Toasts;
+    inject UIService UIs;
+    inject ModelsProvider Models;
     string SendMode = "";
     // Shell mode (TUI parity): "!" typed as the entire input flips the composer into shell
     // command entry; Esc, the ✕ button, or submitting leaves it again. Submit runs
     // POST /session/{id}/shell instead of a prompt.
     bool ShellMode = false;
+    `IReadOnlyList<string>` SelectionVarients => `
+        Sessions.ActiveChatParams.Model is not {} model
+        ? EmptyList
+        : Models.ModelOptions[Sessions.ActiveChatParams.Model].Varients`;
+    bool IsBusy => `Sessions.ActiveHead?.IsBusy ?? false`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -76,9 +87,9 @@ namespace UnoVibe.Pages.Chat;
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
                             <TextBlock Text=`$"⏳ {Store.Active.PendingPrompts} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
                         </Border>
-                    if (`Store.Active.IsBusy`)
+                    if (`IsBusy`)
                         <Button Content="⏹ Stop" @Click+=`await Store.Active.InterruptAsync()` CornerRadius=6 />
-                    <SendMessageButton Mode=`SendMode` IsBusy=`Store.Active.IsBusy` Enabled=`Store.ActivePermission is null`
+                    <SendMessageButton Mode=`SendMode` IsBusy=`IsBusy` Enabled=`StoreToUpdate.ActivePermission is null`
                                        SendRequested+=`OnSendWithMode` />
                 </StackPanel>
             </Grid>
@@ -86,16 +97,32 @@ namespace UnoVibe.Pages.Chat;
                 <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 10)`>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
-                        modeCombo = <ComboBox ItemsSource=`Store.ModeOptions` SelectedItem=`Store.Active.Mode` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnModeChanged(sender, e)` MinWidth=`IsCompact ? 76 : 90` Height=28 FontSize=12 />
+                        modeCombo = <ComboBox
+                            ItemsSource=`Models.AgentOptions`
+                            SelectedItem=`Sessions.ActiveChatParams.Agent`
+                            ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value) ?? "Build"` /> }
+                            SelectedItem+=>`x => Sessions.ActiveChatParams.Agent = x as string`
+                            MinWidth=`IsCompact ? 76 : 90`
+                            Height=28
+                            FontSize=12
+                        />
                     </StackPanel>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
-                        modelPicker = <ModelPicker ItemsSource=`Store.ModelOptions` SelectedItem=`Store.Active.SelectedModelOption`
-                                    ModelSelected+=`OnModelSelected` />
+                        modelPicker = <ModelPicker />
                     </StackPanel>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
-                        variantCombo = <ComboBox ItemsSource=`Store.VariantOptions` SelectedItem=`Store.Active.Variant` IsEnabled=`Store.Active.HasVariants` ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value)` /> } SelectionChanged+=`(sender, e) => OnVariantChanged(sender, e)` MinWidth=`IsCompact ? 76 : 90` Height=28 FontSize=12 />
+                        variantCombo = <ComboBox
+                            ItemsSource=`SelectionVarients`
+                            SelectedItem=`Sessions.ActiveChatParams.Variant`
+                            IsEnabled=`SelectionVarients.Count > 0`
+                            ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value) ?? "Default"` /> }
+                            SelectedItem+=>`x => Sessions.ActiveChatParams.Variant = x as string`
+                            MinWidth=`IsCompact ? 76 : 90`
+                            Height=28
+                            FontSize=12
+                        />
                     </StackPanel>
                 </StackPanel>
             else
@@ -109,18 +136,7 @@ namespace UnoVibe.Pages.Chat;
     """)]
 public partial class ChatComposer : IQuickMarkupComponent<Grid>
 {
-    /// <summary>Handler for <see cref="SendRequested"/>.</summary>
-    public delegate Task SendRequestedHandler(string text, SendPromptMode? mode);
-
-    /// <summary>Raised when the user triggers a send; the page runs the send and re-pins the autoscroll.</summary>
-    public event SendRequestedHandler? SendRequested;
-
-    /// <summary>Handler for <see cref="ShellCommandRequested"/>.</summary>
-    public delegate Task ShellCommandHandler(string command);
-
-    /// <summary>Raised when the user submits a shell-mode command; the page runs it in the session.</summary>
-    public event ShellCommandHandler? ShellCommandRequested;
-
+    static readonly IReadOnlyList<string> EmptyList = [];
     /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
     private DispatcherQueue? _dispatcher;
 
@@ -141,13 +157,13 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         // server-backed providers (commands, skills, files) return empty lists when the server is
         // unreachable or has no data (no mock fallback — the box simply shows nothing); the
         // directory is read fresh on every query so it tracks the active session.
-        suggestBox.Providers = new ISuggestionProvider[]
-        {
+        suggestBox.Providers =
+        [
             new BuiltInCommandSuggestionProvider(IsBuiltInAvailable),
-            new ServerCommandSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
-            new ServerSkillSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
-            new ServerFileSuggestionProvider(() => Store.Client, Store.ActiveDirectory),
-        };
+            new ServerCommandSuggestionProvider(() => Opencode, () => Sessions.ActiveSessionDirectory),
+            new ServerSkillSuggestionProvider(() => Opencode, () => Sessions.ActiveSessionDirectory),
+            new ServerFileSuggestionProvider(() => Opencode, () => Sessions.ActiveSessionDirectory),
+        ];
         suggestBox.CommandTriggered += (sender, item) => RunBuiltInCommandAsync(item.Action!);
 
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
@@ -232,8 +248,8 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
     {
         var command = (suggestBox.MarkupNode.Text ?? "").Trim();
         ExitShellMode();
-        if (command.Length == 0 || ShellCommandRequested is null) return;
-        await ShellCommandRequested(command);
+        if (command.Length == 0) return;
+        await SendShellCommandAsync(command);
     }
 
     /// <summary>Enter was pressed in the input box with the suggestion flyout closed — run a built-in
@@ -247,7 +263,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             return;
         }
         if (await TryRunBuiltInTextAsync(text)) return;
-        if (SendRequested is not null) await SendRequested(text, null);
+        await SendAsync(text, null);
         sender.Clear();
     }
 
@@ -261,7 +277,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             return;
         }
         if (await TryRunBuiltInTextAsync(suggestBox.MarkupNode.Text)) return;
-        if (SendRequested is not null) await SendRequested(suggestBox.MarkupNode.Text, mode);
+        await SendAsync(suggestBox.MarkupNode.Text, mode);
         suggestBox.Clear();
     }
 
@@ -272,7 +288,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
     /// Availability predicate for the built-in command flyout: context-dependent rows are hidden
     /// when they make no sense right now (e.g. <c>/interrupt</c> only while the session runs).
     /// </summary>
-    private bool IsBuiltInAvailable(string name) => name != "interrupt" || Store.Active.IsBusy;
+    private bool IsBuiltInAvailable(string name) => name != "interrupt" || IsBusy;
 
     /// <summary>
     /// Runs the action for a built-in command row committed from the suggestion flyout
@@ -286,12 +302,12 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 OpenCombo(modeCombo);
                 break;
             case "connect":
-                await ProviderConnectDialog.ShowAsync(Store, MarkupNode.XamlRoot);
+                await ProviderConnectDialog.ShowAsync(Opencode, Toasts, MarkupNode.XamlRoot!);
                 break;
             case "continue":
                 // Same as the ⟳ Continue card: a literal "continue" user message the agent is
                 // instructed to treat as "pick up where you stopped".
-                if (SendRequested is not null) await SendRequested("continue", null);
+                await SendAsync("continue", null);
                 break;
             case "editor":
                 LaunchFolder(FolderLauncher.OpenInEditor);
@@ -300,31 +316,34 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 LaunchFolder(FolderLauncher.OpenInFileManager);
                 break;
             case "fork":
-                await Store.ForkFullSessionAsync();
+                if (Sessions.ActiveSessionId is {} sessionId)
+                    UIs.ForkAndSwitchSession(sessionId);
+                else
+                    Toasts.ShowWarning("No session to fork.", "/fork");
                 break;
             case "interrupt":
-                if (!Store.Active.IsBusy)
-                    Store.ShowWarning("Nothing is running right now.", "/interrupt");
+                if (!IsBusy)
+                    Toasts.ShowWarning("Nothing is running right now.", "/interrupt");
                 else
                     await Store.Active.InterruptAsync();
                 break;
             case "mcps":
-                Store.RequestMcpSection();
+                UIs.InvokeMcpSectionRequested();
                 break;
             case "models":
                 modelPicker.Open();
                 break;
             case "new":
-                await Store.NewSessionAsync(Store.ActiveDirectory());
+                Sessions.PrepareNewSession(Sessions.ActiveSessionDirectory);
                 break;
             case "redo":
                 await ChatP.RedoLastAsync();
                 break;
             case "rename":
-                if (Store.ActiveSessionId.Length == 0)
-                    Store.ShowWarning("There is no conversation to rename yet.", "/rename");
+                if (ActiveSessionId is null)
+                    Toasts.ShowWarning("There is no conversation to rename yet.", "/rename");
                 else
-                    ChatP.BeginRename();
+                    UIs.BeginRenameAndFocus();
                 break;
             case "setting":
                 SettingsOpen = true;
@@ -336,8 +355,8 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 await ChatP.UndoLastAsync();
                 break;
             case "variants":
-                if (!Store.Active.HasVariants)
-                    Store.ShowWarning("The selected model has no reasoning variants.", "No variants");
+                if (SelectionVarients.Count is 0)
+                    Toasts.ShowWarning("The selected model has no reasoning variants.", "No variants");
                 else
                     OpenCombo(variantCombo);
                 break;
@@ -364,9 +383,9 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
     /// open on the active directory, toast on failure.</summary>
     private void LaunchFolder(Func<string, string?> open)
     {
-        var error = open(Store.ActiveDirectory());
+        var error = open(Sessions.ActiveSessionDirectory);
         if (error is null) return;
-        Store.ShowToast(new ToastItem
+        Toasts.Show(new ToastItem
         {
             Title = "Open folder",
             Message = error,
@@ -374,20 +393,8 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         });
     }
 
-    private void OnModeChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if ((sender as ComboBox)?.SelectedItem is string mode) Store.Active.SetMode(mode);
-    }
-
-    private void OnModelSelected(ModelOption model) => Store.Active.SetModel(model.Id);
-
-    private void OnVariantChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if ((sender as ComboBox)?.SelectedItem is string variant) Store.Active.SetVariant(variant);
-    }
-
-    private static string Capitalize(string? value) =>
-        string.IsNullOrEmpty(value) ? "" : char.ToUpper(value[0]) + value.Substring(1);
+    private static string? Capitalize(string? value) =>
+        string.IsNullOrEmpty(value) ? null : char.ToUpper(value[0]) + value[1..];
 
     public void SetChatText(string txt)
     {

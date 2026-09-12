@@ -12,7 +12,6 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
     inject? bool IsCompact;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -51,11 +50,4 @@ namespace UnoVibe.Pages.Chat;
         </StackPanel>
     </root>
     """)]
-public partial class ChatStatusArea : IQuickMarkupComponent<StackPanel>
-{
-    [QuickMarkupConstructor]
-    private void Ctor()
-    {
-        Init();
-    }
-}
+public partial class ChatStatusArea : IQuickMarkupComponent<StackPanel>;

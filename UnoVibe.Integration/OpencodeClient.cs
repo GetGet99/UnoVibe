@@ -12,23 +12,14 @@ namespace UnoVibe.Integration;
 /// </summary>
 public sealed partial class OpencodeClient
 {
-    /// <summary>Environment variable holding the server password (Basic auth).</summary>
-    public const string PasswordEnvVar = "OPENCODE_SERVER_PASSWORD";
 
-    /// <summary>Environment variable holding the server username (defaults to "opencode").</summary>
-    public const string UsernameEnvVar = "OPENCODE_SERVER_USERNAME";
-
-    public OpencodeClient(string baseUrl, string? password = null, string? username = null)
+    public OpencodeClient(string baseUrl, string? username = null, string? password = null)
     {
         BaseUrl = baseUrl.TrimEnd('/');
         Http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
-
-        password ??= Environment.GetEnvironmentVariable(PasswordEnvVar);
         if (!string.IsNullOrEmpty(password))
         {
-            var user = !string.IsNullOrEmpty(username)
-                ? username
-                : Environment.GetEnvironmentVariable(UsernameEnvVar) ?? "opencode";
+            var user = !string.IsNullOrEmpty(username) ? username : "opencode";
             Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Basic",
                 Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}")));
