@@ -57,16 +57,16 @@ public partial class ChatPage : Page
     /// <summary>Enters the header's imposer, then scroll to the end.</summary>
     public async Task UndoLastAsync()
     {
-        await Store.Active.UndoLastMessageAsync();
-        if (Store.Active.RevertPromptText.Length > 0)
-            composer.SetChatText(Store.Active.RevertPromptText);
+        await StoreToUpdate.Active.UndoLastMessageAsync();
+        if (StoreToUpdate.Active.RevertPromptText.Length > 0)
+            composer.SetChatText(StoreToUpdate.Active.RevertPromptText);
         UIs.ScrollChatToBottom();
     }
 
     /// <summary>Restore reverted messages (/redo built-in), then scroll to the end.</summary>
     public async Task RedoLastAsync()
     {
-        await Store.Active.RedoLastMessageAsync();
+        await StoreToUpdate.Active.RedoLastMessageAsync();
         UIs.ScrollChatToBottom();
     }
 

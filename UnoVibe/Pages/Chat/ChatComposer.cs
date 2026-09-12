@@ -51,9 +51,9 @@ namespace UnoVibe.Pages.Chat;
         </>>
             <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
                           HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled
-                          Visibility=`Store.Active.PendingImageCount > 0 ? Visibility.Visible : Visibility.Collapsed`>
+                          Visibility=`StoreToUpdate.Active.PendingImageCount > 0 ? Visibility.Visible : Visibility.Collapsed`>
                 <StackPanel Orientation=Horizontal>
-                    foreach (var a in `Store.Active.PendingImages`)
+                    foreach (var a in `StoreToUpdate.Active.PendingImages`)
                     {
                         <Grid Margin=`new Thickness(0, 4, 8, 4)`>
                             <Border Width=64 Height=64 CornerRadius=6 BorderBrush=`theme.CardStroke`
@@ -64,7 +64,7 @@ namespace UnoVibe.Pages.Chat;
                             <Button Width=18 Height=18 Padding=0 HorizontalAlignment=Right VerticalAlignment=Top
                                     CornerRadius=9 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke`
                                     BorderThickness=`new Thickness(1)` Foreground=`theme.PrimaryText` FontSize=10
-                                    ToolTipService.ToolTip="Remove attachment" @Click+=`Store.Active.RemovePendingImage(a)`>
+                                    ToolTipService.ToolTip="Remove attachment" @Click+=`StoreToUpdate.Active.RemovePendingImage(a)`>
                                 <TextBlock Text="✕" FontSize=10 />
                             </Button>
                         </Grid>
@@ -75,20 +75,20 @@ namespace UnoVibe.Pages.Chat;
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                suggestBox = <SuggestBox PlaceholderText=`ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`Store.ActivePermission is null`
+                suggestBox = <SuggestBox PlaceholderText=`ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`StoreToUpdate.ActivePermission is null`
                     TextChanged+=`OnInputTextChanged` PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     if (`!ShellMode`)
-                        <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`Store.ActivePermission is null`
-                                @Click+=`await Store.Active.PickImageAsync(HostWindow)`>
+                        <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`StoreToUpdate.ActivePermission is null`
+                                @Click+=`await StoreToUpdate.Active.PickImageAsync(HostWindow)`>
                             <SymbolIcon Symbol=Camera VerticalAlignment=Center />
                         </Button>
-                    if (`Store.Active.PendingPrompts > 0`)
+                    if (`StoreToUpdate.Active.PendingPrompts > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
-                            <TextBlock Text=`$"⏳ {Store.Active.PendingPrompts} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                            <TextBlock Text=`$"⏳ {StoreToUpdate.Active.PendingPrompts} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
                         </Border>
                     if (`IsBusy`)
-                        <Button Content="⏹ Stop" @Click+=`await Store.Active.InterruptAsync()` CornerRadius=6 />
+                        <Button Content="⏹ Stop" @Click+=`await StoreToUpdate.Active.InterruptAsync()` CornerRadius=6 />
                     <SendMessageButton Mode=`SendMode` IsBusy=`IsBusy` Enabled=`StoreToUpdate.ActivePermission is null`
                                        SendRequested+=`OnSendWithMode` />
                 </StackPanel>
@@ -189,7 +189,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             !InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
         {
-            if (await Store.Active.PasteImageFromClipboardAsync())
+            if (await StoreToUpdate.Active.PasteImageFromClipboardAsync())
                 e.Handled = true;
         }
     }
@@ -302,7 +302,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 OpenCombo(modeCombo);
                 break;
             case "connect":
-                await ProviderConnectDialog.ShowAsync(Opencode, Toasts, MarkupNode.XamlRoot!);
+                await ProviderConnectDialog.ShowAsync(Opencode, Toasts, Models, MarkupNode.XamlRoot!);
                 break;
             case "continue":
                 // Same as the ⟳ Continue card: a literal "continue" user message the agent is
@@ -325,7 +325,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 if (!IsBusy)
                     Toasts.ShowWarning("Nothing is running right now.", "/interrupt");
                 else
-                    await Store.Active.InterruptAsync();
+                    await StoreToUpdate.Active.InterruptAsync();
                 break;
             case "mcps":
                 UIs.InvokeMcpSectionRequested();
@@ -361,6 +361,22 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                     OpenCombo(variantCombo);
                 break;
         }
+    }
+
+
+    private async Task SendAsync(string text, SendPromptMode? mode)
+    {
+        var content = text.Trim();
+        if (content.Length == 0 && StoreToUpdate.Active.PendingImages.Count == 0) return;
+        await StoreToUpdate.Active.SendAsync(content, mode);
+        UIs.ScrollChatToBottom();
+    }
+
+    /// <summary>Runs a shell-mode command in the session (composer "!" prefix, TUI parity).</summary>
+    private async Task SendShellCommandAsync(string command)
+    {
+        await StoreToUpdate.Active.SendShellAsync(command);
+        UIs.ScrollChatToBottom();
     }
 
     /// <summary>Intercepts submitted text that is an exact built-in command ("/name", optional

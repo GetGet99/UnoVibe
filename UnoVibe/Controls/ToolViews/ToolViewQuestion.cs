@@ -10,7 +10,6 @@ namespace UnoVibe.Controls.ToolViews;
     using UnoVibe.Services;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
     required PartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -68,12 +67,12 @@ public partial class ToolViewQuestion : IQuickMarkupComponent
         }
 
         if (Part.QuestionRequestId.Length == 0 || answers.Count == 0) return;
-        await Store.ReplyQuestionAsync(Part.QuestionRequestId, answers);
+        await StoreToUpdate.ReplyQuestionAsync(Part.QuestionRequestId, answers);
     }
 
     private async Task RejectAsync()
     {
         if (Part.QuestionRequestId.Length == 0) return;
-        await Store.RejectQuestionAsync(Part.QuestionRequestId);
+        await StoreToUpdate.RejectQuestionAsync(Part.QuestionRequestId);
     }
 }

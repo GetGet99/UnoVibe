@@ -18,24 +18,24 @@ namespace UnoVibe.Pages.Chat;
     </setup>
     <root>
         <StackPanel Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 4)` Spacing=6>
-            if (`Store.Active.StatusMessage.Length > 0`)
+            if (`StoreToUpdate.Active.StatusMessage.Length > 0`)
                 <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(10,  6, 10,  6)`
                         BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` HorizontalAlignment=Stretch>
                     <StackPanel Orientation=Horizontal Spacing=8>
                         <ProgressRing Width=14 Height=14 IsActive=true VerticalAlignment=Center />
-                        <TextBlock Text=`Store.Active.StatusMessage` FontSize=12 Foreground=`theme.SystemCaution` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                        <TextBlock Text=`StoreToUpdate.Active.StatusMessage` FontSize=12 Foreground=`theme.SystemCaution` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
                     </StackPanel>
                 </Border>
-            if (`Store.SubagentCount > 0`)
+            if (`StoreToUpdate.SubagentCount > 0`)
             {
                 <StackPanel Spacing=6>
-                    <TextBlock Text=`$"Subagents ({Store.SubagentCount})"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
+                    <TextBlock Text=`$"Subagents ({StoreToUpdate.SubagentCount})"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
                     <ScrollViewer HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
                         <StackPanel Orientation=Horizontal Spacing=6>
-                            foreach (var s in `Store.ActiveSubagents`; `s.Head.Id`)
+                            foreach (var s in `StoreToUpdate.ActiveSubagents`; `s.Head.Id`)
                             {
                                 <Button Padding=`new Thickness(10,  6, 10,  6)` CornerRadius=6 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1
-                                        @Click+=`await Store.SwitchSessionAsync(s.Id)`
+                                        @Click+=`await StoreToUpdate.SwitchSessionAsync(s.Id)`
                                         ToolTipService.ToolTip=`s.Head.Title`>
                                     <StackPanel Orientation=Horizontal Spacing=6>
                                         <SessionIndicator State=`s.Head.State` />
