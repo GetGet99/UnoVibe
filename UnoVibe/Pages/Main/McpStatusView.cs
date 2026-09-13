@@ -15,6 +15,10 @@ namespace UnoVibe.Pages.Main;
     inject OpencodeClient Opencode;
     inject UIServiceProvider UIs;
     private McpService McpService = `null!`;
+    <setup>
+        var theme = ThemeBrushes.Global;
+        var transparent = new SolidColorBrush(Colors.Transparent);
+    </setup>
     <Border Grid.Row=1 Padding=`new Thickness(12, 8, 12, 8)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
         <StackPanel Spacing=6>
             <Grid ColumnDefinitions=<>

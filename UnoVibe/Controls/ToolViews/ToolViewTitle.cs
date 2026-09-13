@@ -19,7 +19,7 @@ namespace UnoVibe.Controls.ToolViews;
             <ToolBusyIndicator Part=`Part` />
             <TextBlock Text=`Text` FontSize=12
                        FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal`
-                       FontFamily=`CodeFont ? CodeFonts.Current : DefaultFont`
+                       FontFamily=`CodeFont ? CodeFontsHelper.Current : DefaultFont`
                        Foreground=`Emphasized ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             if (`Part is ToolCallPartItem tc && tc.Interrupted`)

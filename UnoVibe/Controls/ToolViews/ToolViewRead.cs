@@ -9,7 +9,7 @@ namespace UnoVibe.Controls.ToolViews;
     <StackPanel Spacing=4>
         <ToolViewTitle Part=`Part` Text=`ToolViewShared.Read(Part)` />
         if (`Part.LoadedFiles.Length > 0`)
-            <TextBlock Text=`ToolViewShared.Truncate(ToolViewShared.Loaded(Part), 2000)` FontSize=11 FontFamily=`CodeFonts.Current` Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+            <TextBlock Text=`ToolViewShared.Truncate(ToolViewShared.Loaded(Part), 2000)` FontSize=11 FontFamily=`CodeFontsHelper.Current` Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
         if (`Part.ToolError.Length > 0`)
             <TextBlock Text=`Part.ToolError` FontSize=11 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
     </StackPanel>
