@@ -461,7 +461,7 @@ partial class ChatMessagesState : IDisposable
                 if (messageId.Length == 0 || callId.Length == 0) continue;
                 if (!_messagesById.TryGetValue(messageId, out var message)) continue;
 
-                var part = message.Parts.FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
+                var part = message.Parts.OfType<ToolCallPartItem>().FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
                 if (part is null || part.QuestionRequestId.Length > 0) continue;
 
                 part.QuestionRequestId = question.Id;

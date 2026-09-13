@@ -122,7 +122,7 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
         scrollHost.SizeChanged += OnScrollHostSizeChanged;
 
         // Pre-fill the server password box from the standard environment variable.
-        ServerPassword = Environment.GetEnvironmentVariable(OpencodeClient.PasswordEnvVar) ?? "";
+        ServerPassword = Environment.GetEnvironmentVariable(OpencodeHelper.PasswordEnvVar) ?? "";
 
         if (startup is { Kind: not LaunchKind.None })
         {

@@ -7,6 +7,7 @@ namespace UnoVibe.Models;
     public string ToolName = "";
     public string ToolStatus = "";
     public string ToolTitle = "";
+    public string QuestionRequestId = "";
     """)]
 public partial class ToolCallPartItem : ChatPartItem
 {

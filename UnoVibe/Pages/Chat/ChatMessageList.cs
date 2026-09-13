@@ -9,6 +9,7 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
+    using UnoVibe.Helpers;
     using UnoVibe.States;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
@@ -107,7 +108,7 @@ namespace UnoVibe.Pages.Chat;
             if (`ChatState?.Messages.Reactive.Count == 0`)
                 <StackPanel HorizontalAlignment=Center VerticalAlignment=Center Padding=`new Thickness(16, 0, 16, 0)` Spacing=6 IsHitTestVisible=false>
                     <AppSymbolIcon Symbol=Folder FontSize=22 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
-                    <TextBlock Text=`PathDisplay.Relative(Sessions.ActiveSessionDirectory, Connection.ServerDirectory)` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
+                    <TextBlock Text=`PathDisplayHelper.Relative(Sessions.ActiveSessionDirectory, Connection.ServerDirectory)` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
                                TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=520 ToolTipService.ToolTip=`Sessions.ActiveSessionDirectory` />
                 </StackPanel>
         </Grid>

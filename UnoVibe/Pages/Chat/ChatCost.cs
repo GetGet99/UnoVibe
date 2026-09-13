@@ -110,6 +110,9 @@ partial class ChatCost : IQuickMarkupComponent
 [QuickMarkup("""
     using UnoVibe.States;
     inject ChatMessagesState? ChatState;
+    <setup>
+        var theme = ThemeBrushes.Global;
+    </setup>
     <StackPanel Orientation=Horizontal Spacing=8>
         <TextBlock Text=`$"${ChatState?.Cost ?? 0:F2}"` FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
         <TextBlock Text="·" FontSize=12 Foreground=`theme.TertiaryText` VerticalAlignment=Center />

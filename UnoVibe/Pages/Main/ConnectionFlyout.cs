@@ -10,6 +10,9 @@ namespace UnoVibe.Pages.Main;
     bool ShowPassword = false;
     inject OpencodeConnection Connection;
     inject ToastsProvider Toasts;
+    <setup>
+        var theme = ThemeBrushes.Global;
+    </setup>
     <Flyout Placement=Top @Closed+=`ShowPassword = false`>
         <StackPanel Spacing=10 MinWidth=320 MaxWidth=400>
             <TextBlock Text="Connection" FontSize=13 FontWeight=`FontWeights.SemiBold` />
