@@ -5,7 +5,6 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using UnoVibe.Integration;
-
 namespace UnoVibe.Services;
 
 /// <summary>
@@ -77,8 +76,8 @@ public sealed class OpencodeServeProcess : IDisposable
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
-        startInfo.Environment[OpencodeClient.PasswordEnvVar] = Password;
-        startInfo.Environment[OpencodeClient.UsernameEnvVar] = "opencode";
+        startInfo.Environment[OpencodeConnection.PasswordEnvVar] = Password;
+        startInfo.Environment[OpencodeConnection.UsernameEnvVar] = "opencode";
 
         _process = new Process { StartInfo = startInfo };
         if (!_process.Start())

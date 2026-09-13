@@ -11,15 +11,14 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Integration;
     using UnoVibe.Services;
     using UnoVibe.Controls;
-    using UnoVibe.Providers;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
-    inject SessionsSource Sessions;
+    inject SessionsState Sessions;
     inject bool IsCompact;
     inject bool IsSidebarView;
     inject OpencodeClient Opencode;
-    inject ToastService Toasts;
-    inject UIService UIs;
+    inject ToastsProvider Toasts;
+    inject UIServiceProvider UIs;
     bool EditingTitle = false;
     // Can be null if it's pending session to create
     SessionHead? Head => `Sessions.Head(Sessions.ActiveSessionId)`;

@@ -1,13 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using QuickMarkup.Infra.Collections;
-using UnoVibe.Helpers;
 using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 using UnoVibe.Models;
-using UnoVibe.Services;
-
-namespace UnoVibe.Providers;
+namespace UnoVibe.States;
 [QuickMarkup("""
     using UnoVibe.Models;
     string? NewSessionDirectory;
@@ -15,26 +11,26 @@ namespace UnoVibe.Providers;
     string ActiveSessionDirectory => `(Sessions.ActiveSessionId is null ? Sessions.NewSessionDirectory : Sessions.Head(Sessions.ActiveSessionId)?.Directory) ?? connection.ServerDirectory`;
     ChatParameters ActiveChatParams => `GetActiveChatParams()`;
     SessionHead? ActiveHead => `Head(ActiveSessionId)`;
-    ChatboxModel ActiveChatbox => `GetActiveChatbox()`;
+    ChatboxState ActiveChatbox => `GetActiveChatbox()`;
     """)]
-partial class SessionsSource
+partial class SessionsState
 {
     OpencodeConnection Connection;
     OpencodeClient Opencode => Connection.Client;
-    EventSource Events;
-    ToastService Toasts;
+    EventsProvider Events;
+    ToastsProvider Toasts;
     NotificationService Notifications;
     DispatcherQueue Dispatcher;
     record Keyed<T>(string Directory, T Value);
     readonly ReactiveKeyedSet<string, Keyed<ChatParameters>> chatParamsNullSessions = new(x => x.Directory);
-    readonly ReactiveKeyedSet<string, Keyed<ChatboxModel>> chatBoxNullSessions = new(x => x.Directory);
+    readonly ReactiveKeyedSet<string, Keyed<ChatboxState>> chatBoxNullSessions = new(x => x.Directory);
     readonly ReactiveKeyedSet<SessionId, SessionHead> sessions = new(x => x.Id);
     readonly ReactiveSet<string> directoriesWithoutSession = [];
-    readonly ReactiveKeyedSet<SessionId, ChatboxModel> chatboxes = new(x => x.SessionId) { RerunReadFromKey = false };
+    readonly ReactiveKeyedSet<SessionId, ChatboxState> chatboxes = new(x => x.SessionId) { RerunReadFromKey = false };
 
     public SessionHead? Head(SessionId? sessId) => sessId is null ? null : sessions.TryGetValue(sessId, out var sessHead) ? sessHead : null;
-    public ChatboxModel? Chatbox(SessionId? sessId) => sessId is null ? null : chatboxes.TryGetValue(sessId, out var chatboxModel) ? chatboxModel : null;
-    public ChatboxModel EnsureChatbox(SessionId sessId)
+    public ChatboxState? Chatbox(SessionId? sessId) => sessId is null ? null : chatboxes.TryGetValue(sessId, out var chatboxModel) ? chatboxModel : null;
+    public ChatboxState EnsureChatbox(SessionId sessId)
     {
         if (Chatbox(sessId) is not {} cb)
             chatboxes.Add(cb = new(Opencode, Toasts, this, Dispatcher, sessId));
@@ -53,7 +49,7 @@ partial class SessionsSource
         chatParamsNullSessions.Add(new(directory, chatParams));
         return chatParams;
     }
-    private ChatboxModel GetActiveChatbox()
+    private ChatboxState GetActiveChatbox()
     {
         if (ActiveSessionId is {} sessId)
         {
@@ -64,14 +60,14 @@ partial class SessionsSource
         var directory = ActiveSessionDirectory;
         if (chatBoxNullSessions.TryGetValue(directory, out var kv))
             return kv.Value;
-        var chatbox = new ChatboxModel(Opencode, Toasts, this, Dispatcher, null);
+        var chatbox = new ChatboxState(Opencode, Toasts, this, Dispatcher, null);
         chatBoxNullSessions.Add(new(directory, chatbox));
         return chatbox;
     }
 
     [QuickMarkupConstructor]
     [MemberNotNull(nameof(Connection), nameof(Events), nameof(Toasts), nameof(Notifications), nameof(Dispatcher))]
-    void Ctor(OpencodeConnection connection, EventSource events, ToastService toasts, NotificationService notification, DispatcherQueue dispatcher) {
+    void Ctor(OpencodeConnection connection, EventsProvider events, ToastsProvider toasts, NotificationService notification, DispatcherQueue dispatcher) {
         Connection = connection;
         Events = events;
         Toasts = toasts;

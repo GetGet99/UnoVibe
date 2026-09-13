@@ -11,11 +11,10 @@ namespace UnoVibe.Controls.ToolViews;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Models;
-    using UnoVibe.Providers;
     using UnoVibe.Services;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    inject SessionsSource Sessions;
+    inject SessionsState Sessions;
     required PartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;

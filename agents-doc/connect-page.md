@@ -52,7 +52,7 @@ The spawned server is owned by `ChatStore.AttachServeProcess(...)` so it survive
 do not re-introduce a `using var serve` that disposes it early.
 
 **Recent history persistence:**
-`Services/RecentConnectionsStore.cs` keeps an `ObservableCollection<RecentConnection>` (model in
+`Helpers/RecentConnectionsStore.cs` keeps an `ObservableCollection<RecentConnection>` (model in
 `Models/RecentConnection.cs`) saved as JSON at
 `Windows.Storage.ApplicationData.Current.LocalFolder.Path/recent.json` (Skia desktop resolves this
 to `~/.local/share/UnoVibe/<AppId>/LocalState/` on Linux — e.g.

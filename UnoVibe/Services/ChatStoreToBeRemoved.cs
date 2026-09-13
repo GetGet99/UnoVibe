@@ -12,7 +12,7 @@ namespace UnoVibe.Services;
 /// event pump), the sidebar state (sessions, directory groups, MCP servers), the shared
 /// settings options (modes/models/variants), and the global permission/toast surfaces.
 ///
-/// The per-session chat state lives in lazily-created, cached <see cref="SessionStore"/>s
+/// The per-session chat state lives in lazily-created, cached <see cref="SessionStoreToBeRemoved"/>s
 /// keyed by session id. <see cref="Active"/> is the store for the currently-open session;
 /// switching sessions re-points it, so an open session's messages and state survive
 /// switching away and back (the cached store is reused, not recreated).
@@ -43,7 +43,8 @@ namespace UnoVibe.Services;
     // it starts as an unsaved draft and is re-pointed on switch/new/delete.
     public SessionStore Active = `NewDraftStore()`;
     """)]
-public sealed partial class ChatStore : IDisposable
+[Obsolete("This class will be removed", error: true)]
+public sealed partial class ChatStoreToBeRemoved : IDisposable
 {
     public ObservableCollection<string> ModeOptions { get; } = new();
     public ObservableCollection<ModelOption> ModelOptions { get; } = new();
@@ -107,7 +108,7 @@ public sealed partial class ChatStore : IDisposable
     // registered here (a draft store is registered under its id the moment a new session is
     // created server-side). Stores are never created for sessions the user has not opened —
     // background events only feed the sidebar maps, not a message list.
-    private readonly Dictionary<string, SessionStore> _sessionStores = new();
+    private readonly Dictionary<string, SessionStoreToBeRemoved> _sessionStores = new();
 
     /// <summary>
     /// Raised after <see cref="Active"/> changes (session switch / new session / active
@@ -115,17 +116,17 @@ public sealed partial class ChatStore : IDisposable
     /// </summary>
     public event Action? ActiveStoreChanged;
 
-    private SessionStore NewDraftStore()
+    private SessionStoreToBeRemoved NewDraftStore()
     {
-        var store = new SessionStore();
+        var store = new SessionStoreToBeRemoved();
         store.Router = this;
         store.SessionId = "";
         return store;
     }
 
-    private SessionStore NewCachedStore(string sessionId)
+    private SessionStoreToBeRemoved NewCachedStore(string sessionId)
     {
-        var store = new SessionStore();
+        var store = new SessionStoreToBeRemoved();
         store.Router = this;
         store.SessionId = sessionId;
         _sessionStores[sessionId] = store;
@@ -133,7 +134,7 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>Returns a cached store for the session, or null when it was never opened.</summary>
-    private SessionStore? GetStore(string sessionId) =>
+    private SessionStoreToBeRemoved? GetStore(string sessionId) =>
         sessionId.Length == 0 ? null : _sessionStores.GetValueOrDefault(sessionId);
 
     /// <summary>The sidebar session with the given id, or null when not listed.</summary>
@@ -606,7 +607,7 @@ public sealed partial class ChatStore : IDisposable
     }
 
     /// <summary>Dispatches a session-scoped event to that session's cached store, if any.</summary>
-    private void DispatchToSession(JsonElement properties, Action<SessionStore, JsonElement> apply)
+    private void DispatchToSession(JsonElement properties, Action<SessionStoreToBeRemoved, JsonElement> apply)
     {
         var sessionId = properties.GetStringProperty("sessionID");
         if (sessionId.Length == 0) return;
@@ -645,7 +646,7 @@ public sealed partial class ChatStore : IDisposable
             // Native toast: suppressed only for the active session while its OWNING window is focused
             // (the inline question form is already on screen there).
             if (item is not null)
-                Notifications.NotifyQuestion(OwnerWindow, item, FirstQuestionText(properties),
+                NotificationsHelper.NotifyQuestion(OwnerWindow, item, FirstQuestionText(properties),
                     sessionId == Active.SessionId);
             _questionDirectories[requestId] = DirectoryOf(sessionId);
         }
@@ -701,7 +702,7 @@ public sealed partial class ChatStore : IDisposable
         // child of it) while its OWNING window is focused — the approval dialog is already on
         // screen there; a background session's approval always toasts.
         if (!_permissions.Any(p => p.Id == request.Id) && sessionId.Length > 0 && GetSession(sessionId) is { } pending)
-            Notifications.NotifyPermission(OwnerWindow, pending, request.Title, request.Body,
+            NotificationsHelper.NotifyPermission(OwnerWindow, pending, request.Title, request.Body,
                 IsActiveOrDescendant(request.SessionId));
         AddPermissionRequest(request);
     }

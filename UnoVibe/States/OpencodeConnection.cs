@@ -1,7 +1,7 @@
 using UnoVibe.Integration;
 using UnoVibe.Services;
 
-namespace UnoVibe.Providers;
+namespace UnoVibe.States;
 partial class OpencodeConnection
 {
     /// <summary>Environment variable holding the server password (Basic auth).</summary>

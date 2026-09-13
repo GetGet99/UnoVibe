@@ -1,29 +1,24 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using QuickMarkup.Infra.Collections;
 using UnoVibe.Integration;
 using UnoVibe.Models;
-using UnoVibe.Services;
-using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage.Streams;
-
-namespace UnoVibe.Providers;
+namespace UnoVibe.States;
 
 [QuickMarkup("""
     public int PendingPromptsCount;
     """)]
     // public string ChatText = "";
-partial class ChatboxModel
+partial class ChatboxState
 {
     public SessionId? SessionId { get; private set; }
     SessionHead? Head => Sessions.Head(SessionId);
-    ToastService Toasts { get; set; }
-    SessionsSource Sessions { get; set; }
+    ToastsProvider Toasts { get; set; }
+    SessionsState Sessions { get; set; }
     OpencodeClient Opencode { get; set; }
     DispatcherQueue Dispatcher { get; set; }
     [QuickMarkupConstructor]
     [MemberNotNull(nameof(Toasts), nameof(Opencode), nameof(Sessions), nameof(Dispatcher))]
-    void Ctor(OpencodeClient client, ToastService toasts, SessionsSource sessions, DispatcherQueue dispatcher, SessionId? sessionId)
+    void Ctor(OpencodeClient client, ToastsProvider toasts, SessionsState sessions, DispatcherQueue dispatcher, SessionId? sessionId)
     {
         Dispatcher = dispatcher;
         Opencode = client;

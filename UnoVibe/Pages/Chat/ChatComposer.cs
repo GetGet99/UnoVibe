@@ -1,11 +1,7 @@
 using Microsoft.UI.Input;
 using UnoVibe.Models;
-using UnoVibe.Services;
 using UnoVibe.Controls;
-using UnoVibe.Helpers;
 using Uno.Extensions;
-using UnoVibe.Providers;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -18,7 +14,6 @@ namespace UnoVibe.Pages.Chat;
 [QuickMarkup("""
     using UnoVibe.Services;
     using UnoVibe.Models;
-    using UnoVibe.Providers;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
@@ -28,10 +23,10 @@ namespace UnoVibe.Pages.Chat;
     inject ChatPage ChatP;
     inject bool SettingsOpen;
     inject SessionId? ActiveSessionId;
-    inject SessionsSource Sessions;
+    inject SessionsState Sessions;
     inject `UnoVibe.Integration.OpencodeClient` Opencode;
-    inject ToastService Toasts;
-    inject UIService UIs;
+    inject ToastsProvider Toasts;
+    inject UIServiceProvider UIs;
     inject ModelsProvider Models;
     string SendMode = "";
     // Shell mode (TUI parity): "!" typed as the entire input flips the composer into shell
@@ -44,7 +39,7 @@ namespace UnoVibe.Pages.Chat;
         : Models.ModelOptions[Sessions.ActiveChatParams.Model].Varients`;
     bool IsBusy => `Sessions.ActiveHead?.IsBusy ?? false`;
     private bool IsEnabled = true; // Should be disabled if there is an active permission prompt
-    ChatboxModel Chatbox => `Sessions.ActiveChatbox`;
+    ChatboxState Chatbox => `Sessions.ActiveChatbox`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -329,10 +324,10 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 await SendAsync("continue", null);
                 break;
             case "editor":
-                LaunchFolder(FolderLauncher.OpenInEditor);
+                LaunchFolder(FolderLauncherHelper.OpenInEditor);
                 break;
             case "explorer":
-                LaunchFolder(FolderLauncher.OpenInFileManager);
+                LaunchFolder(FolderLauncherHelper.OpenInFileManager);
                 break;
             case "fork":
                 if (Sessions.ActiveSessionId is {} sessionId)
@@ -368,7 +363,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 SettingsOpen = true;
                 break;
             case "terminal":
-                LaunchFolder(FolderLauncher.OpenInTerminal);
+                LaunchFolder(FolderLauncherHelper.OpenInTerminal);
                 break;
             case "undo":
                 await ChatP.UndoLastAsync();
@@ -440,7 +435,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         if (combo is not null) combo.IsDropDownOpen = true;
     }
 
-    /// <summary>The /editor //explorer //terminal built-ins: run a <see cref="FolderLauncher"/>
+    /// <summary>The /editor //explorer //terminal built-ins: run a <see cref="FolderLauncherHelper"/>
     /// open on the active directory, toast on failure.</summary>
     private void LaunchFolder(Func<string, string?> open)
     {

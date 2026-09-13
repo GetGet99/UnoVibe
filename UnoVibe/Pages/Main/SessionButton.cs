@@ -4,12 +4,11 @@ namespace UnoVibe.Pages.Main;
     using UnoVibe.Services;
     using UnoVibe.Models;
     using UnoVibe.Controls;
-    using UnoVibe.Providers;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     required SessionHead Session;
-    inject SessionsSource Sessions;
+    inject SessionsState Sessions;
     inject? bool IsSidebarView;
     <setup>
         var theme = ThemeBrushes.Global;

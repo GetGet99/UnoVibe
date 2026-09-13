@@ -5,9 +5,8 @@ namespace UnoVibe.Controls.ToolViews;
 [QuickMarkup("""
     using UnoVibe.Models;
     using UnoVibe.Services;
-    using UnoVibe.Providers;
     using QuickMarkup.WinUI;
-    inject SessionsSource Sessions;
+    inject SessionsState Sessions;
     inject OpencodeConnection Connection;
     required PartItem Part;
     bool Expanded = false;

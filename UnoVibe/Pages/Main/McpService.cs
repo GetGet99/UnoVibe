@@ -1,8 +1,6 @@
 using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 using UnoVibe.Models;
-using UnoVibe.Providers;
-
 namespace UnoVibe.Pages.Main;
 
 class McpService
@@ -27,13 +25,13 @@ class McpService
     }
     private const int McpPollIntervalMs = 5000;
     OpencodeClient Client { get; }
-    EventSource Events { get; }
+    EventsProvider Events { get; }
     public string Directory { get; }
-    ToastService Toasts { get; }
+    ToastsProvider Toasts { get; }
     DispatcherQueue Dispatcher { get; }
     CancellationTokenSource cts = new();
     CancellationToken ct => cts.Token;
-    public McpService(OpencodeClient client, EventSource events, ToastService toasts, DispatcherQueue dispatcher, string directory)
+    public McpService(OpencodeClient client, EventsProvider events, ToastsProvider toasts, DispatcherQueue dispatcher, string directory)
     {
         Client = client;
         Directory = directory;

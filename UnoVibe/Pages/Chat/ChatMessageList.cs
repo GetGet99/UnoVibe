@@ -11,13 +11,12 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
-    using UnoVibe.Providers;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
-    inject UIService UIs;
-    inject SessionsSource Sessions;
+    inject UIServiceProvider UIs;
+    inject SessionsState Sessions;
     inject OpencodeConnection Connection;
     string PermissionStage = "choose";
     string RejectText = "";
@@ -134,7 +133,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     /// tracks the router's Active StoreToUpdate so a session switch re-wires the CollectionChanged
     /// handler (and part hooks) to the newly-active StoreToUpdate's collection.
     /// </summary>
-    private SessionStore? _hookedStoreToUpdate;
+    private SessionStoreToBeRemoved? _hookedStoreToUpdate;
 
     [QuickMarkupConstructor]
     private void Ctor()

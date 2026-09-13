@@ -2,7 +2,7 @@ using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using UnoVibe.Models;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Bridges the chat sidebar indicators (background completion, pending question/approval) to
@@ -31,7 +31,7 @@ namespace UnoVibe.Services;
 /// polyfills' docs — so any app window being focused suppresses the whole app's active-session
 /// toasts there.)
 /// </summary>
-internal static class Notifications
+internal static class NotificationsHelper
 {
 #if WASDK
     private static bool _registered;

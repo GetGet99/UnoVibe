@@ -8,13 +8,13 @@ namespace UnoVibe.Providers;
     using UnoVibe.Models;
     ToastItem? CurrentToast;
     """)]
-public partial class ToastService
+public partial class ToastsProvider
 {
-    EventSource Event { get; set; }
+    EventsProvider Event { get; set; }
     DispatcherQueue dispatcher;
     [QuickMarkupConstructor]
     [MemberNotNull(nameof(Event), nameof(dispatcher))]
-    void Ctor(EventSource Event, DispatcherQueue dispatcher)
+    void Ctor(EventsProvider Event, DispatcherQueue dispatcher)
     {
         this.Event = Event;
         this.dispatcher = dispatcher;

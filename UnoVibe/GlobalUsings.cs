@@ -15,6 +15,10 @@ global using System.Collections.ObjectModel;
 global using System.Linq;
 global using System.Threading;
 global using System.Threading.Tasks;
+global using UnoVibe.Helpers;
+global using UnoVibe.States;
+global using UnoVibe.Stores;
+global using UnoVibe.Providers;
 #if WASDK
 global using WrapPanel = CommunityToolkit.WinUI.Controls.WrapPanel;
 #endif

@@ -7,14 +7,14 @@ namespace UnoVibe;
 
 /// <summary>
 /// Tracks one top-level <see cref="MicaWindow"/> together with its own
-/// <see cref="ChatStore"/>. This lets each window scope to an independent
+/// <see cref="ChatStoreToBeRemoved"/>. This lets each window scope to an independent
 /// (or shared) opencode serve session instead of a single global store.
 /// </summary>
 public sealed class WindowController
 {
     public MicaWindow Window { get; } = new();
 
-    public ChatStore Store { get; } = new();
+    public ChatStoreToBeRemoved Store { get; } = new();
 
     public WindowController()
     {

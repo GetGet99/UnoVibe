@@ -73,7 +73,7 @@ public partial class DiffView : IQuickMarkupComponent<UIElement>
         };
         var text = new TextBlock
         {
-            FontFamily = CodeFonts.Current,
+            FontFamily = CodeFontsHelper.Current,
             FontSize = 12,
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,

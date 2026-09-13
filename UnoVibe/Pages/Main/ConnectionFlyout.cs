@@ -5,7 +5,6 @@ namespace UnoVibe.Pages.Main;
 
 [QuickMarkup("""
     using UnoVibe.Services;
-    using UnoVibe.Providers;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -13,7 +12,7 @@ namespace UnoVibe.Pages.Main;
     using Microsoft.UI;
     bool ShowPassword = false;
     inject OpencodeConnection Connection;
-    inject ToastService Toasts;
+    inject ToastsProvider Toasts;
     <Flyout Placement=Top @Closed+=`ShowPassword = false`>
         <StackPanel Spacing=10 MinWidth=320 MaxWidth=400>
             <TextBlock Text="Connection" FontSize=13 FontWeight=`FontWeights.SemiBold` />

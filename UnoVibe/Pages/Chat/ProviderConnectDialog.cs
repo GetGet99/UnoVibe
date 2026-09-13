@@ -1,11 +1,5 @@
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using System.Collections.ObjectModel;
 using UnoVibe.Models;
-using UnoVibe.Services;
 using UnoVibe.Integration;
-using UnoVibe.Providers;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -243,7 +237,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
 
     OpencodeClient Client { get; set; }
 
-    ToastService Toasts { get; set; }
+    ToastsProvider Toasts { get; set; }
     ModelsProvider Models { get; set; }
 
     // Current method's prompt definition and the collected answers.
@@ -258,7 +252,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     /// point: the model picker's "Connect a provider…" row and the composer's /connect built-in).
     /// No-op when not connected to a server.
     /// </summary>
-    public static async Task ShowAsync(OpencodeClient client, ToastService toastService, ModelsProvider models, XamlRoot xamlRoot)
+    public static async Task ShowAsync(OpencodeClient client, ToastsProvider toastService, ModelsProvider models, XamlRoot xamlRoot)
     {
         var dialog = new ProviderConnectDialog { Client = client, Toasts = toastService, Models = models };
         await dialog.LoadAsync();
@@ -579,7 +573,7 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
 
     private void OpenOauthUrl()
     {
-        var error = FolderLauncher.OpenUrl(_oauthUrl);
+        var error = FolderLauncherHelper.OpenUrl(_oauthUrl);
         if (error is not null)
         {
             Status = $"Could not open a browser: {error}";

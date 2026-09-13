@@ -3,15 +3,14 @@ using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
 using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
-using UnoVibe.Services;
 
 namespace UnoVibe.Providers;
 
-class EventSource
+class EventsProvider
 {
     OpencodeClient client;
     DispatcherQueue dispatcherQueue;
-    public EventSource(OpencodeClient client, DispatcherQueue dispatcherQueue)
+    public EventsProvider(OpencodeClient client, DispatcherQueue dispatcherQueue)
     {
         this.client = client;
         this.dispatcherQueue = dispatcherQueue;

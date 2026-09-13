@@ -2,7 +2,7 @@ using System.IO;
 using System.Text.Json;
 using UnoVibe.Models;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Stores;
 
 /// <summary>How sending a message behaves while a turn is already running.</summary>
 public enum SendPromptMode
@@ -46,7 +46,7 @@ public sealed record SettingSpec(
 /// App settings: a single static source of truth for every window (and, via a file watcher,
 /// every process). Values are persisted to <c>settings.json</c> under the app's local-data
 /// directory and loaded once at startup. Typed static properties are the canonical store
-/// (read live by the app logic, e.g. <see cref="FolderLauncher"/> and <see cref="SessionStore"/>);
+/// (read live by the app logic, e.g. <see cref="FolderLauncherHelper"/> and <see cref="SessionStore"/>);
 /// the <see cref="Specs"/> registry + <see cref="GetValue"/>/<see cref="SetValue"/> bridge them to
 /// the data-driven settings page.
 ///
@@ -82,9 +82,9 @@ public static class SettingsStore
     public static SendPromptMode SendMode { get; set; } = SendPromptMode.OnNextToolCall;
 
     /// <summary>Monospaced font used for code blocks, tool output, and diffs. Empty string (the
-    /// default) picks a font that ships with the OS (see <see cref="CodeFonts"/>); any other
+    /// default) picks a font that ships with the OS (see <see cref="CodeFontsHelper"/>); any other
     /// value is a font family name used verbatim.</summary>
-    public static string CodeFont { get; set; } = CodeFonts.DefaultValue;
+    public static string CodeFont { get; set; } = CodeFontsHelper.DefaultValue;
 
     /// <summary>Whether a slash command that matches a skill expands it (TUI behavior, default).
     /// Off: only real commands/MCP prompts expand — a skill-only name falls through to a plain
@@ -99,7 +99,7 @@ public static class SettingsStore
     public static bool AutoContinueOnThinking { get; set; } = false;
 
     /// <summary>The settings-page rows. Built lazily (on first settings open) so the Code font options
-    /// can enumerate the user's installed fonts via <see cref="SystemFonts"/>; cached thereafter.
+    /// can enumerate the user's installed fonts via <see cref="SystemFontsHelper"/>; cached thereafter.
     /// Adding a setting = add a spec here + a GetValue/SetValue case.</summary>
     public static IReadOnlyList<SettingSpec> Specs => _specs ??= BuildSpecs();
 
@@ -109,9 +109,9 @@ public static class SettingsStore
     {
         var codeFontOptions = new List<SettingOption>
         {
-            new(CodeFonts.DefaultValue, "Default (per platform)"),
+            new(CodeFontsHelper.DefaultValue, "Default (per platform)"),
         };
-        foreach (var name in SystemFonts.Families)
+        foreach (var name in SystemFontsHelper.Families)
             codeFontOptions.Add(new SettingOption(name, name));
 
         return new SettingSpec[]

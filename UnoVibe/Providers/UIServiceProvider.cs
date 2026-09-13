@@ -1,7 +1,8 @@
-
 using UnoVibe.Models;
 
-class UIService
+namespace UnoVibe.Providers;
+
+class UIServiceProvider
 {
     public event Action? McpSectionRequested;
     public void InvokeMcpSectionRequested() => McpSectionRequested?.Invoke();

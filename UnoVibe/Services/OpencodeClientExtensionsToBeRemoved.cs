@@ -1,13 +1,18 @@
-
 using System.Text.Json;
 
 namespace UnoVibe.Services;
 
-internal static class OpencodeClientExtensions
+/// <summary>
+/// Only in use for SessionStore and ChatStore. Will be removed
+/// </summary>
+[Obsolete("This class will be removed", error: true)]
+internal static class OpencodeClientExtensionsToBeRemoved
 {
+    [Obsolete("This extension will be removed", error: true)]
     public static string GetStringProperty(this JsonElement element, string name) =>
         element.TryGetProperty(name, out var prop) ? prop.GetString() ?? "" : "";
 
+    [Obsolete("This extension will be removed", error: true)]
     public static long GetInt64Property(this JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var prop)) return 0;
@@ -15,6 +20,7 @@ internal static class OpencodeClientExtensions
         return 0;
     }
 
+    [Obsolete("This extension will be removed", error: true)]
     public static bool GetBoolProperty(this JsonElement element, string name, bool fallback = false)
     {
         if (!element.TryGetProperty(name, out var prop)) return fallback;

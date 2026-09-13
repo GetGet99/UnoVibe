@@ -21,7 +21,7 @@ public partial class App : Application
 #endif
     }
 
-    /// <summary>All open windows. Each window scopes to its own <see cref="ChatStore"/>.</summary>
+    /// <summary>All open windows. Each window scopes to its own <see cref="ChatStoreToBeRemoved"/>.</summary>
     public static List<WindowController> Windows { get; } = new();
 
     protected Window? MainWindow { get; private set; }
@@ -29,7 +29,7 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         ReactiveInitializer.InitReactiveScheduler();
-        Notifications.Initialize();
+        NotificationsHelper.Initialize();
 
         MainWindow = CreateWindow().Window;
     }
@@ -60,7 +60,7 @@ public partial class App : Application
         };
 
         controller.Window.Activate();
-        Notifications.RegisterWindow(controller.Window);
+        NotificationsHelper.RegisterWindow(controller.Window);
         return controller;
     }
 
@@ -89,7 +89,7 @@ public partial class App : Application
         Environment.Exit(1);
     }
 
-    private static void TryDispose(ChatStore store)
+    private static void TryDispose(ChatStoreToBeRemoved store)
     {
         try { store.Dispose(); } catch { /* best effort on shutdown */ }
     }

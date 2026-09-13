@@ -8,15 +8,14 @@ namespace UnoVibe.Pages.Main;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
-    using UnoVibe.Providers;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
-    inject SessionsSource Sessions;
-    inject EventSource Events;
-    inject ToastService Toasts;
+    inject SessionsState Sessions;
+    inject EventsProvider Events;
+    inject ToastsProvider Toasts;
     inject Window HostWindow;
     inject bool SettingsOpen;
     inject? bool IsCompact;
@@ -156,7 +155,7 @@ public partial class SessionSidebar : IQuickMarkupComponent
     }
 
     /// <summary>
-    /// Path relative to the connected server's directory via <see cref="PathDisplay.Relative"/>.
+    /// Path relative to the connected server's directory via <see cref="PathDisplayHelper.Relative"/>.
     /// </summary>
-    private string DisplayPath(string fullPath) => PathDisplay.Relative(fullPath, Connection.ServerDirectory);
+    private string DisplayPath(string fullPath) => PathDisplayHelper.Relative(fullPath, Connection.ServerDirectory);
 }

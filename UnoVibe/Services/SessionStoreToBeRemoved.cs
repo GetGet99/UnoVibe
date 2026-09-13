@@ -1,11 +1,5 @@
 using System.Text.Json;
-using System.Threading.Channels;
-using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage;
-using Windows.Storage.Streams;
 using UnoVibe.Models;
-using UnoVibe.Providers;
-using UnoVibe.Helpers;
 
 namespace UnoVibe.Services;
 
@@ -14,9 +8,9 @@ namespace UnoVibe.Services;
 /// marker, retry/continue state, composer attachments and per-session mode/model/variant —
 /// everything the chat page shows for the currently-active session.
 ///
-/// Stores are created lazily by <see cref="ChatStore"/> the first time a session is opened
+/// Stores are created lazily by <see cref="ChatStoreToBeRemoved"/> the first time a session is opened
 /// and cached (keyed by session id) so switching sessions never recreates or resets them:
-/// switching re-points the router's <see cref="ChatStore.Active"/> reference and the cached
+/// switching re-points the router's <see cref="ChatStoreToBeRemoved.Active"/> reference and the cached
 /// store (messages included) is reused. Sessions that exist on the sidebar but were never
 /// opened have no store — only the router's per-session sidebar maps track them.
 ///
@@ -69,13 +63,14 @@ namespace UnoVibe.Services;
     // revert point changes (recounts the reverted user messages from the message list).
     public string RevertCountLabel = "";
     """)]
-public sealed partial class SessionStore
+[Obsolete("This class will be removed", error: true)]
+public sealed partial class SessionStoreToBeRemoved
 {
     /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
 
     /// <summary>The router that owns this store (client, sidebar, settings options).</summary>
-    public ChatStore Router { get; set; } = null!;
+    public ChatStoreToBeRemoved Router { get; set; } = null!;
 
     public ObservableCollection<MessageItem> Messages { get; } = new();
 

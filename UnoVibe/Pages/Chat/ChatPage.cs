@@ -13,13 +13,12 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
-    using UnoVibe.Providers;
     using UnoVibe.Integration;
     using QuickMarkup.WinUI;
-    inject SessionsSource Sessions;
-    inject ToastService Toasts;
+    inject SessionsState Sessions;
+    inject ToastsProvider Toasts;
     inject OpencodeClient Opencode;
-    inject UIService UIs;
+    inject UIServiceProvider UIs;
     provide ChatPage ChatP = `this`;
     <root>
         <Grid RowDefinitions=<>

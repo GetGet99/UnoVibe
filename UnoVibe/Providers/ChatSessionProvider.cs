@@ -4,7 +4,7 @@ namespace UnoVibe.Providers;
 [QuickMarkup("""
     
     """)] // SessionTokens Tokens = Zero;
-partial class ChatSessionService
+partial class ChatSessionProvider
 {
     [QuickMarkupConstructor]
     void Ctor(SessionId session)

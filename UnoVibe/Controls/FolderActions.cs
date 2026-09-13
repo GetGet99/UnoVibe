@@ -1,6 +1,3 @@
-using UnoVibe.Models;
-using UnoVibe.Services;
-
 namespace UnoVibe.Controls;
 
 /// <summary>
@@ -12,11 +9,10 @@ namespace UnoVibe.Controls;
 [QuickMarkup("""
     using UnoVibe.Services;
     using UnoVibe.Models;
-    using UnoVibe.Providers;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
-    inject SessionsSource Sessions;
-    inject ToastService Toasts;
+    inject SessionsState Sessions;
+    inject ToastsProvider Toasts;
     inject? bool IsSidebarView;
     required string Directory;
     bool ShowFileManager = false;
@@ -44,11 +40,11 @@ namespace UnoVibe.Controls;
     """)]
 public partial class FolderActions : IQuickMarkupComponent
 {
-    private void OnOpenInEditor() => RunFolderAction(FolderLauncher.OpenInEditor);
+    private void OnOpenInEditor() => RunFolderAction(FolderLauncherHelper.OpenInEditor);
 
-    private void OnOpenInFileManager() => RunFolderAction(FolderLauncher.OpenInFileManager);
+    private void OnOpenInFileManager() => RunFolderAction(FolderLauncherHelper.OpenInFileManager);
 
-    private void OnOpenInTerminal() => RunFolderAction(FolderLauncher.OpenInTerminal);
+    private void OnOpenInTerminal() => RunFolderAction(FolderLauncherHelper.OpenInTerminal);
 
     private void OnNewSession()
     {
@@ -62,11 +58,6 @@ public partial class FolderActions : IQuickMarkupComponent
     {
         var error = action(Directory);
         if (error is null) return;
-        Toasts.Show(new ToastItem
-        {
-            Title = "Open folder",
-            Message = error,
-            Variant = "error",
-        });
+        Toasts.ShowError(error, "Open folder");
     }
 }

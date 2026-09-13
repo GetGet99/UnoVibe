@@ -4,7 +4,6 @@ namespace UnoVibe.Pages.Main;
 
 [QuickMarkup("""
     using UnoVibe.Services;
-    using UnoVibe.Providers;
     using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -12,13 +11,13 @@ namespace UnoVibe.Pages.Main;
     using Microsoft.UI;
     bool McpExpanded = false;
     inject bool SettingsOpen;
-    inject SessionsSource Sessions;
-    inject EventSource Events;
-    inject ToastService Toasts;
+    inject SessionsState Sessions;
+    inject EventsProvider Events;
+    inject ToastsProvider Toasts;
     inject bool IsCompact;
     inject bool IsSidebarView;
     inject OpencodeClient Opencode;
-    inject UIService UIs;
+    inject UIServiceProvider UIs;
     private McpService McpService = `null!`;
     <Border Grid.Row=1 Padding=`new Thickness(12, 8, 12, 8)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
         <StackPanel Spacing=6>

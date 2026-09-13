@@ -1,5 +1,3 @@
-using UnoVibe.Providers;
-
 namespace UnoVibe.Pages.Main;
 
 /// <summary>
@@ -14,9 +12,9 @@ namespace UnoVibe.Pages.Main;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     provide NotificationService Notifications = `null!`;
-    provide SessionsSource Sessions = `null!`;
-    provide EventSource Events = `null!`;
-    provide ToastService Toasts = `null!`;
+    provide SessionsState Sessions = `null!`;
+    provide EventsProvider Events = `null!`;
+    provide ToastsProvider Toasts = `null!`;
     provide OpencodeConnection Connection = `null!`;
     provide OpencodeClient Opencode = `null!`;
     provide ModelsProvider Models = `null!`;
@@ -24,14 +22,14 @@ namespace UnoVibe.Pages.Main;
     provide bool SettingsOpen = false;
     provide bool IsCompact = false;
     provide bool IsSidebarView = false;
-    provide UIService UIs = `new()`;
+    provide UIServiceProvider UIs = `new()`;
     <setup>
         Connection = connection;
         Opencode = Connection.Client;
         HostWindow = hostWindow;
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         Notifications = new(hostWindow);
-        Events = new EventSource(Connection.Client, dispatcher);
+        Events = new EventsProvider(Connection.Client, dispatcher);
         Toasts = new(Events, dispatcher);
         Sessions = new(Connection.Client, Events, Toasts, Notifications, dispatcher);
         Models = new() { Opencode = Opencode, Toasts = Toasts };

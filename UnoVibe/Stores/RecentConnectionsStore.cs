@@ -1,8 +1,7 @@
-using System.IO;
 using System.Text.Json;
 using UnoVibe.Models;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Stores;
 
 /// <summary>
 /// Persists the ConnectPage "Recent" list (folders launched via `opencode serve`
@@ -16,7 +15,7 @@ public static class RecentConnectionsStore
 {
     private const int MaxEntries = 20;
 
-    private static readonly string Dir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+    private static readonly string Dir = ApplicationData.Current.LocalFolder.Path;
     private static readonly string FilePath = Path.Combine(Dir, "recent.json");
     private static readonly object Gate = new();
 

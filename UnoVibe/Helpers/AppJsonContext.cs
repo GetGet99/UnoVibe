@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using UnoVibe.Integration.Events;
 using UnoVibe.Models;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Source-generated System.Text.Json context covering every type the app (de)serializes.
@@ -21,7 +21,7 @@ namespace UnoVibe.Services;
 [JsonSerializable(typeof(SettingsStore.SettingsFileModel))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(List<Integration.QuestionInfo>))]
-// --- Event types used by EventSource ---
+// --- Event types used by EventsProvider ---
 [JsonSerializable(typeof(MessageUpdatedEvent))]
 [JsonSerializable(typeof(MessagePartUpdatedEvent))]
 [JsonSerializable(typeof(MessagePartDeltaEvent))]

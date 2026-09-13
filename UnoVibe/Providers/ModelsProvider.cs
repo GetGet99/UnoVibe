@@ -7,7 +7,7 @@ namespace UnoVibe.Providers;
 public class ModelsProvider
 {
     public required OpencodeClient Opencode { private get; init; }
-    public required ToastService Toasts { private get; init; }
+    public required ToastsProvider Toasts { private get; init; }
     public ReactiveList<string> AgentOptions { get; } = [];
     public ReactiveKeyedSet<Model, ModelOption> ModelOptions { get; } = new(Model.From);
 

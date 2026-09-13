@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Shared folder-path display helper used by the sidebar and the chat header. Shows the
@@ -8,7 +8,7 @@ namespace UnoVibe.Services;
 /// meaningful "home" for the user, not the app's CWD — so callers only pass the reference
 /// directory and get consistent output everywhere.
 /// </summary>
-public static class PathDisplay
+public static class PathDisplayHelper
 {
     /// <summary>
     /// Returns the shorter of <paramref name="fullPath"/> or a path relative to
