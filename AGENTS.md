@@ -42,22 +42,23 @@ that code, and keep it up to date alongside AGENTS.md (see "Contribution guideli
   health, the `/event` stream, session create/list/rename/abort, title auto-naming, subagent
   (task-tool) sessions, the permission + question APIs, session status/errors, MCP API,
   unhandled events, and serve flags/port probing.
-  _Read before_ working on `OpencodeClient`, `ChatStore.Apply`, SSE event handling,
-  permissions/questions, MCP, or `ServeProcess`.
+  _Read before_ working on `OpencodeClient`, `EventsProvider`, SSE event handling,
+  permissions/questions, MCP, or `OpencodeServeProcess`.
 - **`agents-doc/integration.md`** — `UnoVibe.Integration` conventions: the one-partial-class =
   one-endpoint rule, dumb API logic (no post-processing), proper C# models instead of
   `JsonElement`, referencing the opencode source for ins/outs, and the `Result<T>` pattern.
   _Read before_ adding or modifying API endpoints, request/response DTOs, or
   `AppJsonContext` registrations.
-- **`agents-doc/session-state.md`** — client-side per-session state: the ChatStore/SessionStore
-  split, send-while-busy modes + the send-mode button, interrupt, revert/undo + the per-message
-  revert flyout, image attachments, fork (per-message + full), auto-retry + continue cards, and
-  chat autoscroll.
-  _Read before_ editing chat send/revert/fork/autoscroll behavior or `SessionStore`.
+- **`agents-doc/session-state.md`** — client-side per-session state: `ChatboxState` (per-session
+  send/queue/auto-continue/commands), `SessionsStateProvider` (session lifecycle), send-while-busy
+  modes + the send-mode button, interrupt, revert/undo + the per-message revert flyout, image
+  attachments, fork (per-message + full), auto-retry + continue cards, and chat autoscroll.
+  _Read before_ editing chat send/revert/fork/autoscroll behavior, `ChatboxState`, or
+  `SessionsStateProvider`.
 - **`agents-doc/session-sidebar.md`** — the sidebar: no-rebuild model, directory groups + git
   branch, folder actions, the Open Folder button, the connection-details flyout, and the
   session/busy/outcome indicators.
-  _Read before_ editing `SessionSidebar` or sidebar state in `ChatStore`.
+  _Read before_ editing `SessionSidebar`, `SessionsStateProvider`, or `SessionHead`.
 - **`agents-doc/quickmarkup.md`** — QuickMarkup gotchas (Init(), reactivity, keyed foreach,
   two-way binding), version notes, and the skill location.
   _Read before_ writing or editing QuickMarkup markup (the "Always load the skill" rule below
@@ -72,7 +73,7 @@ that code, and keep it up to date alongside AGENTS.md (see "Contribution guideli
   _Read before_ touching folder pickers, `WindowsHelper`, or any `UnoVibe/Polyfills/*` file.
 - **`agents-doc/notifications.md`** — desktop notifications: the `Notifications` façade, the
   shared toast path, WASDK/Linux/macOS delivery, focus gating, and the no-op targets.
-  _Read before_ editing `Services/Notifications.cs`, notification wiring, or the notification
+  _Read before_ editing `Helpers/Notifications.cs`, notification wiring, or the notification
   polyfills.
 - **`agents-doc/connect-page.md`** — the ConnectPage flow: two-column layout + compact mode,
   one-click Open Folder, folder security/passwords, `recent.json` persistence, and the
@@ -126,7 +127,7 @@ High-level goals/design:
 - Only external package references: `QuickMarkup.Uno`, `Markdig`, and `ColorCode.Core`
   (plus `QuickMarkup.WinUI`, `Microsoft.WindowsAppSDK`, and `Microsoft.Graphics.Win2D` on the
   Windows target). Everything else comes from the Uno.Sdk implicit packages.
-  `SkiaSharp` is used by `Services/SystemFonts.cs` but **not referenced directly** — it comes
+  `SkiaSharp` is used by `Helpers/SystemFontsHelper.cs` but **not referenced directly** — it comes
   transitively from Uno's Skia host, so desktop targets get it with no added dependency.
 - Build uses `Uno.SingleProject`; `EmitCompilerGeneratedFiles=true` so generated source lands
   under `UnoVibe/obj/<tfm>/generated/...`.
@@ -134,15 +135,19 @@ High-level goals/design:
 ### Native AOT constraints
 
 `<PublishAot>true</PublishAot>` is set in the csproj, so reflection-based JSON is unavailable.
-All JSON (de)serialization must go through the source-generated **`Services/AppJsonContext.cs`**
-(`AppJsonContext.Default.X`): `JsonSerializer.Deserialize/Serialize` with a `JsonTypeInfo`, and
-the `PostAsJsonAsync`/`PatchAsJsonAsync` overloads taking a `JsonTypeInfo`.
+All JSON (de)serialization must go through source-generated `JsonSerializerContext` classes:
+- **`Helpers/AppJsonContext.cs`** — app-layer types: `SessionInfo`, event types, settings models,
+  recent connections.
+- **`UnoVibe.Integration/AppJsonContext.cs`** — API-layer types: request/response DTOs
+  (`CreateSessionRequest`, `SendPromptRequest`, `MessageWithParts`, etc.).
+
+Both use `AppJsonContext.Default.X` for `JsonSerializer.Deserialize/Serialize` with a `JsonTypeInfo`,
+and the `PostAsJsonAsync`/`PatchAsJsonAsync` overloads taking a `JsonTypeInfo`.
 
 - Do NOT add new reflection-based `JsonSerializer.Deserialize<T>(..., JsonSerializerOptions)`
   calls, anonymous/Dictionary request bodies, or `JsonSerializerOptions` fields.
-- Every request body and persisted model is a named class registered in `AppJsonContext`
-  (opencode request DTOs like `CreateSessionRequest`/`SendPromptRequest`/`EmptyRequest` live in
-  that file too).
+- Every request body and persisted model is a named class registered in the appropriate
+  `AppJsonContext`.
 
 **Uno platform quirks:**
 
@@ -153,8 +158,8 @@ the `PostAsJsonAsync`/`PatchAsJsonAsync` overloads taking a `JsonTypeInfo`.
   Uno resolves the item property for those via a reflection-driven `BindingPath` that NativeAOT
   trimming breaks (the model combo rendered an empty label and dead selection under AOT only).
   Use `ItemTemplate` + an object-based `SelectedItem` binding instead
-  (the model combo binds `SelectedItem` to the reactive computed `SessionStore.SelectedModelOption`,
-  resolved from `Router.ModelOptions` via `.Reactive.FirstOrDefault(...)`).
+  (the model combo binds `SelectedItem` to the reactive computed `SessionsStateProvider.SelectedModelOption`,
+  resolved from `ModelsProvider.ModelOptions` via `.Reactive.FirstOrDefault(...)`).
 
 ### Compile-time OS constants
 
@@ -208,15 +213,16 @@ machine also lacks the reference clones in `agents-doc/referenced-projects.md` �
   flows through the QuickMarkup provide/inject context — `MainPage` declares
   `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via
   `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and
-  pass it to `WindowsHelper.InitializeWithWindow`. Callers like `SessionStore.PickImageAsync(Window)`
-  take it as a parameter. `ConnectPage` reaches it through its own `Controller.Window` instead.
+  pass it to   `WindowsHelper.InitializeWithWindow`. Callers like `ChatComposer.OnPickImages` pass it via
+  `ImageIOHelper.PickImagesAsync(HostWindow)` directly. `ConnectPage` reaches it through its own
+  `Controller.Window` instead.
   Folder picking routes through `WindowsHelper.PickFolderAsync(window, startPath)` — per-target
   WASDK / polyfill / classic routing — see `agents-doc/polyfills.md`.
 - Since the Windows target is planned/supported, prefer these portable forms whenever convenient;
   on Linux just write the forms above — the goal is code that compiles on both targets.
 
 Desktop notifications bridge the sidebar indicators to native toasts via a platform-dispatching
-façade (`Services/Notifications.cs`) whose callers need no `#if` guards — see
+façade (`Helpers/Notifications.cs`) whose callers need no `#if` guards — see
 `agents-doc/notifications.md`.
 
 ## How to Build & Run
@@ -318,40 +324,31 @@ the user is talking to this opencode session **through the running UnoVibe app**
   `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`), `SymbolExtemsion`,
   `ToolViews/*` (ToolView* render opencode tool calls).
   See `agents-doc/markdown-rendering.md`, `agents-doc/tool-views.md`, `agents-doc/suggest-box.md`.
-- `UnoVibe/Services/` — core logic:
-  - `OpencodeClient.cs` — minimal HTTP client for the opencode REST API; Basic-auth capable.
-  - `ChatStore.cs` — the per-window **router** store.
-    Owns the connection (client, serve process, SSE event pump), the sidebar state (sessions,
-    directory groups, MCP servers), the shared settings options (modes/models/variants),
-    the global permission/toast surfaces, and the per-session **`SessionStore` cache** (keyed by
-    session id). `Active` (a reactive `SessionStore?` field) is the store for the currently-open
-    session; switching sessions re-points it and raises `ActiveStoreChanged` (the chat page
-    re-hooks the active store's message list on that event). Session-scoped SSE events are
-    dispatched to the owning cached store; sessions never opened have no store, so only the
-    sidebar maps are fed.
-  - `SessionStore.cs` — a cached per-session store holding that session's messages,
-    composer/model/variant/mode selection, usage/token/context stats, revert/redo state,
-    retry card state, and pending-image attachments.
-    Lazily created and loaded on first open (`LoadAsync`), then kept alive and reused on revisit
-    (stale-while-revalidate `RefreshAsync` when not mid-turn), so switching away and back preserves
-    the live message list. `Router` back-reference provides the shared client/options/status
-    surfaces. Fields in its `[QuickMarkup]` header are the reactive references the chat page binds
-    to via `Store.Active.X`. See `agents-doc/session-state.md`.
-  - `EventStreamReader.cs` — reads the SSE `/event` stream.
-  - `AppJsonContext.cs` — the source-generated `System.Text.Json` context (AOT-mandated; see
-    "Native AOT constraints") plus the named opencode request DTOs it registers.
-  - `ServeProcess.cs` — launches `opencode serve --port <free>` in a folder, waits for health.
-    Password: null → generated strong password, "" → unsecured, non-empty → used.
-  - `StartupArgs.cs` — command-line parsing (`LaunchKind`/`PasswordMode`):
-    the single positional folder-or-URL argument plus the `--password` flag;
-    `ResolveFolderPassword`/`ResolveServerPassword` map to the per-mode defaults.
-  - `SuggestionProviders.cs` — the `ISuggestionProvider` implementations for `SuggestBox`
-    (namespace `UnoVibe.Controls`). See `agents-doc/suggest-box.md`.
-  - `SettingsStore.cs` — app settings: typed static values, a `Specs` registry for the
-    data-driven settings page, `settings.json` persistence, and a cross-process file watcher.
-    See `agents-doc/settings.md`.
-- `UnoVibe/Models/` — DTOs (`MessageItem`, `SessionInfo`, `ModelOption`, `ToolView*` item types,
-  etc.), plus the settings page's reactive row model (`SettingsEntry`).
+- `UnoVibe/Providers/` — window-level global registration of shared services:
+  `UnoVibeProviders` (composition root, owns all providers), `EventsProvider` (SSE event pump +
+  dispatch), `SessionsStateProvider` (session lifecycle, active session tracking),
+  `ModelsProvider` (agent/model option lists), `ToastsProvider` (in-app toast messages),
+  `NotificationProvider` (native desktop notifications), `UIServiceProvider` (cross-component
+  UI event bus), `ReactiveKeyedSet` (reactive keyed collection).
+- `UnoVibe/States/` — scoped reactive state:
+  `ChatboxState` (per-session send/queue/auto-continue/commands, partial class with
+  `AutoContinue` and `Command` extensions), `SessionHead` (per-session sidebar metadata),
+  `OpencodeConnection` (live server connection, health check, status).
+- `UnoVibe/Helpers/` — static helper functions (may hold little state or read from stores):
+  `AppJsonContext` (app-layer source-generated JSON context), `Notifications` (platform-dispatching
+  notification facade), `CLIHelper`, `CodeFontsHelper`, `FolderLauncherHelper`, `ImageIOHelper`,
+  `MessageJsonHelper`, `OpencodeHelper`, `PathDisplayHelper`, `SystemFontsHelper`, `AsyncHelper`.
+- `UnoVibe/Stores/` — persistence stores:
+  `RecentConnectionsStore` (recent.json persistence), `SettingsStore` (settings.json persistence
+  + data-driven Specs registry). See `agents-doc/settings.md`.
+- `UnoVibe/Models/` — reactive models (not to be confused with `UnoVibe.Integration` DTOs):
+  `MessageItem`, `PartItem`, `ChatboxMessage`, `ImageAttachment`, `SessionState`, `ChatOutcome`,
+  `SessionTokens`, `Model`, `SettingsEntry`, plus `Startup/LaunchKind` and `Startup/StartupArgs`.
+- `UnoVibe/Commands/` — `SuggestionProviders` (the `ISuggestionProvider` implementations for
+  `SuggestBox`, namespace `UnoVibe.Controls`). See `agents-doc/suggest-box.md`.
+- `UnoVibe/Services/` — legacy code being removed (classes with `ToBeRemoved` suffix are
+  `[Obsolete(..., error: true)]` and will not compile when included). Only
+  `OpencodeServeProcess.cs` remains active here. See `agents-doc/session-state.md`.
 - `UnoVibe/Pages/Main/SettingsPage.cs` — the settings panel (modal overlay), rendered from
   `SettingsStore.Specs`. See `agents-doc/settings.md`.
 - `App.xaml.cs` — startup routing: parses `StartupArgs` (`App.CreateWindow`), fails the launch on
@@ -386,17 +383,72 @@ a Windows dev environment does **not** have them, so don't assume those paths ar
 See `agents-doc/referenced-projects.md` for the paths, what each is for, and the Uno TextBox
 key-processing quirk SuggestBox works around.
 
+## Architecture Guidelines
+
+### JsonElement usage
+
+Minimize or avoid `JsonElement`. Prefer creating a proper class in `UnoVibe.Integration` and
+(de)serializing with `System.Text.Json`. The only exception is truly dynamic/per-tool shapes
+(tool `input`, `metadata`, `structured`, `ProviderMetadata`) where the structure varies and
+is not worth modeling.
+
+### Single source of truth
+
+Only one place should hold the source of truth for a piece of data, unless absolutely necessary.
+Multiple sources of truth lead to someone forgetting to update one and introducing inconsistencies.
+For optimization, caches may be necessary, but introducing a new source of truth should be a
+consciously agreed-upon decision before it is used everywhere.
+
+### State isolation on directory/session change
+
+When the selected directory or session changes, use a **different, new object** rather than
+resetting state on the existing one. This avoids state leaks and ensures nobody forgets a reset.
+
+### Need-to-know storage
+
+Store values only on a need-to-know basis. For example, `SessionHead` holds only sidebar-relevant
+metadata (title, busy, outcome, pending attention) — not full chat messages, token counts, or
+other data not needed while it sits in the sidebar.
+
+### Remove values when not needed
+
+Remove values from objects when they are no longer needed. This may not be fully done today,
+but in the future (e.g., when chat message handling is refactored), messages will only be
+stored while viewing the page and discarded after.
+
+### Provider / State / Helper / Store / Model conventions
+
+- **Providers**: Window-level global registration (e.g., `SessionsStateProvider`,
+  `EventsProvider`, `ToastsProvider`). Wired in `UnoVibeProviders`.
+- **States**: Smaller-scoped reactive state. Exception: `OpencodeConnection` is a
+  broader-scope state that hasn't found its final home yet.
+- **Helpers**: Static helper functions. May hold little state or read from stores.
+- **Stores**: Persistence that may write to disk (`RecentConnectionsStore`, `SettingsStore`).
+- **Models** (in UnoVibe main project): Mostly reactive models. Not to be confused with
+  `UnoVibe.Integration` model classes (API DTOs).
+
+### ToBeRemoved suffix
+
+Classes and members with a `ToBeRemoved` suffix are `[Obsolete(..., error: true)]`, will not
+compile when included, and will be removed shortly. Do not use them.
+
+### Refactoring status
+
+The refactoring is not 100% complete. `ToBeRemoved` suffix classes and chat-message-related
+code are not yet fully refactored. Do not expect the main UnoVibe project to build in this
+stage.
+
 ## CONTRIBUTION RULES AND BANNED PATTERNS
 
 This applies to new and changed codes.
 
-### `Router.ConnectionStatus` message is not for error.
+### `ConnectionStatus` message is not for error.
 
-Don't set error message to `Router.ConnectionStatus` for failure. Its rendering is too small and
+Don't set error message to `ConnectionStatus` for failure. Its rendering is too small and
 user can't read it. It's just have enough space for `Connected` string.
 
-Instead: show an in-app toast — `Router.ShowError(message, title)` for failures,
-`Router.ShowWarning(message, title)` for transient notices, or `Router.ShowToast(new ToastItem { ... })`
+Instead: show an in-app toast — `Toasts.ShowError(message, title)` for failures,
+`Toasts.ShowWarning(message, title)` for transient notices, or `Toasts.ShowToast(new ToastItem { ... })`
 for full control (variant/duration). Sole exception: connect-time failures inside `ConnectAsync`
 still write `ConnectionStatus`, which `ConnectPage` displays on its own status line (no toast host
 exists until `MainPage` mounts).

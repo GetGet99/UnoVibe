@@ -51,7 +51,7 @@ Endpoint methods must be thin wrappers around the HTTP helpers. They should:
 
 They must **not** do any post-processing, field remapping, aggregation, or business logic
 on the data. The API layer's job is transport and (de)serialization only. Any transformation
-belongs in the caller (e.g., `ChatStore` or `SessionStore`).
+belongs in the caller (e.g., `ChatboxState` or `SessionsStateProvider`).
 
 ## No JsonElement for structured data
 

@@ -1,7 +1,7 @@
 # Desktop notifications
 
 Reference for the desktop-notifications bridge.
-**Read this file when** editing `Services/Notifications.cs`, `App.xaml.cs` notification wiring,
+**Read this file when** editing `Helpers/Notifications.cs`, `App.xaml.cs` notification wiring,
 or the notification polyfills under `UnoVibe/Polyfills/{Linux,MacOS}/`.
 The shared `UnoVibe.Polyfills.MacOS.ObjC` binder used by macOS notifications is also used by the
 macOS folder-picker polyfill (see [`polyfills.md`](polyfills.md)).
@@ -9,19 +9,19 @@ macOS folder-picker polyfill (see [`polyfills.md`](polyfills.md)).
 ## In-app toast overlay (a separate system)
 
 Errors and transient notices shown INSIDE the app do not go through this facade. They use the
-in-app toast surface on `ChatStore`: `ShowError(message, title)`, `ShowWarning(message, title)`,
+in-app toast surface on `ToastsProvider`: `ShowError(message, title)`, `ShowWarning(message, title)`,
 or `ShowToast(new ToastItem { ... })` for full control (variant "info"|"success"|"warning"|"error"
 and `DurationMs`; 0/negative = persistent). These set the reactive `CurrentToast`, which `MainPage`
 renders as a top-right card (variant-colored accent/background, ✕ button) that auto-dismisses.
-Errors must never be written to `ChatStore.ConnectionStatus` (see AGENTS.md banned patterns): that
+Errors must never be written to `ConnectionStatus` (see AGENTS.md banned patterns): that
 field carries only the connect lifecycle ("Connecting...", "Connected") plus `ConnectAsync`'s
 connect-time failures, which `ConnectPage` shows on its own status line because no toast host
 exists until `MainPage` mounts. Producers today: the SSE `tui.toast.show` event, clipboard-copy
-confirmations, MCP auth notices, and every migrated error path in `ChatStore`/`SessionStore`.
+confirmations, MCP auth notices, and every migrated error path in `ChatboxState`/`SessionsStateProvider`.
 
-## OS toast delivery (`Services/Notifications.cs`)
+## OS toast delivery (`Helpers/Notifications.cs`)
 
-`Services/Notifications.cs` bridges the chat sidebar indicators to native desktop notifications.
+`Helpers/Notifications.cs` bridges the chat sidebar indicators to native desktop notifications.
 Every public method is a platform-dispatching façade, so callers need no `#if` guards.
 
 - **The WASDK (WinUI), desktop-Linux and desktop-macOS (Skia) targets share ONE toast path**,
@@ -41,11 +41,11 @@ Every public method is a platform-dispatching façade, so callers need no `#if` 
   `Register()` also acquires the COM identity that lets an unpackaged app show toasts) and
   `Notifications.RegisterWindow(controller.Window)` after each window activates. Windows are
   stored as `Window` instances; the HWND is resolved on demand (`window.AppWindow.Id`) at check time.
-- Fires for the same events the sidebar indicators show, from `ChatStore`:
+- Fires for the same events the sidebar indicators show, from `SessionsStateProvider`:
   **background completion** (`ApplySessionStatus`, type idle + non-active session) and pending
   **question**/**permission** (`ApplyQuestionAsked`/`ApplyPermissionAsked`).
 - **Focus gating is per-window:** a toast only fires when it carries info the user isn't already
-  looking at. Each event passes its store's `Window` (`ChatStore.OwnerWindow`, set by
+  looking at. Each event passes its store's `Window` (`OpencodeConnection.OwnerWindow`, set by
   `WindowController`); the gate compares only THAT window against `GetForegroundWindow()`.
   Background-session events always toast; active-session events (inline form/dialog on screen)
   are suppressed only while the owning window is the foreground window — a second window being

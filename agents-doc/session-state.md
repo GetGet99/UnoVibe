@@ -1,23 +1,20 @@
 # Session state (client-side behaviors)
 
 Reference for the per-session, client-side state and behaviors that drive the chat page.
-**Read this file when** editing send/interrupt logic, `SessionStore`, revert/undo, image attachments,
-fork, or chat autoscroll. The server protocol behind these features is in
+**Read this file when** editing chat send/revert/fork/autoscroll behavior, `ChatboxState`, or
+`SessionsStateProvider`. The server protocol behind these features is in
 [`opencode-server.md`](opencode-server.md); the sidebar model is in
 [`session-sidebar.md`](session-sidebar.md).
 
-> **Store split (router + per-session stores):** feature notes predate the split and name `ChatStore`
-> for everything. Today `ChatStore` is the router (connection, sidebar, shared options, permissions,
-> toasts, the `SessionStore` cache, and the `Active` re-point). Anything per-session — messages,
-> composer mode/model/variant, usage/context stats, revert/redo, retry card, pending images,
-> `SendAsync`/`RenameSessionAsync`/`SetMode`/`SetModel`/`SetVariant` — lives on the cached
-> `SessionStore` and is reached via `Store.Active.X` (or `Store.Active.X(...)` from `ChatPage`
-> code-behind). `ChatPage` re-hooks the active store's message list on the router's
-> `ActiveStoreChanged` event.
+> **Provider/State model:** `SessionsStateProvider` manages session lifecycle (creation,
+> switching, directory changes, sidebar reconciliation). Per-session chat behavior lives on
+> `ChatboxState` (send/queue/auto-continue/commands), reached via
+> `SessionsStateProvider.Chatbox(sessionId)`. `ChatPage` re-hooks the active session's state
+> on session switch.
 
 ## Interrupt / send-while-busy
 
-`ChatStore.InterruptAsync()` calls `POST /session/:id/abort` (the server cancels the runner +
+`ChatboxState.InterruptAsync()` calls `POST /session/:id/abort` (the server cancels the runner +
 in-flight tools and marks aborted tool parts with `state.metadata.interrupted=true` and the assistant
 message `error.name === "MessageAbortedError"`).
 
@@ -30,12 +27,12 @@ a send does while a turn is running:
   **next agent step** (after the in-flight tool call), not at full idle. Matches the TUI
   (`stream.transport.ts` `runPromptTurn` calls `promptAsync` regardless of busy; its `state.wait`
   gate only prevents a second concurrent UI submit).
-- **Queue**: `SessionStore.SendAsync` holds the prompt in the client-side queue
+- **Queue**: `ChatboxState.SendAsync` holds the prompt in the client-side queue
   (`EnqueuePrompt`/`DrainPendingPromptsAsync`, surfaced as the `⏳ N queued` badge) and flushes it
   one at a time when the session goes idle (`OnTurnCompleted` / `ApplySessionStatus`). The queue is
-  per-`SessionStore` (so per cached session) and survives session switches; queued prompts drain in
+  per-`ChatboxState` (so per cached session) and survives session switches; queued prompts drain in
   the background when that session idles.
-- **Send immediately**: `SessionStore.SendAsync` interrupts the running turn first
+- **Send immediately**: `ChatboxState.SendAsync` interrupts the running turn first
   (`InterruptAsync` → `POST /session/:id/abort`) then fires `prompt_async`, so the new message
   becomes the active request instead of waiting for the next agent step. The abort POST returns once
   the runner is idle, so the following prompt starts a fresh turn. When idle it sends like
@@ -44,7 +41,7 @@ a send does while a turn is running:
   interrupt+send flow — this is UnoVibe-only.)
 
 **Busy-state send button:** while a turn runs, the composer's send button becomes a `SplitButton`
-(`Controls/SendModeButton.cs`) — the primary click sends with the configured `SendMode`, and the
+(`Controls/SendMessageButton.cs`) — the primary click sends with the configured `SendMode`, and the
 chevron opens a `MenuFlyout` of the three modes as **one-time overrides** (they never change the
 `send.mode` setting; the primary stays the configured default). The menu checkmark + the button
 tooltip track the setting live: `ChatPage` keeps the reactive `SendMode` ref synced via
@@ -66,7 +63,7 @@ re-set) so slash tokens in commands don't pop the flyout, image attach is disabl
 (revert/fork restore) force-exits so a restored prompt can't run as a command.
 
 Submit raises `ChatComposer.ShellCommandRequested` → `ChatPage.SendShellCommandAsync` →
-`SessionStore.SendShellAsync`: ensure session, reject while busy (status-line message — the server
+`ChatboxState.SendShellAsync`: ensure session, reject while busy (status-line message — the server
 409s concurrent runs anyway), optimistic `IsBusy`, then fire POST `/session/{id}/shell` detached on a
 dedicated no-timeout client (`OpencodeClient.SendShellAsync`, mirroring `SendCommandNow`) with
 `{ agent: Mode, model: {providerID, modelID}, command }`. The endpoint blocks until the command exits;
@@ -82,7 +79,7 @@ esc/backspace-at-0 bindings exit, submit calls `sdk.client.session.shell`; serve
 
 ## Turn-stop handling: Continue button + auto-continue
 
-When a turn stops, `SessionStore` decides between showing the end-of-chat **⟳ Continue** button
+When a turn stops, `ChatboxState` decides between showing the end-of-chat **⟳ Continue** button
 (`ShowContinue`, rendered by `ChatMessageList`; clicking it sends the literal prompt `continue`)
 and, when **Auto-continue on thinking stop** (`turn.autocontinue`,
 [`settings.md`](settings.md)) is enabled and the chat ends on an unfinished Thinking (reasoning)
@@ -91,12 +88,12 @@ part, firing that same continue automatically (`HandleStoppedTurn`). Stop signal
 are handled uniformly (`HandleStoppedTurn` from both sites), and echoes of an already-auto-continued
 stop are ignored until the server confirms the restarted turn with its first non-idle status event.
 The auto-fired continue is silent: no completion toast and no sidebar indicator
-(`ChatStore.ApplySessionStatus` asks `store.WillAutoContinue()` before applying an idle event and
+(`SessionsStateProvider.ApplySessionStatus` asks `store.WillAutoContinue()` before applying an idle event and
 skips both). A streak cap of 10 consecutive auto-continues — reset by any manual send or a
 non-qualifying stop — hands control back to the manual Continue button as a runaway-loop guard.
 Aborted turns never qualify (a user Stop must not be answered with a continue). Because
 `session.status idle` can be processed before the final `message.updated` lands the abort error,
-`SessionStore` also keeps a client-side `interruptRequested` flag — set by `InterruptAsync`,
+`ChatboxState` also keeps a client-side `interruptRequested` flag — set by `InterruptAsync`,
 cleared on the next confirmed running turn or session reset — that suppresses auto-continue (and,
 via `MarkInterrupted`, hides a stale Continue button) even when the aborted marker hasn't arrived.
 
@@ -108,11 +105,11 @@ via `MarkInterrupted`, hides a stale Continue button) even when the aborted mark
 
 `revert.messageID` = the user message the conversation is rewound to; the server **keeps** reverted
 messages until the next prompt, when `SessionRevert.cleanup` removes messages with
-`id >= revert.messageID` (emitting `message.removed`, handled by `ChatStore.ApplyMessageRemoved`)
+`id >= revert.messageID` (emitting `message.removed`, handled by `EventsProvider.ApplyMessageRemoved`)
 and clears the marker (a `session.updated` whose info omits `revert`, synced in
 `ApplySessionUpsert`).
 
-`ChatStore` holds the reactive `RevertMessageId`/`RevertCountLabel` (+ plain `RevertPromptText`)
+`ChatboxState` holds the reactive `RevertMessageId`/`RevertCountLabel` (+ plain `RevertPromptText`)
 and `RevertToMessageAsync(MessageItem)` (abort-if-busy → revert → `ApplyRevertMarker`; restores the
 undone prompt (text + re-staged image attachments) into the composer via `RevertPromptText`/
 `PendingImages`) plus `UndoLastMessageAsync()`/`RedoLastMessageAsync()` mirroring the TUI.
@@ -125,7 +122,7 @@ the per-message ↶ revert flyout goes to `RevertToMessageAsync` directly.
 every user message renders a small always-visible **↶ revert icon** in an action row under its text
 bubble (`MessageTextPart` (per-text-part bubble + action row) → its `RevertRequested` →
 `MessageView.OnPartRevertRequested` re-raises `MessageView.RevertRequested` →
-`ChatPage.OnMessageRevertRequested` → `Store.RevertToMessageAsync`), which rewinds the conversation
+`ChatPage.OnMessageRevertRequested` → `ChatboxState.RevertToMessageAsync`), which rewinds the conversation
 to that exact user message (web-client per-message revert / TUI dialog-message parity).
 
 Clicking the ↶ opens a **confirmation flyout** (`Button.Flyout` auto-opens on click — Uno calls
@@ -157,7 +154,7 @@ web ref: `use-session-commands.tsx` + `pages/session/timeline/model.ts`
 
 The ChatPage attach (camera) button opens `Windows.Storage.Pickers.FileOpenPicker` (XDG portal on
 Linux; `FileTypeFilter` `.png/.jpg/.jpeg/.gif/.webp/.bmp`) and stages `ImageAttachment`s into
-`ChatStore.PendingImages`, shown as a thumbnail strip (Row 3) with ✕ remove buttons;
+`ChatboxMessage.Images`, shown as a thumbnail strip (Row 3) with ✕ remove buttons;
 `PendingImageCount` drives strip visibility.
 
 On send, `OpencodeClient.SendPromptAsync` builds prompt parts from the text (omitted if
@@ -186,10 +183,10 @@ guarding image-incapable models is a known follow-up.
 every user message renders a **⇆ fork icon** (WinUI `Symbol.Switch` glyph) in the action row next
 to the ↶ revert icon (`MessageTextPart` → its `ForkRequested` → `MessageView.OnPartForkRequested`
 re-raises `MessageView.ForkRequested` → `ChatPage.OnMessageForkRequested` →
-`Store.ForkFromMessageAsync`).
+`ChatboxState.ForkFromMessageAsync`).
 Unlike revert there's **no confirmation flyout** (fork is non-destructive — it creates a new session).
 
-`ChatStore.ForkFromMessageAsync(MessageItem)` calls `ForkSessionAsync(_sessionId, message.Id)`, then
+`ChatboxState.ForkFromMessageAsync(MessageItem)` calls `ForkSessionAsync(_sessionId, message.Id)`, then
 `SwitchSessionAsync(forked.Id)` (loads the copied history, resets IsRead), then restores the
 forked-at message's prompt into the composer via the plain `ForkPromptText` field (set from
 `PromptTextFromMessage`) + `StageImagesFromMessage` for re-staged attachments — the user
@@ -198,7 +195,7 @@ edits/continues from there, matching the TUI/web fork-navigate-with-prompt flow.
 
 **Full-session fork** (no message id) is available from a **⇆ button in the ChatPage header row**
 (right side, next to the stats button; `Symbol.Switch` glyph, tooltip "Fork full session", disabled
-until a session exists) wired to `ChatStore.ForkFullSessionAsync()` — same
+until a session exists) wired to `ChatboxState.ForkFullSessionAsync()` — same
 `ForkSessionAsync(_sessionId)` → `SwitchSessionAsync(forked.Id)` flow but with no composer restore
 (the whole conversation is copied, nothing to re-inject).
 
@@ -219,7 +216,7 @@ never jumps to the top on session select). `SizeChanged` is the single trigger: 
 messages (collection changes resize the panel), in-place streaming deltas, and toggling a collapsed
 Thinking header (which resizes the panel) — so an expanded reasoning block follows while the agent
 is thinking without a redundant per-delta scroll.
-(A previous `ChatStore.PartContentChanged` event fired on every `ApplyPartDelta`/`ApplyPartUpdated`;
+(A previous `PartContentChanged` event fired on every `ApplyPartDelta`/`ApplyPartUpdated`;
 it was removed because each scroll instantly re-pinned via `ChangeView`, killing the user's
 in-progress wheel-scroll animation — the collapse/expand case proved it.)
 
