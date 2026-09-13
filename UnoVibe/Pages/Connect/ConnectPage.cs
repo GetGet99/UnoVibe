@@ -1,7 +1,6 @@
-using UnoVibe;
 using UnoVibe.Services;
-using UnoVibe.Models;
 using UnoVibe.Integration;
+using UnoVibe.Models.Startup;
 
 namespace UnoVibe.Pages.Connect;
 
@@ -17,7 +16,6 @@ namespace UnoVibe.Pages.Connect;
 /// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
     provide bool Connecting = false;
     provide bool ShowConnectForm = false;
     provide string Url = "";

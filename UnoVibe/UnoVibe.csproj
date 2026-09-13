@@ -58,6 +58,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="./Services/SessionStoreToBeRemoved.cs" />
+    <Compile Remove="./Services/OpencodeClientExtensionsToBeRemoved.cs" />
+    <Compile Remove="./Services/ChatStoreToBeRemoved.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../UnoVibe.Integration/UnoVibe.Integration.csproj" />
     <PackageReference Include="Markdig" />
     <PackageReference Include="ColorCode.Core" />

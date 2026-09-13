@@ -1,6 +1,3 @@
-using System.Collections.Specialized;
-using UnoVibe.Models;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -8,8 +5,6 @@ namespace UnoVibe.Pages.Chat;
 /// User messages are right-aligned accent bubbles; assistant messages are left-aligned.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe;
-    using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;

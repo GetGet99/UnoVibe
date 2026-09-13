@@ -180,7 +180,7 @@ desktop `-r linux-x64` → `DESKTOP_LINUX`; `net10.0-windows10.0.26100.0` (any R
 This replaces runtime `OperatingSystem.IsWindows()/IsMacOS()/IsLinux()` dispatch. The
 `net10.0-desktop` build's OS still comes from `DESKTOP_*` where Skia/WinUI behavior differs; pure
 OS behaviors that are identical on WinAppSDK use the broader `WINDOWS` guard instead
-(`Services/FolderLauncher.cs` file-manager/editor/terminal/`PATHEXT` Windows branches).
+(`Helpers/FolderLauncher.cs` file-manager/editor/terminal/`PATHEXT` Windows branches).
 
 ## Windows Build (WinUI) Conventions
 

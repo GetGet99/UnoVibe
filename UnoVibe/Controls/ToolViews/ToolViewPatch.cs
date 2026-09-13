@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 /// <summary>
@@ -10,10 +8,8 @@ namespace UnoVibe.Controls.ToolViews;
 /// server omits the per-file metadata (older servers only surface <c>state.metadata.diff</c>).
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
     required PartItem Part;
     bool Expanded = false;
     bool Hovering = false;

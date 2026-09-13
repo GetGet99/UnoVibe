@@ -1,7 +1,3 @@
-using Microsoft.UI.Dispatching;
-using UnoVibe.Models;
-using UnoVibe.Services;
-
 namespace UnoVibe.Pages.Main;
 
 /// <summary>
@@ -12,8 +8,6 @@ namespace UnoVibe.Pages.Main;
 /// on <see cref="SettingsStore.Changed"/> so multiple open windows stay in sync.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Services;
-    using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;

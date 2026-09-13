@@ -1,11 +1,7 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
     required PartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;

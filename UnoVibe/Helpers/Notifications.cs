@@ -1,8 +1,7 @@
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
-using UnoVibe.Models;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Bridges the chat sidebar indicators (background completion, pending question/approval) to
@@ -31,7 +30,7 @@ namespace UnoVibe.Services;
 /// polyfills' docs — so any app window being focused suppresses the whole app's active-session
 /// toasts there.)
 /// </summary>
-internal static class Notifications
+internal static class NotificationsHelper
 {
 #if WASDK
     private static bool _registered;
@@ -93,7 +92,7 @@ internal static class Notifications
     /// True when this event is already visible in the chat while the app is focused (the active
     /// session), so the toast is suppressed then — background-session completions always toast.
     /// </param>
-    public static void NotifyCompleted(Window? window, SessionInfo? session, ChatOutcome outcome, bool visibleWhenFocused)
+    public static void NotifyCompleted(Window? window, SessionHead? session, ChatOutcome outcome, bool visibleWhenFocused)
     {
         if (!ShouldShow(window, visibleWhenFocused)) return;
         var title = DisplayTitle(session);
@@ -116,7 +115,7 @@ internal static class Notifications
     /// True when the inline question form is on the active session's chat, so the toast only shows
     /// while the app is not focused; background-session questions always toast.
     /// </param>
-    public static void NotifyQuestion(Window? window, SessionInfo? session, string question, bool visibleWhenFocused)
+    public static void NotifyQuestion(Window? window, SessionHead? session, string question, bool visibleWhenFocused)
     {
         if (!ShouldShow(window, visibleWhenFocused)) return;
         Show(DisplayTitle(session) + " needs an answer",
@@ -134,7 +133,7 @@ internal static class Notifications
     /// task child of it), so the toast only shows while the app is not focused; background-session
     /// approval requests always toast.
     /// </param>
-    public static void NotifyPermission(Window? window, SessionInfo? session, string permissionTitle, string body, bool visibleWhenFocused)
+    public static void NotifyPermission(Window? window, SessionHead? session, string permissionTitle, string body, bool visibleWhenFocused)
     {
         if (!ShouldShow(window, visibleWhenFocused)) return;
         var detail = permissionTitle.Length > 0 ? permissionTitle
@@ -189,9 +188,9 @@ internal static class Notifications
     }
 
     /// <summary>Session display name, mapping the server's default titles to "New Chat".</summary>
-    private static string DisplayTitle(SessionInfo? session)
+    private static string DisplayTitle(SessionHead? session)
     {
-        var title = session?.Head.Title ?? "";
+        var title = session?.Title ?? "";
         if (title.Length == 0) return "UnoVibe chat";
         if (title.StartsWith("New session - ") || title.StartsWith("Child session - "))
             return "New Chat";
@@ -224,7 +223,7 @@ internal static class Notifications
     {
         body = body.Replace('\r', ' ').Replace('\n', ' ');
         if (body.Length <= 140) return body;
-        return body.Substring(0, 137) + "...";
+        return string.Concat(body.AsSpan(0, 137), "...");
     }
 
 #if WASDK

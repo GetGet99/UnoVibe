@@ -1,8 +1,6 @@
 #if DESKTOP_LINUX
 // Registers the Linux polyfill result type as the app-wide `PickFolderResult`.
 // See AGENTS.md -> "Polyfills".
-global using PickFolderResult = UnoVibe.Polyfills.Linux.PickFolderResult;
-
 namespace UnoVibe.Polyfills.Linux;
 
 /// <summary>

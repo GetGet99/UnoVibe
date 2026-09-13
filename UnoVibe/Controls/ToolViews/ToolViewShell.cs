@@ -1,12 +1,9 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
-    using UnoVibe.Services;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
+    inject SessionsStateProvider Sessions;
+    inject OpencodeConnection Connection;
     required PartItem Part;
     bool Expanded = false;
     <setup>
@@ -47,8 +44,6 @@ public partial class ToolViewShell : IQuickMarkupComponent
     /// </summary>
     private string WorkdirLabel()
     {
-        var dir = Store.ActiveDirectory();
-        if (dir.Length == 0) dir = Store.ServerDirectory;
-        return ToolViewShared.ShellWorkdir(Part, dir);
+        return ToolViewShared.ShellWorkdir(Part, Sessions.ActiveSessionDirectory);
     }
 }

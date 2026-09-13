@@ -1,6 +1,3 @@
-using UnoVibe.Models;
-using UnoVibe.Services;
-
 namespace UnoVibe.Controls;
 
 /// <summary>
@@ -10,11 +7,10 @@ namespace UnoVibe.Controls;
 /// file-manager button and the new-session button can be disabled per site.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Services;
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
-    inject ChatStore Store;
+    inject SessionsStateProvider Sessions;
+    inject ToastsProvider Toasts;
     inject? bool IsSidebarView;
     required string Directory;
     bool ShowFileManager = false;
@@ -42,17 +38,17 @@ namespace UnoVibe.Controls;
     """)]
 public partial class FolderActions : IQuickMarkupComponent
 {
-    private void OnOpenInEditor() => RunFolderAction(FolderLauncher.OpenInEditor);
+    private void OnOpenInEditor() => RunFolderAction(FolderLauncherHelper.OpenInEditor);
 
-    private void OnOpenInFileManager() => RunFolderAction(FolderLauncher.OpenInFileManager);
+    private void OnOpenInFileManager() => RunFolderAction(FolderLauncherHelper.OpenInFileManager);
 
-    private void OnOpenInTerminal() => RunFolderAction(FolderLauncher.OpenInTerminal);
+    private void OnOpenInTerminal() => RunFolderAction(FolderLauncherHelper.OpenInTerminal);
 
     private void OnNewSession()
     {
         // Small-screen view switching: a new session lands in its chat view.
         IsSidebarView = false;
-        _ = Store.NewSessionAsync(Directory);
+        Sessions.PrepareNewSession(Directory);
     }
 
     /// <summary>Runs a folder-launch action and surfaces failures as a toast.</summary>
@@ -60,11 +56,6 @@ public partial class FolderActions : IQuickMarkupComponent
     {
         var error = action(Directory);
         if (error is null) return;
-        Store.ShowToast(new ToastItem
-        {
-            Title = "Open folder",
-            Message = error,
-            Variant = "error",
-        });
+        Toasts.ShowError(error, "Open folder");
     }
 }

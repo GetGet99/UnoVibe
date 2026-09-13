@@ -1,25 +1,39 @@
-using Microsoft.UI.Xaml;
+using System.Diagnostics.CodeAnalysis;
+using UnoVibe.Models.Startup;
 using UnoVibe.Pages.Connect;
 using UnoVibe.Pages.Main;
-using UnoVibe.Services;
 
 namespace UnoVibe;
 
 /// <summary>
 /// Tracks one top-level <see cref="MicaWindow"/> together with its own
-/// <see cref="ChatStore"/>. This lets each window scope to an independent
+/// <see cref="ChatStoreToBeRemoved"/>. This lets each window scope to an independent
 /// (or shared) opencode serve session instead of a single global store.
 /// </summary>
 public sealed class WindowController
 {
-    public MicaWindow Window { get; } = new();
+    public event Action? Disposed;
 
-    public ChatStore Store { get; } = new();
+    [NotNull]
+    public MicaWindow? Window {
+        get => field ?? throw new ObjectDisposedException("WindowController");
+        private set;
+    } = new();
+
+    public UnoVibeProviders? Providers { get; private set; }
 
     public WindowController()
     {
-        // Each window's store knows its own window so toast focus-gating is per-window.
-        Store.OwnerWindow = Window;
+        Window.SetWindowIcon();
+        Window.Closed += OnClose;
+    }
+
+    void OnClose(object sender, WindowEventArgs args)
+    {
+        Providers?.Dispose();
+        Providers = null;
+        Window = null;
+        Disposed?.Invoke();
     }
 
     public void ShowConnect(StartupArgs? startup = null)
@@ -28,10 +42,12 @@ public sealed class WindowController
         Window.Title = "UnoVibe - Welcome";
     }
 
-    public void ShowMain()
+    public void ShowMain(OpencodeConnection connection)
     {
-        var label = Store.DisplayLabel;
-        Window.Child = new MainPage(Store, Window).MarkupNode;
+        Providers?.Dispose();
+        Providers = new(connection, Window);
+        var label = connection.DisplayLabel;
+        Window.Child = new MainPage(Providers, Window).MarkupNode;
         Window.Title = string.IsNullOrEmpty(label) ? "UnoVibe" : $"UnoVibe - {label}";
     }
 }

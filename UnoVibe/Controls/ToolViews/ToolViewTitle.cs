@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 /// <summary>
@@ -7,9 +5,7 @@ namespace UnoVibe.Controls.ToolViews;
 /// the title text. Mirrors the TUI's per-tool spinner while a call is in flight.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
     required PartItem Part;
     string Text = "";
     bool SemiBold = false;

@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Launches external programs against a local folder: the default file manager
@@ -9,7 +9,7 @@ namespace UnoVibe.Services;
 /// the default terminal, and the configured editor/IDE (the "Default IDE/Editor" setting,
 /// default VS Code's <c>code</c> CLI). Returns an error message on failure, or null on success.
 /// </summary>
-public static class FolderLauncher
+public static class FolderLauncherHelper
 {
     /// <summary>Opens <paramref name="folder"/> in the OS file manager. Returns an error message or null.</summary>
     public static string? OpenInFileManager(string folder)

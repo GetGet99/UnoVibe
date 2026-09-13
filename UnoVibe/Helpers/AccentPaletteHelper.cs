@@ -1,7 +1,7 @@
 using Windows.UI;
 using Windows.UI.ViewManagement;
 
-namespace UnoVibe;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Shared service deriving a secondary (alternate) accent family from the app's primary accent.
@@ -13,7 +13,7 @@ namespace UnoVibe;
 /// Palette order matches the WinRT <c>UISettings</c> accent palette (Light3..Dark3); brightness
 /// factors come from the Windows accent palette algorithm.
 /// </summary>
-public static class AccentPalette
+public static class AccentPaletteHelper
 {
     // Hue rotation applied to the primary accent to get the secondary accent. Negative = toward
     // cyan/teal: Windows' default blue-ish accent (~200°) lands around 160° (mint), clearly

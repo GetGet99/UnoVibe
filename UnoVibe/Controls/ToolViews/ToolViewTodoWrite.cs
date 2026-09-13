@@ -1,9 +1,6 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
     required PartItem Part;

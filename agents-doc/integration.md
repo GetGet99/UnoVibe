@@ -14,6 +14,7 @@ AOT-compatible.
   single public method. Request/response DTOs live in the same file when endpoint-specific.
 - `SharedModels/` — DTOs shared across multiple endpoints (`SessionInfo`, `MessageWithParts`,
   etc.).
+- `SharedModels/Events/` — typed SSE event payloads (see "Event models" below).
 - `AppJsonContext.cs` — source-generated `JsonSerializerContext` registering every DTO type.
 - `Result.cs` — `Result<T>` discriminated return type and `ApiError`.
 
@@ -57,10 +58,47 @@ belongs in the caller (e.g., `ChatStore` or `SessionStore`).
 Do not read or convert fields from `JsonElement` in API methods. Instead, define a proper
 C# model/DTO with the correct types and register it in `AppJsonContext`.
 
-The one exception is for **deferred/complex type unions** that are not yet fully implemented.
-For example, `MessageWithParts.Parts` is `List<JsonElement>?` because the full part-type
-union is not yet modeled. When a `JsonElement` field is used, add a doc comment explaining
-that it is deferred (see `MessageWithParts.cs` for the pattern).
+## Event models
+
+All SSE event payloads are modeled as C# classes in `SharedModels/Events/`. The `OpencodeEvent`
+envelope's `Properties` field remains as `JsonElement` — consumers deserialize it into the
+appropriate typed event model using the source-generated context:
+
+```csharp
+// Example: deserializing a session.status event
+var status = JsonSerializer.Deserialize(
+    evt.Properties.GetRawText(),
+    AppJsonContext.Default.SessionStatusEvent);
+```
+
+### Event model file layout
+
+| File | Contents |
+|---|---|
+| `EventBase.cs` | Enums, base classes with `JsonDerivedType` (MessageInfo, Part, ToolState, FilePartSource, AssistantError, SessionStatusPayload), shared sub-models, `EventTypes` constants |
+| `SessionEvents.cs` | Session CRUD events (created/updated/deleted) using unified `SessionInfo` |
+| `MessageEvents.cs` | Message updated/removed, part updated/removed/delta + 12 Part types + ToolState hierarchy + MessageInfo hierarchy (User/Assistant) |
+| `SessionStatusEvents.cs` | Session status/idle/error/diff/compacted events |
+| `PermissionEvents.cs` | V1 + V2 permission asked/replied events |
+| `QuestionEvents.cs` | V1 + V2 question asked/replied/rejected events |
+| `SessionNextEvents.cs` | V2 `session.next.*` events (shell, step, text, reasoning, tool, compaction, revert, agent/model switch, prompted, retried) |
+| `SimpleEvents.cs` | Remaining simple events (server, file, mcp, tui, vcs, project, pty, todo, workspace, worktree, installation, plugin, reference, catalog, integration, command) |
+
+### Discriminated unions
+
+All TypeScript string-literal discriminated unions use `JsonDerivedType` on a base class:
+
+```csharp
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "role")]
+[JsonDerivedType(typeof(UserMessageInfo), "user")]
+[JsonDerivedType(typeof(AssistantMessageInfo), "assistant")]
+public abstract class MessageInfo { }
+```
+
+### Tool input / metadata
+
+Tool `input`, `metadata`, `structured`, and `ProviderMetadata` fields remain as `JsonElement`
+since their shape varies per tool and is truly dynamic.
 
 ## Reference the opencode source for ins/outs
 
@@ -68,13 +106,6 @@ When adding a new endpoint, **do not guess** the request or response shape. Chec
 opencode server source at the path documented in
 [`referenced-projects.md`](referenced-projects.md) (the `opencode` checkout). Look at the
 route handler to see the exact JSON fields, nullability, and nesting.
-
-## JsonElement as a temporary escape hatch
-
-Fields that are not yet needed by the client, or whose shape is a complex discriminated
-union not yet worth modeling, may be typed as `JsonElement` or omitted entirely. As soon as
-the client needs to read or act on such a field, transition it to a proper C# model and
-register the model in `AppJsonContext`.
 
 ## Registering new types in AppJsonContext
 

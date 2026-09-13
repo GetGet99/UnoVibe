@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using UnoVibe.Models;
 
 namespace UnoVibe.Controls.ToolViews;
 
@@ -440,7 +438,7 @@ public static class ToolViewShared
 
         var preview = string.Join("\n", lines.Take(maxLines));
         if (preview.Length > maxChars)
-            return (preview.Substring(0, Math.Max(0, maxChars - 1)) + "…", true);
+            return (string.Concat(preview.AsSpan(0, Math.Max(0, maxChars - 1)), "…"), true);
 
         return (preview + "\n…", true);
     }

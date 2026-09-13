@@ -149,7 +149,7 @@ public partial class PermissionRequestItem
     private static string Truncate(string value, int max)
     {
         if (value.Length <= max) return value;
-        return value.Substring(0, max) + "\n… (truncated)";
+        return string.Concat(value.AsSpan(0, max), "\n… (truncated)");
     }
 
     private static string GetString(JsonElement element, string name) =>

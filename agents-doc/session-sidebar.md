@@ -32,7 +32,7 @@ called after session refreshes and on the `vcs.branch.updated` SSE event.
 Each `SessionSidebar` directory-group header shows, left of the "+" (new session) button, two small
 icon buttons — `Symbol.Code` (editor, tooltip "Open folder in editor") and `Symbol.OpenLocal`
 (file manager, tooltip "Open folder in file manager").
-`SessionSidebar.RunFolderAction` delegates to `Services/FolderLauncher.cs`
+`SessionSidebar.RunFolderAction` delegates to `Helpers/FolderLauncher.cs`
 (`OpenInEditor`/`OpenInFileManager`), which validates `Directory.Exists` then launches
 `<command> <dir>` where the command is the **Default IDE/Editor** setting (`SettingsStore.EditorCommand`,
 default `code` — see [`settings.md`](settings.md)) and, for the file manager, `explorer.exe <dir>`

@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 /// <summary>
@@ -9,7 +7,6 @@ namespace UnoVibe.Controls.ToolViews;
 /// so callers get 0 or 1 element.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
     required PartItem Part;
     <setup>

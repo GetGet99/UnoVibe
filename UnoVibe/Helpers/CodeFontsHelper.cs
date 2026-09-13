@@ -1,6 +1,4 @@
-using Microsoft.UI.Xaml.Media;
-
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Resolves the monospaced "code" font — code blocks, inline code, diffs, tool output, the
@@ -13,12 +11,12 @@ namespace UnoVibe.Services;
 /// font on those platforms (no monospace rendering); these names are present out of the box.
 /// Any other value is used verbatim (installed custom fonts work).
 /// </summary>
-public static class CodeFonts
+public static class CodeFontsHelper
 {
     /// <summary>Stored value for "use the per-platform default".</summary>
     public const string DefaultValue = "";
 
-    private static readonly Dictionary<string, FontFamily> Cache = new();
+    private static readonly Dictionary<string, FontFamily> Cache = [];
 
     /// <summary>The <see cref="FontFamily"/> for the current setting, resolved live so a setting
     /// change takes effect on the next render.</summary>

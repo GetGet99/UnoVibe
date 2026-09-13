@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -9,8 +7,6 @@ namespace UnoVibe.Pages.Chat;
 /// and action row align right for user messages and left for assistant messages.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe;
-    using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Windows.UI.Text;

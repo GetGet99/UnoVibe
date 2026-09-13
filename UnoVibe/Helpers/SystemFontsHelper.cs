@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace UnoVibe.Services;
+namespace UnoVibe.Helpers;
 
 /// <summary>
 /// Enumerates the installed system font families so the Code font setting can offer the user's own
@@ -15,7 +11,7 @@ namespace UnoVibe.Services;
 /// get it with no new dependency. The result is cached; failures yield an empty list (the setting then
 /// shows only its Default option).
 /// </summary>
-public static class SystemFonts
+public static class SystemFontsHelper
 {
     private static string[]? _families;
 

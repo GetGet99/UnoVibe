@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 namespace UnoVibe.Models;
 
 /// <summary>Reactive state for one question in an inline question-tool form.</summary>
