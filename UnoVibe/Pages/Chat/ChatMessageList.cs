@@ -72,7 +72,7 @@ namespace UnoVibe.Pages.Chat;
                                 <TextBlock Text=`StoreToUpdate.Active.RetryCountdown` FontSize=11 Foreground=`theme.SystemCaution` TextWrapping=Wrap />
                             </StackPanel>
                         </Border>
-                    if (`StoreToUpdate.Active.ShowContinue`)
+                    if (`Chatbox.ShowContinue`)
                         <StackPanel Orientation=Horizontal Spacing=8 Margin=`new Thickness(0, 8, 0, 0)` HorizontalAlignment=Left>
                             <Button Content="⟳ Continue" CornerRadius=6 VerticalAlignment=Center
                                     ToolTipService.ToolTip=`"Sends a message with content \"continue\" to resume the work from the last incomplete step."`
