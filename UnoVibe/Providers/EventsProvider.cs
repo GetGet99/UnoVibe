@@ -138,6 +138,18 @@ public class EventsProvider : IDisposable
     // doesn't push a status event for connect/disconnect, so re-poll GET /mcp.
     public void UnregisterMcpToolsChanged(string? directory, Action<string, McpToolsChangedEvent> handler)
         => UnregisterDelegate(directory, EventTypes.McpToolsChanged, handler);
+    public void UnregisterMessageUpdated(string? directory, Action<string, MessageUpdatedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.MessageUpdated, handler);
+    public void UnregisterMessagePartUpdated(string? directory, Action<string, MessagePartUpdatedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.MessagePartUpdated, handler);
+    public void UnregisterMessagePartDelta(string? directory, Action<string, MessagePartDeltaEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.MessagePartDelta, handler);
+    public void UnregisterMessagePartRemoved(string? directory, Action<string, MessagePartRemovedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.MessagePartRemoved, handler);
+    public void UnregisterMessageRemoved(string? directory, Action<string, MessageRemovedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.MessageRemoved, handler);
+    public void UnregisterSessionUpdated(string? directory, Action<string, SessionCrudEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.SessionUpdated, handler);
 
     Action<string, JsonElement> MakeHandler<T>(Action<string, T> handler, JsonTypeInfo<T> typeInfo)
     {

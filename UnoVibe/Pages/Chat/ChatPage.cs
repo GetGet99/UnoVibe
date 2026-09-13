@@ -10,11 +10,15 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
+    using UnoVibe.States;
     inject SessionsStateProvider Sessions;
     inject ToastsProvider Toasts;
     inject OpencodeClient Opencode;
     inject UIServiceProvider UIs;
+    inject EventsProvider Events;
+    inject ModelsProvider Models;
     provide ChatPage ChatP = `this`;
+    provide ChatMessagesState? ChatState = null;
     <root>
         <Grid RowDefinitions=<>
             <RowDefinition Height=Auto />
@@ -44,23 +48,47 @@ public partial class ChatPage : Page
     {
         UIs.ForkAndSwitchSessionRequested += ForkAndSwitchSession;
         UIs.ForkAndSwitchSessionWithMessageRequested += ForkAndSwitchSession;
+        WatchSession();
         Init();
-        
+    }
+
+    void WatchSession()
+    {
+        Sessions.ActiveSessionIdProp.Watch(newSession =>
+        {
+            ChatState?.Dispose();
+            if (newSession is not null)
+                AsyncHelper.RunAndReport(
+                    CreateChatStateAsync(newSession),
+                    Toasts, "", "Chat State"
+                );
+            else
+                ChatState = null;
+        }, immediete: true);
+    }
+
+    async Task CreateChatStateAsync(SessionId sessionId)
+    {
+        ChatState = await ChatMessagesState.Create(Opencode, Toasts, Events, Models, Sessions, sessionId);
     }
 
     /// <summary>Enters the header's imposer, then scroll to the end.</summary>
     public async Task UndoLastAsync()
     {
-        await StoreToUpdate.Active.UndoLastMessageAsync();
-        if (StoreToUpdate.Active.RevertPromptText.Length > 0)
-            composer.SetChatText(StoreToUpdate.Active.RevertPromptText);
+        if (ChatState is not null)
+        {
+            await ChatState.UndoLastMessageAsync();
+        }
         UIs.ScrollChatToBottom();
     }
 
     /// <summary>Restore reverted messages (/redo built-in), then scroll to the end.</summary>
     public async Task RedoLastAsync()
     {
-        await StoreToUpdate.Active.RedoLastMessageAsync();
+        if (ChatState is not null)
+        {
+            await ChatState.RedoLastMessageAsync();
+        }
         UIs.ScrollChatToBottom();
     }
 
@@ -88,7 +116,7 @@ public partial class ChatPage : Page
         var head = Sessions.Register(forked);
 
         Sessions.ActiveSessionId = head.Id;
-        Sessions.ActiveChatbox.ReplaceFromMessage(message);
+        Sessions.ActiveChatbox.Message = ChatboxMessage.From(message);
         
         return;
     }

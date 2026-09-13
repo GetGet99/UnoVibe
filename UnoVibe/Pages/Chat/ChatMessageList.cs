@@ -9,11 +9,14 @@ namespace UnoVibe.Pages.Chat;
 /// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
+    using UnoVibe.States;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     inject UIServiceProvider UIs;
     inject SessionsStateProvider Sessions;
     inject OpencodeConnection Connection;
+    inject ChatMessagesState? ChatState;
+    ChatboxState Chatbox => `Sessions.ActiveChatbox`;
     string PermissionStage = "choose";
     string RejectText = "";
     // Mirrors the turn.autocontinue setting for the inline switch shown next to the Continue
@@ -26,28 +29,28 @@ namespace UnoVibe.Pages.Chat;
         <Grid>
             scrollHost = <StickyScrollViewer>
                 messagePanel = <StackPanel Padding=16>
-                    if (`StoreToUpdate.Active.TruncatedMessagesCount > 0`)
+                    if (`ChatState?.TruncatedMessagesCount > 0`)
                         <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10,  8, 10,  8)` Margin=`new Thickness(0, 0, 0, 8)`>
-                            <TextBlock Text=`$"History truncated: {StoreToUpdate.Active.TruncatedMessagesCount} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                            <TextBlock Text=`$"History truncated: {ChatState?.TruncatedMessagesCount} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                         </Border>
                     // Keyed by message id so QuickMarkup reuses MessageView blocks across
                     // collection resets (session switches/rebuilds) instead of recreating
                     // every element; the revert filter below then only toggles visibility.
-                    foreach (var m in `StoreToUpdate.Active.Messages`; `m.Id`)
+                    foreach (var m in `ChatState?.Messages`; `m.Id`)
                     {
                         // Undo: the server keeps reverted messages until the next prompt, so
                         // hide everything at/after the revert point (the card replaces them).
-                        if (`StoreToUpdate.Active.RevertMessageId.Length == 0 || StringComparer.Ordinal.Compare(m.Id, StoreToUpdate.Active.RevertMessageId) < 0`)
+                        if (`(ChatState?.RevertMessageId ?? "").Length == 0 || StringComparer.Ordinal.Compare(m.Id, ChatState?.RevertMessageId ?? "") < 0`)
                             <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`if (Sessions.ActiveSessionId is {} id) UIs.ForkAndSwitchSession(id, message)` />
                     }
-                    if (`StoreToUpdate.Active.RevertMessageId.Length > 0`)
+                    if (`(ChatState?.RevertMessageId ?? "").Length > 0`)
                     {
                         <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                 BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                             <StackPanel Spacing=6>
                                 <StackPanel Orientation=Horizontal Spacing=8>
                                     <AppSymbolIcon Symbol=Undo FontSize=14 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
-                                    <TextBlock Text=`StoreToUpdate.Active.RevertCountLabel` FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                                    <TextBlock Text=`ChatState?.RevertCount == 1 ? "1 message reverted" : $"{ChatState?.RevertCount} messages reverted"` FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
                                 </StackPanel>
                                 <StackPanel Orientation=Horizontal Spacing=8>
                                     <Button Content="Redo" @Click+=`await RedoLastMessageAsync()` CornerRadius=6 Padding=`new Thickness(10,  4, 10,  4)` />
@@ -109,7 +112,7 @@ namespace UnoVibe.Pages.Chat;
                     }
                 </StackPanel>
             </StickyScrollViewer>
-            if (`StoreToUpdate.Active.Messages.Reactive.Count == 0`)
+            if (`ChatState?.Messages.Reactive.Count == 0`)
                 <StackPanel HorizontalAlignment=Center VerticalAlignment=Center Padding=`new Thickness(16, 0, 16, 0)` Spacing=6 IsHitTestVisible=false>
                     <AppSymbolIcon Symbol=Folder FontSize=22 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
                     <TextBlock Text=`PathDisplay.Relative(Sessions.ActiveSessionDirectory, Connection.ServerDirectory)` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
@@ -125,11 +128,10 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private DispatcherQueue? dispatcher;
 
     /// <summary>
-    /// The SessionStore whose Messages collection this component is currently hooked to. Hooking
-    /// tracks the router's Active StoreToUpdate so a session switch re-wires the CollectionChanged
-    /// handler (and part hooks) to the newly-active StoreToUpdate's collection.
+    /// The ChatMessagesState whose Messages collection this component is currently hooked to.
+    /// Re-hooked whenever ChatState changes (session switch).
     /// </summary>
-    private SessionStoreToBeRemoved? _hookedStoreToUpdate;
+    private ChatMessagesState? _hookedChatState;
 
     [QuickMarkupConstructor]
     private void Ctor()
@@ -143,11 +145,10 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         // added to the collection — targets a stale ScrollableHeight of 0 and leaves the
         // viewport at the top.
         messagePanel.SizeChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
-        // Messages live on the active SessionStore, which swaps on every session switch
-        // (router keeps one cached StoreToUpdate per session). Re-hook the CollectionChanged handler
-        // and part hooks whenever the router's Active StoreToUpdate changes.
-        StoreToUpdate.ActiveStoreChanged += HookActiveStore;
-        HookActiveStore();
+        // Messages live on ChatState, which swaps on every session switch.
+        // Re-hook the CollectionChanged handler and part hooks whenever ChatState changes.
+        ChatStateProp.Watch(HookChatState);
+        HookChatState(ChatState);
 
         StoreToUpdate.ActivePermissionProp.Watch(_newReq =>
         {
@@ -171,6 +172,18 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         SettingsStore.Changed += OnSettingsChanged;
     }
 
+    private void HookChatState(ChatMessagesState? newState)
+    {
+        _hookedChatState?.Messages.CollectionChanged -= OnMessagesChanged;
+        _hookedChatState = newState;
+        if (newState is not null)
+        {
+            newState.Messages.CollectionChanged += OnMessagesChanged;
+            foreach (var message in newState.Messages) HookParts(message);
+        }
+        scrollHost.ForceScrollToBottom();
+    }
+
     private void OnSettingsChanged()
     {
         _ = dispatcher?.TryEnqueue(() =>
@@ -184,17 +197,6 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task ScrollToPermissionAsync()
     {
         await Task.Yield();
-        scrollHost.ForceScrollToBottom();
-    }
-
-    private void HookActiveStore()
-    {
-        _hookedStoreToUpdate?.Messages.CollectionChanged -= OnMessagesChanged;
-        _hookedStoreToUpdate = StoreToUpdate.Active;
-        _hookedStoreToUpdate.Messages.CollectionChanged += OnMessagesChanged;
-        foreach (var message in _hookedStoreToUpdate.Messages) HookParts(message);
-        // The markup foreach re-renders with the new collection; re-pin so the freshly-loaded
-        // history autoscrolls into view.
         scrollHost.ForceScrollToBottom();
     }
 
@@ -219,14 +221,15 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     /// </summary>
     private async Task ContinueAsync()
     {
-        await StoreToUpdate.Active.SendAsync("continue");
+        await Chatbox.SendManualContinueAsync();
         scrollHost.ForceScrollToBottom();
     }
 
     /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
     private async Task RedoLastMessageAsync()
     {
-        await StoreToUpdate.Active.RedoLastMessageAsync();
+        if (ChatState is not null)
+            await ChatState.RedoLastMessageAsync();
         scrollHost.ForceScrollToBottom();
     }
 
@@ -236,8 +239,9 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     /// </summary>
     private async Task OnMessageRevertRequested(MessageItem message)
     {
-        await StoreToUpdate.Active.RevertToMessageAsync(message);
-        Sessions.ActiveChatbox.ReplaceFromMessage(message);
+        if (ChatState is not null)
+            await ChatState.RevertToMessageAsync(message);
+        Sessions.ActiveChatbox.Message = ChatboxMessage.From(message);
         scrollHost.ForceScrollToBottom();
     }
 
