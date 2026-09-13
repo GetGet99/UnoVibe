@@ -435,8 +435,9 @@ compile when included, and will be removed shortly. Do not use them.
 ### Refactoring status
 
 The refactoring is not 100% complete. `ToBeRemoved` suffix classes and chat-message-related
-code are not yet fully refactored. Do not expect the main UnoVibe project to build in this
-stage.
+code are not yet fully refactored.
+
+DO NOT EXPECT THE MAIN UnoVibe PROJECT TO BUILD IN THIS STAGE.
 
 ## CONTRIBUTION RULES AND BANNED PATTERNS
 
