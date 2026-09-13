@@ -1,18 +1,19 @@
 using UnoVibe.Helpers;
 using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
+using UnoVibe.Models;
 using UnoVibe.Providers;
 
 namespace UnoVibe.States;
 
 /// <summary>
-/// Session-scoped reactive state owning the message list, cost/tokens, and revert marker
-/// for a single chat session. Created by <see cref="Pages.Chat.ChatPage"/> when the active
-/// session changes and disposed when switching away.
+/// Session-scoped reactive state owning the message list, cost/tokens, revert marker,
+/// retry state, permission queue, and question handlers for a single chat session.
+/// Created by <see cref="Pages.Chat.ChatPage"/> when the active session changes and
+/// disposed when switching away.
 ///
-/// Chat UI components (<c>ChatMessageList</c>, <c>ChatCost</c>, <c>ChatCostInline</c>)
-/// read from this state. Formatting is the caller's responsibility — this state stores raw
-/// numeric values.
+/// Chat UI components read from this state. Formatting is the caller's responsibility —
+/// this state stores raw values.
 /// </summary>
 [QuickMarkup("""
     double Cost;
@@ -21,6 +22,8 @@ namespace UnoVibe.States;
     int TruncatedMessagesCount;
     string RevertMessageId = "";
     int RevertCount;
+    RetryState Retry = `RetryState.None`;
+    PermissionRequestItem? ActivePermission;
     """)]
 partial class ChatMessagesState : IDisposable
 {
@@ -30,6 +33,8 @@ partial class ChatMessagesState : IDisposable
     public SessionId SessionId { get; private set; }
     public ObservableCollection<MessageItem> Messages { get; } = [];
     readonly Dictionary<string, MessageItem> _messagesById = new();
+
+    readonly List<PermissionRequestItem> _permissions = [];
 
     OpencodeClient Opencode;
     ToastsProvider Toasts;
@@ -65,6 +70,10 @@ partial class ChatMessagesState : IDisposable
 
     async Task FetchInitialStateAsync()
     {
+        var head = Sessions.Head(SessionId);
+        var directory = head?.Directory;
+
+        // Messages
         if (!(await Opencode.GetMessagesAsync(SessionId.Id)).TryGetValue(out var messages, out var error))
         {
             Toasts.ShowError(error, "Could not load messages");
@@ -78,6 +87,14 @@ partial class ChatMessagesState : IDisposable
             AppendMessage(message);
         }
         UpdateSessionStats();
+
+        // Pending permissions
+        if (directory is not null)
+            await SyncPendingPermissionsAsync(directory);
+
+        // Pending questions (attach to existing tool parts)
+        if (directory is not null)
+            await SyncPendingQuestionsAsync(directory);
     }
 
     // ── Message collection management ───────────────────────────────────────
@@ -102,6 +119,12 @@ partial class ChatMessagesState : IDisposable
         Events.RegisterMessagePartRemoved(null, OnPartRemoved);
         Events.RegisterMessageRemoved(null, OnMessageRemoved);
         Events.RegisterSessionUpdated(null, OnSessionUpdated);
+        Events.RegisterSessionStatus(null, OnSessionStatus);
+        Events.RegisterPermissionAsked(null, OnPermissionAsked);
+        Events.RegisterPermissionReplied(null, OnPermissionReplied);
+        Events.RegisterQuestionAsked(null, OnQuestionAsked);
+        Events.RegisterQuestionReplied(null, OnQuestionReplied);
+        Events.RegisterQuestionRejected(null, OnQuestionRejected);
     }
 
     void UnregisterEvents()
@@ -112,6 +135,12 @@ partial class ChatMessagesState : IDisposable
         Events.UnregisterMessagePartRemoved(null, OnPartRemoved);
         Events.UnregisterMessageRemoved(null, OnMessageRemoved);
         Events.UnregisterSessionUpdated(null, OnSessionUpdated);
+        Events.UnregisterSessionStatus(null, OnSessionStatus);
+        Events.UnregisterPermissionAsked(null, OnPermissionAsked);
+        Events.UnregisterPermissionReplied(null, OnPermissionReplied);
+        Events.UnregisterQuestionAsked(null, OnQuestionAsked);
+        Events.UnregisterQuestionReplied(null, OnQuestionReplied);
+        Events.UnregisterQuestionRejected(null, OnQuestionRejected);
     }
 
     // ── SSE event handlers ──────────────────────────────────────────────────
@@ -215,7 +244,7 @@ partial class ChatMessagesState : IDisposable
         var updated = MessageJsonHelper.PartFromPart(part);
         var idx = message.Parts.IndexOf(existing);
         message.Parts[idx] = updated;
-        if (updated is FilePartItem fileUpdated) 
+        if (updated is FilePartItem fileUpdated)
             AsyncHelper.RunAndReport(fileUpdated.LoadImageAsync(),
                 Toasts, "", "Load image"
             );
@@ -260,6 +289,226 @@ partial class ChatMessagesState : IDisposable
         {
             RevertMessageId = revertMsgId;
             RevertCount = ComputeRevertCount(revertMsgId);
+        }
+    }
+
+    // ── Session status (retry / busy) ───────────────────────────────────────
+
+    void OnSessionStatus(string _, SessionStatusEvent e)
+    {
+        if (e.SessionId != SessionId.Id) return;
+
+        switch (e.Status)
+        {
+            case SessionStatusRetry retry:
+                Retry = RetryState.From(retry);
+                break;
+            case SessionStatusBusy:
+                Retry = RetryState.None;
+                break;
+            case SessionStatusIdle:
+                Retry = RetryState.None;
+                break;
+        }
+    }
+
+    // ── Permissions ─────────────────────────────────────────────────────────
+
+    void OnPermissionAsked(string _, PermissionAskedEvent e)
+    {
+        if (!IsSessionOrDescendant(e.SessionId)) return;
+
+        var request = PermissionRequestItem.From(e);
+        if (_permissions.Any(p => p.Id == request.Id)) return;
+        _permissions.Add(request);
+        UpdateActivePermission();
+    }
+
+    void OnPermissionReplied(string _, PermissionRepliedEvent e)
+    {
+        if (!IsSessionOrDescendant(e.SessionId)) return;
+        _permissions.RemoveAll(p => p.Id == e.RequestId);
+        UpdateActivePermission();
+    }
+
+    void UpdateActivePermission()
+    {
+        ActivePermission = _permissions.Count > 0 ? _permissions[0] : null;
+    }
+
+    bool IsSessionOrDescendant(string sessionId)
+    {
+        var current = sessionId;
+        var guard = 0;
+        while (current.Length > 0 && guard++ < 64)
+        {
+            if (current == SessionId.Id) return true;
+            var head = Sessions.Head(new(current));
+            current = head?.ParentId?.Id ?? "";
+        }
+        return false;
+    }
+
+    async Task SyncPendingPermissionsAsync(string directory)
+    {
+        try
+        {
+            if (!(await Opencode.GetPendingPermissionsAsync(directory)).TryGetValue(out var requests, out var error))
+            {
+                Toasts.ShowWarning(error, $"Could not sync approvals for {directory}");
+                return;
+            }
+
+            _permissions.Clear();
+            ActivePermission = null;
+            foreach (var request in requests)
+            {
+                if (request.Id.Length == 0) continue;
+                var item = PermissionRequestItem.From(request);
+                if (!IsSessionOrDescendant(item.SessionId)) continue;
+                _permissions.Add(item);
+            }
+            UpdateActivePermission();
+        }
+        catch (Exception ex)
+        {
+            Toasts.ShowError(ex.Message, "Could not sync approvals");
+        }
+    }
+
+    public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null)
+    {
+        var directory = Sessions.Head(SessionId)?.Directory;
+        try
+        {
+            await Opencode.ReplyPermissionAsync(requestId, new() { Reply = reply, Message = message }, directory);
+            _permissions.RemoveAll(p => p.Id == requestId);
+            UpdateActivePermission();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _permissions.RemoveAll(p => p.Id == requestId);
+            UpdateActivePermission();
+            Toasts.ShowWarning("The permission request was already handled.", "Approval dismissed");
+        }
+        catch (Exception ex)
+        {
+            Toasts.ShowError(ex.Message, "Approval reply failed");
+        }
+    }
+
+    // ── Questions ───────────────────────────────────────────────────────────
+
+    void OnQuestionAsked(string _, QuestionAskedEvent e)
+    {
+        if (e.SessionId != SessionId.Id) return;
+        if (e.Tool is null) return;
+        if (!_messagesById.TryGetValue(e.Tool.MessageId, out var message)) return;
+        var part = message.Parts.FirstOrDefault(p => p.CallId == e.Tool.CallId);
+        if (part is null) return;
+
+        part.QuestionRequestId = e.Id;
+        if (e.Questions is { Count: > 0 })
+        {
+            part.Questions = e.Questions;
+            MessageJsonHelper.PopulateQuestionForm(part, e.Questions);
+        }
+    }
+
+    void OnQuestionReplied(string _, QuestionRepliedEvent e)
+    {
+        if (e.SessionId != SessionId.Id) return;
+        ClearQuestionState(e.RequestId);
+    }
+
+    void OnQuestionRejected(string _, QuestionRejectedEvent e)
+    {
+        if (e.SessionId != SessionId.Id) return;
+        ClearQuestionState(e.RequestId);
+    }
+
+    void ClearQuestionState(string requestId)
+    {
+        foreach (var message in Messages)
+        {
+            foreach (var part in message.Parts)
+            {
+                if (part is ToolCallPartItem tool && tool.QuestionRequestId == requestId)
+                {
+                    tool.QuestionRequestId = "";
+                    tool.QuestionForm.Clear();
+                }
+            }
+        }
+    }
+
+    async Task SyncPendingQuestionsAsync(string directory)
+    {
+        try
+        {
+            if (!(await Opencode.GetPendingQuestionsAsync(directory)).TryGetValue(out var questions, out var error))
+            {
+                Toasts.ShowWarning(error, "Could not sync questions");
+                return;
+            }
+
+            foreach (var question in questions)
+            {
+                if (question.SessionId != SessionId.Id) continue;
+                if (question.Tool is null) continue;
+                var messageId = question.Tool.MessageId;
+                var callId = question.Tool.CallId;
+                if (messageId.Length == 0 || callId.Length == 0) continue;
+                if (!_messagesById.TryGetValue(messageId, out var message)) continue;
+
+                var part = message.Parts.FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
+                if (part is null || part.QuestionRequestId.Length > 0) continue;
+
+                part.QuestionRequestId = question.Id;
+                if (question.Questions is { Count: > 0 })
+                {
+                    part.Questions = question.Questions;
+                    MessageJsonHelper.PopulateQuestionForm(part, question.Questions);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.ShowError(ex.Message, "Could not sync questions");
+        }
+    }
+
+    public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers)
+    {
+        var directory = Sessions.Head(SessionId)?.Directory;
+        try
+        {
+            await Opencode.ReplyQuestionAsync(requestId, new() { Answers = answers }, directory);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            Toasts.ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");
+        }
+        catch (Exception ex)
+        {
+            Toasts.ShowError(ex.Message, "Question reply failed");
+        }
+    }
+
+    public async Task RejectQuestionAsync(string requestId)
+    {
+        var directory = Sessions.Head(SessionId)?.Directory;
+        try
+        {
+            await Opencode.RejectQuestionAsync(requestId, directory);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            Toasts.ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");
+        }
+        catch (Exception ex)
+        {
+            Toasts.ShowError(ex.Message, "Question dismiss failed");
         }
     }
 
@@ -367,6 +616,9 @@ partial class ChatMessagesState : IDisposable
         UnregisterEvents();
         Messages.Clear();
         _messagesById.Clear();
+        _permissions.Clear();
+        ActivePermission = null;
+        Retry = RetryState.None;
         GC.SuppressFinalize(this);
     }
 }

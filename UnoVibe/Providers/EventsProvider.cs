@@ -150,6 +150,18 @@ public class EventsProvider : IDisposable
         => UnregisterDelegate(directory, EventTypes.MessageRemoved, handler);
     public void UnregisterSessionUpdated(string? directory, Action<string, SessionCrudEvent> handler)
         => UnregisterDelegate(directory, EventTypes.SessionUpdated, handler);
+    public void UnregisterSessionStatus(string? directory, Action<string, SessionStatusEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.SessionStatus, handler);
+    public void UnregisterPermissionAsked(string? directory, Action<string, PermissionAskedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.PermissionAsked, handler);
+    public void UnregisterPermissionReplied(string? directory, Action<string, PermissionRepliedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.PermissionReplied, handler);
+    public void UnregisterQuestionAsked(string? directory, Action<string, QuestionAskedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.QuestionAsked, handler);
+    public void UnregisterQuestionReplied(string? directory, Action<string, QuestionRepliedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.QuestionReplied, handler);
+    public void UnregisterQuestionRejected(string? directory, Action<string, QuestionRejectedEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.QuestionRejected, handler);
 
     Action<string, JsonElement> MakeHandler<T>(Action<string, T> handler, JsonTypeInfo<T> typeInfo)
     {

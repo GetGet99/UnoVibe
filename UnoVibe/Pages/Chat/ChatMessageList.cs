@@ -59,18 +59,10 @@ namespace UnoVibe.Pages.Chat;
                             </StackPanel>
                         </Border>
                     }
-                    if (`StoreToUpdate.Active.IsRetrying`)
+                    if (`ChatState?.Retry.IsRetrying == true`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                 BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
-                            <StackPanel Spacing=6>
-                                <StackPanel Orientation=Horizontal Spacing=8>
-                                    <ProgressRing Width=14 Height=14 IsActive=true VerticalAlignment=Center />
-                                    <TextBlock Text="Auto-retrying" FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
-                                </StackPanel>
-                                if (`StoreToUpdate.Active.RetryMessage.Length > 0`)
-                                    <TextBlock Text=`StoreToUpdate.Active.RetryMessage` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                <TextBlock Text=`StoreToUpdate.Active.RetryCountdown` FontSize=11 Foreground=`theme.SystemCaution` TextWrapping=Wrap />
-                            </StackPanel>
+                            <ChatRetryCard />
                         </Border>
                     if (`Chatbox.ShowContinue`)
                         <StackPanel Orientation=Horizontal Spacing=8 Margin=`new Thickness(0, 8, 0, 0)` HorizontalAlignment=Left>
@@ -81,17 +73,17 @@ namespace UnoVibe.Pages.Chat;
                                           FontSize=12 VerticalAlignment=Center
                                           ToolTipService.ToolTip=`"When on, a turn that stops with the chat ending on an unfinished Thinking block is continued automatically — no completion notification and no sidebar check mark. Same as the \"Auto-continue on thinking stop\" setting."` />
                         </StackPanel>
-                    if (`StoreToUpdate.ActivePermission is not null`)
+                    if (`ChatState?.ActivePermission is not null`)
                     {
                         <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                 BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                             <StackPanel Spacing=8>
                                 <StackPanel Spacing=2>
-                                    <TextBlock Text=`StoreToUpdate.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                    if (`(StoreToUpdate.ActivePermission?.Body?.Length ?? 0) > 0`)
-                                        <TextBlock Text=`StoreToUpdate.ActivePermission?.Body ?? ""` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                    if (`(StoreToUpdate.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
-                                        <TextBlock Text=`StoreToUpdate.ActivePermission?.PatternsText ?? ""` FontSize=10 Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    <TextBlock Text=`ChatState?.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    if (`(ChatState?.ActivePermission?.Body?.Length ?? 0) > 0`)
+                                        <TextBlock Text=`ChatState?.ActivePermission?.Body ?? ""` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    if (`(ChatState?.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
+                                        <TextBlock Text=`ChatState?.ActivePermission?.PatternsText ?? ""` FontSize=10 Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                 </StackPanel>
                                 if (`PermissionStage == "reject"`)
                                     <StackPanel Spacing=8>
@@ -150,17 +142,17 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         ChatStateProp.Watch(HookChatState);
         HookChatState(ChatState);
 
-        StoreToUpdate.ActivePermissionProp.Watch(_newReq =>
+        // Watch permission changes on ChatState — reset the UI state and scroll to the card.
+        ChatStateProp.Watch(newChat =>
         {
-            PermissionStage = "choose";
-            RejectText = "";
-            _ = ScrollToPermissionAsync();
+            newChat?.ActivePermissionProp.Watch(newReq =>
+            {
+                if (newReq != ChatState?.ActivePermission) return;
+                PermissionStage = "choose";
+                RejectText = "";
+                _ = ScrollToPermissionAsync();
+            });
         });
-
-        // One-second tick that keeps the end-of-chat retry card's countdown live.
-        var countdown = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        countdown.Tick += (_, _) => StoreToUpdate.Active.UpdateRetryCountdown();
-        countdown.Start();
 
         // The inline auto-continue switch next to the Continue button mirrors the
         // turn.autocontinue setting two-way: toggling persists immediately (live-apply, like the
@@ -247,25 +239,25 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
 
     private async Task AllowPermissionOnceAsync()
     {
-        var req = StoreToUpdate.ActivePermission;
+        var req = ChatState?.ActivePermission;
         if (req is null) return;
-        await StoreToUpdate.ReplyPermissionAsync(req.Id, "once");
+        await ChatState!.ReplyPermissionAsync(req.Id, "once");
     }
 
     private async Task AllowPermissionAlwaysAsync()
     {
-        var req = StoreToUpdate.ActivePermission;
+        var req = ChatState?.ActivePermission;
         if (req is null) return;
-        await StoreToUpdate.ReplyPermissionAsync(req.Id, "always");
+        await ChatState!.ReplyPermissionAsync(req.Id, "always");
     }
 
     private void StartReject() => PermissionStage = "reject";
 
     private async Task RejectPermissionAsync()
     {
-        var req = StoreToUpdate.ActivePermission;
+        var req = ChatState?.ActivePermission;
         if (req is null) return;
-        await StoreToUpdate.ReplyPermissionAsync(req.Id, "reject", RejectText.Trim());
+        await ChatState!.ReplyPermissionAsync(req.Id, "reject", RejectText.Trim());
     }
 
     private void CancelPermission() => PermissionStage = "choose";

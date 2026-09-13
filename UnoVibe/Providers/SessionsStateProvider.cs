@@ -81,6 +81,7 @@ public partial class SessionsStateProvider
         Events.RegisterSessionCreated(null, UpsertSession);
         Events.RegisterSessionUpdated(null, UpsertSession);
         Events.RegisterSessionDeleted(null, DeleteSession);
+        Events.RegisterSessionStatus(null, OnSessionStatus);
         Events.RegisterMessageUpdated(null, MessageUpdated);
         Events.RegisterVcsBranchUpdated(null, VcsBranchUpdated);
     }
@@ -224,6 +225,14 @@ public partial class SessionsStateProvider
             ActiveSessionId = null;
         sessions.Remove(sessId);
         chatboxes.Remove(sessId);
+    }
+
+    void OnSessionStatus(string _, SessionStatusEvent e)
+    {
+        var sessId = new SessionId(e.SessionId);
+        if (!sessions.TryGetValue(sessId, out var head)) return;
+
+        head.IsBusy = e.Status is not SessionStatusIdle;
     }
 
     void VcsBranchUpdated(string directory, VcsBranchUpdatedEvent e)

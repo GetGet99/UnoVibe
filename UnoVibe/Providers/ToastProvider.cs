@@ -80,6 +80,10 @@ public partial class ToastsProvider : IDisposable
     public void ShowError(Integration.ApiError message, string title = "Error")
         => ShowError(message.DisplayMessage, title);
 
+
+    public void ShowWarning(Integration.ApiError message, string title = "Warning")
+        => ShowWarning(message.DisplayMessage, title);
+
     /// <summary>
     /// Shows an error toast. The one sanctioned way to surface a failure to the user —
     /// <see cref="ConnectionStatus"/> is reserved for the connect lifecycle ("Connecting...",

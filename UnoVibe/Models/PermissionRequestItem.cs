@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Models;
 
@@ -23,9 +24,9 @@ public partial class PermissionRequestItem
     public string ToolMessageId { get; set; } = "";
     public string ToolCallId { get; set; } = "";
 
-    public static PermissionRequestItem From(Integration.PermissionRequestItem theirs)
+    /// <summary>Creates from a typed <c>GET /permission</c> response DTO.</summary>
+    public static PermissionRequestItem From(Integration.PermissionRequestDto theirs)
     {
-        var permission = theirs.Permission;
         var item = new PermissionRequestItem
         {
             Id = theirs.Id,
@@ -40,52 +41,57 @@ public partial class PermissionRequestItem
             item.ToolMessageId = theirs.Tool.MessageId;
             item.ToolCallId = theirs.Tool.CallId;
         }
-        var metadata = theirs.Metadata;
 
-        var meta = new Dictionary<string, JsonElement>();
-        if (metadata.ValueKind == JsonValueKind.Object)
-            foreach (var p in metadata.EnumerateObject()) meta[p.Name] = p.Value;
-
-        (item.Title, item.Body) = Describe(permission, meta, item.Patterns);
-
-        item.PatternsText = string.Join("\n", item.Patterns.Where(p => p.Length > 0).Select(p => "• " + p));
-        item.AlwaysText = string.Join("\n", item.Always.Where(p => p.Length > 0).Select(p => "• " + p));
+        var meta = ParseMetadata(theirs.Metadata);
+        (item.Title, item.Body) = Describe(item.Permission, meta, item.Patterns);
+        item.PatternsText = FormatPatterns(item.Patterns);
+        item.AlwaysText = FormatPatterns(item.Always);
         return item;
     }
-    public static PermissionRequestItem FromJson(JsonElement request)
+
+    /// <summary>Creates from a typed <c>permission.asked</c> SSE event.</summary>
+    public static PermissionRequestItem From(PermissionAskedEvent e)
     {
-        var permission = GetString(request, "permission");
         var item = new PermissionRequestItem
         {
-            Id = GetString(request, "id"),
-            SessionId = GetString(request, "sessionID"),
-            Permission = permission,
-            Patterns = GetStringArray(request, "patterns"),
-            Always = GetStringArray(request, "always"),
+            Id = e.Id,
+            SessionId = e.SessionId,
+            Permission = e.Permission,
+            Patterns = e.Patterns.ToArray(),
+            Always = e.Always.ToArray()
         };
 
-        if (request.TryGetProperty("tool", out var tool) && tool.ValueKind == JsonValueKind.Object)
+        if (e.Tool is not null)
         {
-            item.ToolMessageId = GetString(tool, "messageID");
-            item.ToolCallId = GetString(tool, "callID");
+            item.ToolMessageId = e.Tool.MessageId;
+            item.ToolCallId = e.Tool.CallId;
         }
 
-        var meta = new Dictionary<string, JsonElement>();
-        if (request.TryGetProperty("metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object)
-            foreach (var p in metadata.EnumerateObject()) meta[p.Name] = p.Value;
-
-        (item.Title, item.Body) = Describe(permission, meta, item.Patterns);
-
-        item.PatternsText = string.Join("\n", item.Patterns.Where(p => p.Length > 0).Select(p => "• " + p));
-        item.AlwaysText = string.Join("\n", item.Always.Where(p => p.Length > 0).Select(p => "• " + p));
+        var meta = ParseMetadata(e.Metadata);
+        (item.Title, item.Body) = Describe(item.Permission, meta, item.Patterns);
+        item.PatternsText = FormatPatterns(item.Patterns);
+        item.AlwaysText = FormatPatterns(item.Always);
         return item;
     }
 
-    private static string S(string key, Dictionary<string, JsonElement> meta) =>
-        meta.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+    static Dictionary<string, string> ParseMetadata(JsonElement metadata)
+    {
+        var meta = new Dictionary<string, string>();
+        if (metadata.ValueKind == JsonValueKind.Object)
+            foreach (var p in metadata.EnumerateObject())
+                if (p.Value.ValueKind == JsonValueKind.String)
+                    meta[p.Name] = p.Value.GetString() ?? "";
+        return meta;
+    }
+
+    static string FormatPatterns(string[] patterns) =>
+        string.Join("\n", patterns.Where(p => p.Length > 0).Select(p => "• " + p));
+
+    static string S(string key, Dictionary<string, string> meta) =>
+        meta.TryGetValue(key, out var v) ? v : "";
 
     /// <summary>Builds a compact "Title" + "Body" description from the tool metadata.</summary>
-    private static (string Title, string Body) Describe(string permission, Dictionary<string, JsonElement> meta, string[] patterns)
+    static (string Title, string Body) Describe(string permission, Dictionary<string, string> meta, string[] patterns)
     {
         string first() => patterns.FirstOrDefault(p => p.Length > 0) ?? "";
 
@@ -146,18 +152,9 @@ public partial class PermissionRequestItem
         }
     }
 
-    private static string Truncate(string value, int max)
+    static string Truncate(string value, int max)
     {
         if (value.Length <= max) return value;
         return string.Concat(value.AsSpan(0, max), "\n… (truncated)");
-    }
-
-    private static string GetString(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var prop) ? prop.GetString() ?? "" : "";
-
-    private static string[] GetStringArray(JsonElement element, string name)
-    {
-        if (!element.TryGetProperty(name, out var prop) || prop.ValueKind != JsonValueKind.Array) return Array.Empty<string>();
-        return prop.EnumerateArray().Select(p => p.GetString() ?? "").Where(s => s.Length > 0).ToArray();
     }
 }
