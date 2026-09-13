@@ -453,3 +453,17 @@ Instead: show an in-app toast — `Toasts.ShowError(message, title)` for failure
 for full control (variant/duration). Sole exception: connect-time failures inside `ConnectAsync`
 still write `ConnectionStatus`, which `ConnectPage` displays on its own status line (no toast host
 exists until `MainPage` mounts).
+
+### No fire-and-forget async (`_ =`, `async void` method).
+
+Avoid discard a `Task` with `_ =` and avoid making `async void` methods.
+Unobserved exceptions silently disappear. Await the call if intended
+to wait or wrap the call in `AsyncHelper.RunAndReport(task, Toasts, error, title)`
+if able so failures surface as toasts.
+
+### No blanket "refresh all" methods.
+
+Avoid methods that iterate every known item to re-fetch from the server (e.g.
+`RefreshBranches()` that loops all directories). They are expensive and a maintenance
+footgun — callers forget they exist and invoke them at the wrong time. Prefer targeted
+per-item refresh that is called explicitly when the item is created or an event arrives.

@@ -25,6 +25,7 @@ public partial class SessionsStateProvider
     readonly ReactiveKeyedSet<SessionId, SessionHead> sessions = new(x => x.Id);
     readonly ReactiveSet<string> directoriesWithoutSession = [];
     readonly ReactiveKeyedSet<SessionId, ChatboxState> chatboxes = new(x => x.SessionId) { RerunReadFromKey = false };
+    readonly ReactiveKeyedSet<string, Keyed<string?>> Branches = new(x => x.Directory);
 
     public SessionHead? Head(SessionId? sessId) => sessId is null ? null : sessions.TryGetValue(sessId, out var sessHead) ? sessHead : null;
     public ChatboxState? Chatbox(SessionId? sessId) => sessId is null ? null : chatboxes.TryGetValue(sessId, out var chatboxModel) ? chatboxModel : null;
@@ -81,6 +82,7 @@ public partial class SessionsStateProvider
         Events.RegisterSessionUpdated(null, UpsertSession);
         Events.RegisterSessionDeleted(null, DeleteSession);
         Events.RegisterMessageUpdated(null, MessageUpdated);
+        Events.RegisterVcsBranchUpdated(null, VcsBranchUpdated);
     }
     void FetchInitialSessions()
         => AsyncHelper.RunAndReport(
@@ -111,11 +113,17 @@ public partial class SessionsStateProvider
             // add to directory without session
             var finalDir = directory ?? Connection.ServerDirectory;
             if (!sessions.Any(x => x.Directory == finalDir))
+            {
                 directoriesWithoutSession.Add(finalDir);
+                AsyncHelper.RunAndReport(RefreshBranchFromServerAsync(finalDir), Toasts, $"Could not fetch branch for {finalDir}", "Branch");
+            }
         } else
         {
             foreach (var newDir in directories)
+            {
                 Events.Register(newDir);
+                AsyncHelper.RunAndReport(RefreshBranchFromServerAsync(newDir), Toasts, $"Could not fetch branch for {newDir}", "Branch");
+            }
         }
     }
 
@@ -218,12 +226,35 @@ public partial class SessionsStateProvider
         chatboxes.Remove(sessId);
     }
 
+    void VcsBranchUpdated(string directory, VcsBranchUpdatedEvent e)
+        => AsyncHelper.RunAndReport(
+            RefreshBranchAsync(directory, e.Branch),
+            Toasts,
+            "Failed to update branch",
+            "Branch Update"
+        );
+
+    async Task RefreshBranchAsync(string directory, string? branch)
+    {
+        Branches.AddOrReplace(new(directory, branch));
+    }
+
+    async Task RefreshBranchFromServerAsync(string directory)
+    {
+        if (!(await Opencode.GetVCSInfoAsync(directory)).TryGetValue(out var vcs, out _))
+            return;
+        Branches.AddOrReplace(new(directory, vcs.Branch));
+    }
+
+    string? GetBranch(string directory)
+        => Branches.TryGetValue(directory, out var db) ? db.Value : null;
+
     public IEnumerable<(string Directory, string? Branch, List<SessionHead> Sessions)> SessionSidebar =>
-        directoriesWithoutSession.Select(x => (x, (string?)"Branch", (List<SessionHead>)[])).Concat(
+        directoriesWithoutSession.Select(x => (x, GetBranch(x), (List<SessionHead>)[])).Concat(
             sessions
             .Where(s => !s.IsSubagent)
             .OrderByDescending(s => s.Updated).ThenByDescending(s => s.Id)
             .GroupBy(s => s.Directory)
-            .Select(g => (g.Key, (string?)"Branch", g.ToList()))
+            .Select(g => (g.Key, GetBranch(g.Key), g.ToList()))
         );
 }
