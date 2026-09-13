@@ -646,7 +646,7 @@ public sealed partial class SessionStoreToBeRemoved
     private long ResolveContextLimit(MessageItem message)
     {
         var model = Router.ModelOptions.FirstOrDefault(m => m.Id == message.ModelId
-            && (message.ProviderId.Length == 0 || m.ProviderId == message.));
+            && (message.ProviderId.Length == 0 || m.ProviderId == message.ProviderId));
         model ??= Router.ModelOptions.FirstOrDefault(m => m.Id == ModelId && m.ProviderId == ProviderId);
         return model?.LimitContext ?? 0;
     }
