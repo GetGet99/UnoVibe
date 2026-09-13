@@ -15,4 +15,19 @@ public sealed class PatchFileItem
     public string MovePath = "";
     public int Additions;
     public int Deletions;
+
+    public static string PatchFileLine(PatchFileItem f)
+    {
+        var label = f.Type switch
+        {
+            "add" => "# Created ",
+            "delete" => "# Deleted ",
+            "move" => "# Moved " + (f.FilePath.Length > 0 ? f.FilePath + " → " : ""),
+            _ => "← Patched ",
+        };
+        var text = label + f.RelativePath;
+        if (f.Additions + f.Deletions > 0)
+            text += $"  ({f.Additions}+ {f.Deletions}-)";
+        return text;
+    }
 }

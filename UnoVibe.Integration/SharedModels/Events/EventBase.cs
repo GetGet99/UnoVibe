@@ -201,7 +201,7 @@ public sealed class ApiAssistantError : AssistantError
     public bool IsRetryable { get; set; }
     public Dictionary<string, string>? ResponseHeaders { get; set; }
     public string? ResponseBody { get; set; }
-    public Dictionary<string, string>? Metadata { get; set; }
+    public JsonElement? Metadata { get; set; }
 }
 
 #endregion

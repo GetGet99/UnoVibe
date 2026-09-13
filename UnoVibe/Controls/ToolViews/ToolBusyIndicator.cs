@@ -8,13 +8,13 @@ namespace UnoVibe.Controls.ToolViews;
 /// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
-    required PartItem Part;
+    required ChatPartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        if (`ToolViewShared.Busy(Part)`)
-            <ProgressRing Width=14 Height=14 IsActive=true Foreground=`Part.ToolStatus == "pending" ? theme.SystemNeutral : theme.SystemCaution` VerticalAlignment=Center />
+        if (`Part is ToolCallPartItem tc && tc.IsBusy`)
+            <ProgressRing Width=14 Height=14 IsActive=true Foreground=`tc.ToolStatus == "pending" ? theme.SystemNeutral : theme.SystemCaution` VerticalAlignment=Center />
     </root>
     """)]
 public partial class ToolBusyIndicator : IQuickMarkupFragmentComponent<UIElement>;

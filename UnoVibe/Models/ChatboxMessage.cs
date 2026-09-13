@@ -24,10 +24,10 @@ public partial class ChatboxMessage
         var sb = new System.Text.StringBuilder();
         foreach (var part in message.Parts)
         {
-            if (part.Type == "text" && !part.Synthetic) sb.Append(part.Text);
-            else if (part.Type == "file")
+            if (part is TextPartItem text && !text.Synthetic) sb.Append(text.Text);
+            else if (part is FilePartItem file)
             {
-                var attachment = AttachmentFromPart(part);
+                var attachment = AttachmentFromFile(file);
                 if (attachment is null) continue;
                 msg.Images.Add(attachment);
             }
@@ -37,7 +37,7 @@ public partial class ChatboxMessage
     }
 
     /// <summary>Rebuilds an <see cref="ImageAttachment"/> from a data-URL image file part; null when not decodable.</summary>
-    static ImageAttachment? AttachmentFromPart(PartItem part)
+    static ImageAttachment? AttachmentFromFile(FilePartItem part)
     {
         if (!part.IsImage || !part.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return null;
         var comma = part.Url.IndexOf(',');
@@ -51,7 +51,7 @@ public partial class ChatboxMessage
                 Mime = part.Mime.Length > 0 ? part.Mime : "image/png",
                 Bytes = bytes,
             };
-            // Decode fire-and-forget like PartItem.LoadImageAsync; the await resumes on the
+            // Decode fire-and-forget like FilePartItem.LoadImageAsync; the await resumes on the
             // UI thread so the thumbnail strip updates once the bitmap is ready.
             _ = DecodePreviewAsync(attachment);
             return attachment;

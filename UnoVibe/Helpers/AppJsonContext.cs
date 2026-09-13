@@ -48,6 +48,8 @@ namespace UnoVibe.Helpers;
 [JsonSerializable(typeof(ServerConnectedEvent))]
 [JsonSerializable(typeof(ServerInstanceDisposedEvent))]
 [JsonSerializable(typeof(TuiToastShowEvent))]
+// --- Tool metadata types used by MessageJsonHelper ---
+[JsonSerializable(typeof(ToolMetadata))]
 internal sealed partial class AppJsonContext : JsonSerializerContext
 {
 }

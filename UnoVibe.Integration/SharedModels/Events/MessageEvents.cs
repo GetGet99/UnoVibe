@@ -109,13 +109,13 @@ public sealed class TextPart : Part
     public bool? Synthetic { get; set; }
     public bool? Ignored { get; set; }
     public TimeRange? Time { get; set; }
-    public Dictionary<string, JsonElement>? Metadata { get; set; }
+    public JsonElement? Metadata { get; set; }
 }
 
 public sealed class ReasoningPart : Part
 {
     public required string Text { get; set; }
-    public Dictionary<string, JsonElement>? Metadata { get; set; }
+    public JsonElement? Metadata { get; set; }
     public required TimeRange Time { get; set; }
 }
 
@@ -132,7 +132,7 @@ public sealed class ToolPart : Part
     [JsonPropertyName("callID")] public required string CallId { get; set; }
     public required string Tool { get; set; }
     public required ToolState State { get; set; }
-    public Dictionary<string, JsonElement>? Metadata { get; set; }
+    public JsonElement? Metadata { get; set; }
 }
 
 public sealed class StepStartPart : Part
@@ -220,7 +220,7 @@ public sealed class ToolStatePending : ToolState
 public sealed class ToolStateRunning : ToolState
 {
     public string? Title { get; set; }
-    public Dictionary<string, JsonElement>? Metadata { get; set; }
+    public ToolMetadata? Metadata { get; set; }
     public required ToolTimeRange Time { get; set; }
 }
 
@@ -228,7 +228,7 @@ public sealed class ToolStateCompleted : ToolState
 {
     public required string Output { get; set; }
     public required string Title { get; set; }
-    public Dictionary<string, JsonElement> Metadata { get; set; } = [];
+    public ToolMetadata? Metadata { get; set; }
     public required ToolTimeRange Time { get; set; }
     public List<FilePart>? Attachments { get; set; }
 }
@@ -236,7 +236,7 @@ public sealed class ToolStateCompleted : ToolState
 public sealed class ToolStateError : ToolState
 {
     public required string Error { get; set; }
-    public Dictionary<string, JsonElement>? Metadata { get; set; }
+    public ToolMetadata? Metadata { get; set; }
     public required ToolTimeRange Time { get; set; }
 }
 

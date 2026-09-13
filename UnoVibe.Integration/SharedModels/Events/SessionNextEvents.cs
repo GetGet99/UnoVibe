@@ -80,7 +80,7 @@ public sealed class RevertFileDiff
 public sealed class ToolProviderInfo
 {
     public bool Executed { get; set; }
-    public Dictionary<string, Dictionary<string, JsonElement>>? Metadata { get; set; }
+    public JsonElement? Metadata { get; set; }
 }
 
 #endregion
@@ -252,7 +252,7 @@ public sealed class ReasoningStartedEvent
     [JsonPropertyName("sessionID")] public required string SessionId { get; set; }
     [JsonPropertyName("assistantMessageID")] public required string AssistantMessageId { get; set; }
     [JsonPropertyName("reasoningID")] public required string ReasoningId { get; set; }
-    public Dictionary<string, Dictionary<string, JsonElement>>? ProviderMetadata { get; set; }
+    public JsonElement? ProviderMetadata { get; set; }
 }
 
 public sealed class ReasoningDeltaEvent
@@ -271,7 +271,7 @@ public sealed class ReasoningEndedEvent
     [JsonPropertyName("assistantMessageID")] public required string AssistantMessageId { get; set; }
     [JsonPropertyName("reasoningID")] public required string ReasoningId { get; set; }
     public required string Text { get; set; }
-    public Dictionary<string, Dictionary<string, JsonElement>>? ProviderMetadata { get; set; }
+    public JsonElement? ProviderMetadata { get; set; }
 }
 
 #endregion

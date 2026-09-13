@@ -6,7 +6,7 @@ namespace UnoVibe.Controls.ToolViews;
 /// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
-    required PartItem Part;
+    required ChatPartItem Part;
     string Text = "";
     bool SemiBold = false;
     bool Emphasized = false;
@@ -22,7 +22,7 @@ namespace UnoVibe.Controls.ToolViews;
                        FontFamily=`CodeFont ? CodeFonts.Current : DefaultFont`
                        Foreground=`Emphasized ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
-            if (`Part.Interrupted`)
+            if (`Part is ToolCallPartItem tc && tc.Interrupted`)
                 <Border Background=`theme.SystemCautionBackground` CornerRadius=4 Padding=`new Thickness(5, 1, 5, 2)` VerticalAlignment=Center>
                     <TextBlock Text="interrupted" FontSize=10 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
                 </Border>
