@@ -123,12 +123,6 @@ public partial class ChatboxState
         PendingPromptsCount = _pendingPrompts.Count;
     }
 
-    private void ClearPendingPrompts()
-    {
-        _pendingPrompts.Clear();
-        PendingPromptsCount = 0;
-    }
-
     private async Task SendPromptNowAsync(ChatboxMessage message)
     {
         Debug.Assert(!message.IsEmpty);
@@ -200,7 +194,7 @@ public partial class ChatboxState
     /// </summary>
     private void SendCommandNow(string name, string arguments, ChatboxMessage message)
     {
-        if (SessionId is null) throw new NullReferenceException(nameof(SessionId));
+        if (SessionId is null) throw new InvalidOperationException("Cannot send message when it is not registered to a session id");
         Head!.IsBusy = true;
         ShowContinue = false;
         var images = message.Images.ToList();

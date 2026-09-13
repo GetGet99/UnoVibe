@@ -31,7 +31,6 @@ partial class ChatboxState
         var canContinue = outcome is ChatOutcome.Error || await endedWithReasoning.Value;
         var canAutoContinue =
             SettingsStore.AutoContinueOnThinking
-            && Head!.IsBusy
             && autoContinueStreak < MaxAutoContinues
             && await endedWithReasoning.Value;
 

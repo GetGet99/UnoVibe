@@ -82,7 +82,13 @@ public partial class SessionsStateProvider
         Events.RegisterSessionDeleted(null, DeleteSession);
         Events.RegisterMessageUpdated(null, MessageUpdated);
     }
-    private async void FetchInitialSessions() => await AddDirectoryPrivateAsync(null);
+    void FetchInitialSessions()
+        => AsyncHelper.RunAndReport(
+            AddDirectoryPrivateAsync(null),
+            Toasts,
+            "Failed to initialize sessions",
+            "Session Handler"
+        );
     public Task AddDirectoryAsync(string directory) => AddDirectoryPrivateAsync(directory);
     private async Task AddDirectoryPrivateAsync(string? directory)
     {
@@ -149,31 +155,33 @@ public partial class SessionsStateProvider
         return UpsertSession(newSession);
     }
 
-    async void MessageUpdated(string _1, MessageUpdatedEvent e)
-    {
-        var sessId = new SessionId(e.SessionId);
-        // Feed the sidebar outcome tracker for assistant message completions. The last
-        // update for a turn carries its definitive outcome (error/finish/cost/tokens).
-        if (e.Info is not AssistantMessageInfo assistent)
-            return;
-        var outcome = MessageJsonHelper.ClassifyMessageOutcome(assistent);
-        
-        sessions[sessId]?.Outcome = outcome;
-        if (assistent.Finish is not null)
+    void MessageUpdated(string _1, MessageUpdatedEvent e)
+        => AsyncHelper.RunAndReport(async () =>
         {
-            var chatBox = Chatbox(sessId);
-            if (!(chatBox is not null && await chatBox.TurnStopActionAsync(outcome, assistent.Id)))
+            var sessId = new SessionId(e.SessionId);
+            // Feed the sidebar outcome tracker for assistant message completions. The last
+            // update for a turn carries its definitive outcome (error/finish/cost/tokens).
+            if (e.Info is not AssistantMessageInfo assistent)
+                return;
+            var outcome = MessageJsonHelper.ClassifyMessageOutcome(assistent);
+            
+            sessions[sessId]?.Outcome = outcome;
+            if (assistent.Finish is not null)
             {
-                if (sessions.TryGetValue(sessId, out var head))
+                var chatBox = Chatbox(sessId);
+                if (!(chatBox is not null && await chatBox.TurnStopActionAsync(outcome, assistent.Id)))
                 {
-                    if (ActiveSessionId != sessId)
-                        head.IsRead = false;
-                    head.IsBusy = false;
-                    Notifications.NotifyCompleted(head, head.Outcome, sessId == ActiveSessionId);
+                    if (sessions.TryGetValue(sessId, out var head))
+                    {
+                        if (ActiveSessionId != sessId)
+                            head.IsRead = false;
+                        head.IsBusy = false;
+                        Notifications.NotifyCompleted(head, head.Outcome, sessId == ActiveSessionId);
+                    }
                 }
-            }
-        }
-    }
+            }    
+        }, Toasts, "", "Message Handling Error");
+        
     void UpsertSession(string _1, SessionCrudEvent properties)
     {
         UpsertSession(properties.Info);

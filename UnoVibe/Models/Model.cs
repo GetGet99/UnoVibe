@@ -6,7 +6,7 @@ public record Model(string ProviderId, string Id)
     {
         if (m is null) return o is null;
         if (o is null) return false;
-        if (m.Id == o.Id && m.Id == o.ProviderId) return true;
+        if (m.Id == o.Id && m.ProviderId == o.ProviderId) return true;
         return false;
     }
     public static bool operator !=(Model? m, ModelOption? o) => !(m == o);

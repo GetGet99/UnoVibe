@@ -9,7 +9,7 @@ public class UnoVibeProviders : IDisposable
     public ToastsProvider Toasts { get; }
     public ModelsProvider Models { get; }
     public Window HostWindow { get; }
-    IDisposable[] Disposables => [Connection, Events];
+    IDisposable[] Disposables => [Connection, Events, Toasts];
 
     public UnoVibeProviders(OpencodeConnection connection, Window hostWindow)
     {
@@ -20,7 +20,7 @@ public class UnoVibeProviders : IDisposable
         Events = new EventsProvider(Connection.Client, dispatcher);
         Toasts = new(Events, dispatcher);
         Sessions = new(Connection, Events, Toasts, Notifications, dispatcher);
-        Models = new() { Opencode = Connection.Client, Toasts = Toasts };
+        Models = new(Connection.Client, Toasts);
     }
     public void Dispose()
     {

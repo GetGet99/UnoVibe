@@ -6,7 +6,7 @@ namespace UnoVibe.Providers;
 [QuickMarkup("""
     ToastItem? CurrentToast;
     """)]
-public partial class ToastsProvider
+public partial class ToastsProvider : IDisposable
 {
     EventsProvider Event { get; set; }
     DispatcherQueue dispatcher;
@@ -98,5 +98,6 @@ public partial class ToastsProvider
     {
         _toastCts?.Cancel();
         _toastCts = null;
+        GC.SuppressFinalize(this);
     }
 }

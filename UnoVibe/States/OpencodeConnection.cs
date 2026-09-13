@@ -59,7 +59,7 @@ public partial class OpencodeConnection : IDisposable
                     }
                 }
             }
-            else if (!healthResult.IsSuccess && healthResult.Error.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            else if (!healthResult.IsSuccess)
             {
                 if (healthResult.Error.StatusCode is System.Net.HttpStatusCode.Unauthorized)
                     ConnectionStatus = "Error: unauthorized - check the server password";

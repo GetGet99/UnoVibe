@@ -163,7 +163,7 @@ static class MessageJsonHelper
         return error is AbortedError ? ChatOutcome.Interrupted : ChatOutcome.Error;
     }
 
-    public static bool IsAbortedError(AssistantMessageInfo info) => ClassifyMessageOutcome(info) is ChatOutcome.Error;
+    public static bool IsAbortedError(AssistantMessageInfo info) => ClassifyMessageOutcome(info) is ChatOutcome.Interrupted;
 
     public static void ApplyMessageError(MessageItem message, AssistantMessageInfo info)
     {

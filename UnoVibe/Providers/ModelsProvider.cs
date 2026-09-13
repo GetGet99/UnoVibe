@@ -5,13 +5,15 @@ namespace UnoVibe.Providers;
 
 public class ModelsProvider
 {
-    public required OpencodeClient Opencode { private get; init; }
-    public required ToastsProvider Toasts { private get; init; }
+    OpencodeClient Opencode { get; }
+    ToastsProvider Toasts { get; }
     public ReactiveList<string> AgentOptions { get; } = [];
     public ReactiveKeyedSet<Model, ModelOption> ModelOptions { get; } = new(Model.From);
 
-    public ModelsProvider()
+    public ModelsProvider(OpencodeClient opencode, ToastsProvider toasts)
     {
+        Opencode = opencode;
+        Toasts = toasts;
         _ = RefreshModelsAsync();
     }
 

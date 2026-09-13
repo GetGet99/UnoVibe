@@ -14,7 +14,7 @@ class McpService
     }
 
     // Guards concurrent connect/disconnect requests (one toggle at a time).
-    private bool _mcpBusy;
+    private volatile bool _mcpBusy;
     // Background poll is only active while the sidebar MCP section is expanded.
     private volatile bool _polling;
     public bool Polling

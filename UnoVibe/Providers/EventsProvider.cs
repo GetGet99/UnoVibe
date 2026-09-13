@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
@@ -22,7 +23,7 @@ public class EventsProvider : IDisposable
         if (registered.ContainsKey(directory)) return;
         registered[directory] = [];
         _ = Task.Run(() => client.ReadEventAsync(channel.Writer, cts.Token));
-        _ = Task.Run(() => PumpAsync());
+        pumpTask ??= Task.Run(() => PumpAsync());
     }
 
     public void Register(string? directory, string eventType, Action<string, JsonElement> handler)
@@ -153,14 +154,30 @@ public class EventsProvider : IDisposable
 
     void Apply(OpencodeEvent evt)
     {
+        ApplyPerDirectory(evt);
+        ApplyAllDirectories(evt);
+    }
+
+    void ApplyPerDirectory(OpencodeEvent evt)
+    {
         if (evt.Directory is null || !registered.TryGetValue(evt.Directory, out var registeredDir))
             return;
         if (!registeredDir.TryGetValue(evt.Type, out var handlers))
             return;
         handlers?.Invoke(evt.Directory, evt.Properties);
     }
+
+    void ApplyAllDirectories(OpencodeEvent evt)
+    {
+        Debug.Assert(evt.Directory is not null);
+        if (!registeredForAllDirectories.TryGetValue(evt.Type, out var handlers))
+            return;
+        handlers?.Invoke(evt.Directory!, evt.Properties);
+    }
+
     CancellationTokenSource cts = new();
     Channel<OpencodeEvent> channel = Channel.CreateUnbounded<OpencodeEvent>();
+    Task? pumpTask;
     readonly HashSet<string> _seenEventIds = new();
     readonly Queue<string> _seenEventIdOrder = new();
 
@@ -205,19 +222,27 @@ public class EventsProvider : IDisposable
     /// </summary>
     private bool IsDuplicateEvent(OpencodeEvent evt)
     {
-        if (string.IsNullOrEmpty(evt.Id)) return false;
-        if (_seenEventIds.Contains(evt.Id)) return true;
-        
-        _seenEventIds.Add(evt.Id);
-        _seenEventIdOrder.Enqueue(evt.Id);
-        while (_seenEventIdOrder.Count > MaxSeenEventIds)
-            _seenEventIds.Remove(_seenEventIdOrder.Dequeue());
-        return false;
+        lock (_seenEventIds)
+        {
+            lock (_seenEventIdOrder)
+            {
+                if (string.IsNullOrEmpty(evt.Id)) return false;
+                if (_seenEventIds.Contains(evt.Id)) return true;
+                
+                _seenEventIds.Add(evt.Id);
+                _seenEventIdOrder.Enqueue(evt.Id);
+                while (_seenEventIdOrder.Count > MaxSeenEventIds)
+                    _seenEventIds.Remove(_seenEventIdOrder.Dequeue());
+                return false;
+            }
+        }
     }
 
     public void Dispose()
     {
+        channel.Writer.TryComplete();
         cts.Cancel();
+        cts.Dispose();
         GC.SuppressFinalize(this);
     }
 }
