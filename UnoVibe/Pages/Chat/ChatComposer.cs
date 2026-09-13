@@ -2,6 +2,9 @@ using Microsoft.UI.Input;
 using UnoVibe.Models;
 using UnoVibe.Services;
 using UnoVibe.Controls;
+using UnoVibe.Helpers;
+using Uno.Extensions;
+using UnoVibe.Providers;
 
 namespace UnoVibe.Pages.Chat;
 
@@ -40,6 +43,8 @@ namespace UnoVibe.Pages.Chat;
         ? EmptyList
         : Models.ModelOptions[Sessions.ActiveChatParams.Model].Varients`;
     bool IsBusy => `Sessions.ActiveHead?.IsBusy ?? false`;
+    private bool IsEnabled = true; // Should be disabled if there is an active permission prompt
+    ChatboxModel Chatbox => `Sessions.ActiveChatbox`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -49,47 +54,47 @@ namespace UnoVibe.Pages.Chat;
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
         </>>
-            <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
-                          HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled
-                          Visibility=`StoreToUpdate.Active.PendingImageCount > 0 ? Visibility.Visible : Visibility.Collapsed`>
-                <StackPanel Orientation=Horizontal>
-                    foreach (var a in `StoreToUpdate.Active.PendingImages`)
-                    {
-                        <Grid Margin=`new Thickness(0, 4, 8, 4)`>
-                            <Border Width=64 Height=64 CornerRadius=6 BorderBrush=`theme.CardStroke`
-                                    BorderThickness=`new Thickness(1)` Background=`theme.CardBackground`
-                                    VerticalAlignment=Top>
-                                <Image Source=`a.Preview` Stretch=Uniform Margin=2 />
-                            </Border>
-                            <Button Width=18 Height=18 Padding=0 HorizontalAlignment=Right VerticalAlignment=Top
-                                    CornerRadius=9 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke`
-                                    BorderThickness=`new Thickness(1)` Foreground=`theme.PrimaryText` FontSize=10
-                                    ToolTipService.ToolTip="Remove attachment" @Click+=`StoreToUpdate.Active.RemovePendingImage(a)`>
-                                <TextBlock Text="✕" FontSize=10 />
-                            </Button>
-                        </Grid>
-                    }
-                </StackPanel>
-            </ScrollViewer>
+            if (`Chatbox.PendingImages > 0`)
+                <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
+                    HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
+                    <StackPanel Orientation=Horizontal>
+                        foreach (var a in `Chatbox.PendingImages`)
+                        {
+                            <Grid Margin=`new Thickness(0, 4, 8, 4)`>
+                                <Border Width=64 Height=64 CornerRadius=6 BorderBrush=`theme.CardStroke`
+                                        BorderThickness=`new Thickness(1)` Background=`theme.CardBackground`
+                                        VerticalAlignment=Top>
+                                    <Image Source=`a.Preview` Stretch=Uniform Margin=2 />
+                                </Border>
+                                <Button Width=18 Height=18 Padding=0 HorizontalAlignment=Right VerticalAlignment=Top
+                                        CornerRadius=9 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke`
+                                        BorderThickness=`new Thickness(1)` Foreground=`theme.PrimaryText` FontSize=10
+                                        ToolTipService.ToolTip="Remove attachment" @Click+=`Chatbox.PendingImages.Remove(a)`>
+                                    <TextBlock Text="✕" FontSize=10 />
+                                </Button>
+                            </Grid>
+                        }
+                    </StackPanel>
+                </ScrollViewer>
             <Grid Grid.Row=1 ColumnSpacing=`IsCompact ? 6 : 8` Padding=`new Thickness(IsCompact ? 12 : 16, 8, IsCompact ? 12 : 16, IsCompact ? 12 : 16)` ColumnDefinitions=<>
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                suggestBox = <SuggestBox PlaceholderText=`ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`StoreToUpdate.ActivePermission is null`
+                suggestBox = <SuggestBox PlaceholderText=`ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`IsEnabled`
                     TextChanged+=`OnInputTextChanged` PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     if (`!ShellMode`)
-                        <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`StoreToUpdate.ActivePermission is null`
-                                @Click+=`await StoreToUpdate.Active.PickImageAsync(HostWindow)`>
+                        <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`IsEnabled`
+                                @Click+=`OnPickImages()`>
                             <SymbolIcon Symbol=Camera VerticalAlignment=Center />
                         </Button>
-                    if (`StoreToUpdate.Active.PendingPrompts > 0`)
+                    if (`Chatbox.PendingPromptsCount > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
-                            <TextBlock Text=`$"⏳ {StoreToUpdate.Active.PendingPrompts} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
+                            <TextBlock Text=`$"⏳ {Chatbox.PendingPromptsCount} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
                         </Border>
                     if (`IsBusy`)
-                        <Button Content="⏹ Stop" @Click+=`await StoreToUpdate.Active.InterruptAsync()` CornerRadius=6 />
-                    <SendMessageButton Mode=`SendMode` IsBusy=`IsBusy` Enabled=`StoreToUpdate.ActivePermission is null`
+                        <Button Content="⏹ Stop" @Click+=`await InterruptSessionAsync()` CornerRadius=6 />
+                    <SendMessageButton Mode=`SendMode` IsBusy=`IsBusy` Enabled=`IsEnabled`
                                        SendRequested+=`OnSendWithMode` />
                 </StackPanel>
             </Grid>
@@ -189,9 +194,23 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             !InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
         {
-            if (await StoreToUpdate.Active.PasteImageFromClipboardAsync())
-                e.Handled = true;
+            // handled must be returned synchronously so doing that first
+            e.Handled = true;
+            var images = await ImageIOHelper.PasteImageFromClipboardAsync();
+            if (images.Count > 0)
+            {
+                Chatbox.PendingImages.AddRange(images);
+            } else
+            {
+                // paste from clipboard normally
+                suggestBox.PasteFromClipboard();
+            }
         }
+    }
+    private async void OnPickImages()
+    {
+        var images = await ImageIOHelper.PickImagesAsync(HostWindow);
+        Chatbox.PendingImages.AddRange(images);
     }
 
     /// <summary>
@@ -263,8 +282,8 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             return;
         }
         if (await TryRunBuiltInTextAsync(text)) return;
-        await SendAsync(text, null);
-        sender.Clear();
+        if (await SendAsync(text, null))
+            sender.Clear();
     }
 
     /// <summary>Sends with an explicit mode (the busy-state split button's primary action or a one-shot dropdown override);
@@ -277,8 +296,8 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
             return;
         }
         if (await TryRunBuiltInTextAsync(suggestBox.MarkupNode.Text)) return;
-        await SendAsync(suggestBox.MarkupNode.Text, mode);
-        suggestBox.Clear();
+        if (await SendAsync(suggestBox.MarkupNode.Text, mode))
+            suggestBox.Clear();
     }
 
     // ── Built-in slash commands (/new /models /agents /variants /connect /editor /explorer
@@ -322,10 +341,10 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                     Toasts.ShowWarning("No session to fork.", "/fork");
                 break;
             case "interrupt":
-                if (!IsBusy)
-                    Toasts.ShowWarning("Nothing is running right now.", "/interrupt");
-                else
-                    await StoreToUpdate.Active.InterruptAsync();
+                if (!await InterruptSessionAsync())
+                {
+                    Toasts.ShowWarning("Chat is not running currently.", "/interrupt");
+                }
                 break;
             case "mcps":
                 UIs.InvokeMcpSectionRequested();
@@ -363,20 +382,46 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
         }
     }
 
-
-    private async Task SendAsync(string text, SendPromptMode? mode)
+    private async Task<bool> InterruptSessionAsync()
     {
-        var content = text.Trim();
-        if (content.Length == 0 && StoreToUpdate.Active.PendingImages.Count == 0) return;
-        await StoreToUpdate.Active.SendAsync(content, mode);
-        UIs.ScrollChatToBottom();
+        if (Sessions.ActiveHead is {} activeSession && activeSession.IsBusy)
+        {
+            await Opencode.AbortAsync(activeSession.Id);
+            return true;
+        }
+        return false;
+    }
+
+    /// <inheritdoc cref="HandleSentStatus" />
+    private async Task<bool> SendAsync(string text, SendPromptMode? mode)
+    {
+        return HandleSentStatus(await Chatbox.SendAsync(text, mode));
     }
 
     /// <summary>Runs a shell-mode command in the session (composer "!" prefix, TUI parity).</summary>
-    private async Task SendShellCommandAsync(string command)
+    /// <inheritdoc cref="HandleSentStatus" />
+    private async Task<bool> SendShellCommandAsync(string command)
     {
-        await StoreToUpdate.Active.SendShellAsync(command);
-        UIs.ScrollChatToBottom();
+        return HandleSentStatus(await Chatbox.SendShellAsync(command));
+    }
+    /// <returns>True if caller should clear the composer text if sent from textbox.
+    /// False when composer text should not be cleared.</returns>
+    bool HandleSentStatus(SentStatus sentStatus)
+    {
+        switch (sentStatus)
+        {
+            case SentStatus.Sent:
+                UIs.ScrollChatToBottom();
+                return true;
+            case SentStatus.Queued:
+                UIs.ScrollChatToBottom();
+                return true;
+            case SentStatus.Error:
+            case SentStatus.Empty:
+            default:
+                // do nothing
+                return false;
+        }
     }
 
     /// <summary>Intercepts submitted text that is an exact built-in command ("/name", optional

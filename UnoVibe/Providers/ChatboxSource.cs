@@ -10,9 +10,9 @@ using Windows.Storage.Streams;
 namespace UnoVibe.Providers;
 
 [QuickMarkup("""
-    public int PendingPrompts;
-    public int PendingImageCount;
+    public int PendingPromptsCount;
     """)]
+    // public string ChatText = "";
 partial class ChatboxModel
 {
     public SessionId? SessionId { get; private set; }
@@ -22,7 +22,7 @@ partial class ChatboxModel
     OpencodeClient Opencode { get; set; }
     DispatcherQueue Dispatcher { get; set; }
     [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Toasts), nameof(Opencode), nameof(Sessions))]
+    [MemberNotNull(nameof(Toasts), nameof(Opencode), nameof(Sessions), nameof(Dispatcher))]
     void Ctor(OpencodeClient client, ToastService toasts, SessionsSource sessions, DispatcherQueue dispatcher, SessionId? sessionId)
     {
         Dispatcher = dispatcher;
@@ -32,36 +32,10 @@ partial class ChatboxModel
         SessionId = sessionId;
     }
     /// <summary>Image attachments staged for the next prompt (shown as thumbnails above the input).</summary>
-    public ObservableCollection<ImageAttachment> PendingImages { get; } = new();
+    public ReactiveList<ImageAttachment> PendingImages { get; } = new();
     private readonly Queue<string> _pendingPrompts = new();
 
     private bool _draining;
-
-    /// <summary>Image file extensions accepted by the picker and the clipboard storage-items paste path.</summary>
-    private static string[] ImageExtensions => field ??= [.. ImageClipboardFormats.Select(x => x.Ext).Distinct()];
-
-    /// <summary>
-    /// Clipboard format names probed (in order) when pasting raw image bytes. Covers the union
-    /// of what each Skia backend exposes: X11 mime atoms (<c>image/png</c>, <c>image/jpeg</c>,
-    /// ...) returning <c>byte[]</c>, and Win32 registered format names (<c>PNG</c>, <c>JFIF</c>,
-    /// ...) returning <c>IRandomAccessStream</c>, plus the CF_DIB remap
-    /// <c>StandardDataFormats.Bitmap</c> returning a <c>RandomAccessStreamReference</c>.
-    /// </summary>
-    private static readonly (string Name, string Mime, string Ext)[] ImageClipboardFormats =
-    {
-        ("image/png", "image/png", "png"),
-        ("image/jpeg", "image/jpeg", "jpeg"),
-        ("image/gif", "image/gif", "gif"),
-        ("image/webp", "image/webp", "webp"),
-        ("image/bmp", "image/bmp", "bmp"),
-        ("PNG", "image/png", "png"),
-        ("JFIF", "image/jpeg", "jpeg"),
-        ("JPEG", "image/jpeg", "jpeg"),
-        ("GIF", "image/gif", "gif"),
-        ("WEBP", "image/webp", "webp"),
-        ("BMP", "image/bmp", "bmp"),
-        (StandardDataFormats.Bitmap, "image/bmp", "bmp"),
-    };
 
 
     /// <summary>
@@ -78,8 +52,8 @@ partial class ChatboxModel
     ///     returns once the runner is idle, so the following prompt starts a fresh turn. When idle
     ///     it sends like OnNextToolCall.
     /// </summary>
-    public async Task SendAsync(string text, SendPromptMode? mode = null)
-        => await SendCoreAsync(text, mode, fromUser: true);
+    public Task<SentStatus> SendAsync(string text, SendPromptMode? mode = null)
+        => SendCoreAsync(text, mode, fromUser: true);
 
 #pragma warning disable CS8774 // Member must have a non-null value when exiting.
     [MemberNotNull(nameof(SessionId), nameof(Head))]
@@ -91,8 +65,10 @@ partial class ChatboxModel
 
     /// <summary>Send implementation. <paramref name="fromUser"/> distinguishes real user sends
     /// (which reset the auto-continue streak) from the automatic "continue" (which must not).</summary>
-    private async Task SendCoreAsync(string text, SendPromptMode? mode, bool fromUser)
+    private async Task<SentStatus> SendCoreAsync(string text, SendPromptMode? mode, bool fromUser)
     {
+        text = text.Trim();
+        if (text.Length is 0 && PendingImages.Count is 0) return SentStatus.Empty;
         if (fromUser)
         {
             autoContinueStreak = 0;
@@ -106,15 +82,18 @@ partial class ChatboxModel
             if (effective == SendPromptMode.Queue && Head.IsBusy)
             {
                 EnqueuePrompt(text);
-                return;
+                return SentStatus.Queued;
             }
             if (effective == SendPromptMode.SendImmediately && Head.IsBusy)
                 await InterruptAsync();
             await SendPromptNowAsync(text);
+            return SentStatus.Sent;
         }
         catch (Exception ex)
         {
             Toasts.ShowError(ex.Message, "Message failed to send");
+            
+        return SentStatus.Error;
         }
     }
 
@@ -125,146 +104,13 @@ partial class ChatboxModel
     private void EnqueuePrompt(string text)
     {
         _pendingPrompts.Enqueue(text);
-        PendingPrompts = _pendingPrompts.Count;
+        PendingPromptsCount = _pendingPrompts.Count;
     }
 
     private void ClearPendingPrompts()
     {
         _pendingPrompts.Clear();
-        PendingPrompts = 0;
-    }
-
-    /// <summary>
-    /// Pastes an image from the system clipboard (Ctrl+V). Returns true when at least one
-    /// image was staged; false when the clipboard holds no usable image, so the caller can
-    /// let the default text paste proceed.
-    /// </summary>
-    /// <remarks>
-    /// Uses Uno's built-in <see cref="Clipboard"/>, probing the union of what each Skia
-    /// backend exposes. On X11 it routes to the <c>X11ClipboardExtension</c> (raw
-    /// <c>image/png</c>/<c>image/jpeg</c> atoms returning <c>byte[]</c>, files via
-    /// <c>text/uri-list</c>); on Windows to the <c>Win32ClipboardExtension</c> (registered
-    /// format names like <c>PNG</c>/<c>JFIF</c> returning <c>IRandomAccessStream</c>, CF_DIB
-    /// remapped to <c>StandardDataFormats.Bitmap</c>, files via <c>CF_HDROP</c>). Both expose
-    /// files under <c>StandardDataFormats.StorageItems</c>, so that check is shared. Only the
-    /// read path is needed here; the write path workaround from PocketPic is not required.
-    /// </remarks>
-    public async Task<bool> PasteImageFromClipboardAsync()
-    {
-        try
-        {
-            var content = Clipboard.GetContent();
-            if (content is null) return false;
-
-            // Files first: "Shell IDList Array" is the cross-platform storage-items format
-            // (X11 maps text/uri-list to it; Win32 maps CF_HDROP to it).
-            if (content.Contains(StandardDataFormats.StorageItems))
-            {
-                var items = await content.GetStorageItemsAsync();
-                var staged = false;
-                foreach (var item in items)
-                {
-                    if (item is not StorageFile file) continue;
-                    var ext = Path.GetExtension(file.Path).ToLowerInvariant();
-                    if (ImageExtensions.Contains(ext))
-                    {
-                        await AddPendingImageAsync(file.Path);
-                        staged = true;
-                    }
-                }
-                if (staged) return true;
-            }
-
-            // Raw image bytes: probe the union of format names each platform exposes. The
-            // retrieved value may be byte[] (X11), IRandomAccessStream (Win32 registered
-            // format), or RandomAccessStreamReference (Win32 CF_DIB).
-            foreach (var (name, mime, ext) in ImageClipboardFormats)
-            {
-                if (!content.Contains(name)) continue;
-                var item = await content.GetDataAsync(name);
-                byte[]? bytes = item switch
-                {
-                    byte[] raw => raw,
-                    IRandomAccessStream stream => await ReadAllBytes(stream),
-                    IRandomAccessStreamReference streamRef => await ReadAllBytes(await streamRef.OpenReadAsync()),
-                    _ => null,
-                };
-                if (bytes is { Length: > 0 })
-                {
-                    StageAttachment(await ImageAttachment.CreateFromBytesAsync(bytes, mime, $"Pasted image.{ext}"));
-                    return true;
-                }
-            }
-        }
-        catch
-        {
-            // Foreign clipboard formats or an unavailable selection should not crash paste.
-        }
-        return false;
-    }
-
-    private static async Task<byte[]> ReadAllBytes(IRandomAccessStream stream)
-    {
-        // DataReader.LoadAsync is not implemented in Uno (Uno0001), so read the underlying
-        // stream instead: AsStreamForRead unwraps the MemoryStream-backed IRandomAccessStream
-        // that Uno's clipboard extensions produce (the same pattern Win32ClipboardExtension uses).
-        stream.Seek(0);
-        using var ms = new MemoryStream();
-        await stream.AsStreamForRead().CopyToAsync(ms);
-        return ms.ToArray();
-    }
-
-    private void StageAttachment(ImageAttachment attachment)
-    {
-        PendingImages.Add(attachment);
-        PendingImageCount = PendingImages.Count;
-    }
-
-    /// <summary>Removes a staged image attachment.</summary>
-    public void RemovePendingImage(ImageAttachment attachment)
-    {
-        PendingImages.Remove(attachment);
-        PendingImageCount = PendingImages.Count;
-    }
-
-    /// <summary>
-    /// Opens the native file picker and stages the chosen image as a pending attachment.
-    /// <paramref name="window"/> is the hosting window used to initialize the picker (WinRT
-    /// pickers need an HWND on Windows).
-    /// </summary>
-    public async Task PickImageAsync(Window window)
-    {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker
-        {
-            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary,
-        };
-        foreach (var ext in ImageExtensions)
-            picker.FileTypeFilter.Add(ext);
-        WindowsHelper.InitializeWithWindow(picker, window);
-        var file = await picker.PickSingleFileAsync();
-        if (file is null) return;
-        await AddPendingImageAsync(file.Path);
-    }
-
-    /// <summary>Reads an image file from disk and stages it as a pending attachment.</summary>
-    public async Task AddPendingImageAsync(string path)
-    {
-        try
-        {
-            var bytes = await File.ReadAllBytesAsync(path);
-            if (bytes.Length == 0) return;
-            StageAttachment(new ImageAttachment
-            {
-                FileName = Path.GetFileName(path),
-                Mime = ImageAttachment.MimeFromPath(path),
-                Bytes = bytes,
-                Preview = await ImageAttachment.DecodeAsync(bytes),
-            });
-        }
-        catch (Exception ex)
-        {
-            Toasts.ShowError(ex.Message, "Could not attach image");
-        }
+        PendingPromptsCount = 0;
     }
 
     private async Task SendPromptNowAsync(string text)
@@ -302,7 +148,6 @@ partial class ChatboxModel
         });
         // Attachments travel with the prompt, so stage them off once the message is stored.
         PendingImages.Clear();
-        PendingImageCount = 0;
     }
 
 
@@ -346,7 +191,6 @@ partial class ChatboxModel
         ResetTurnFlags();
         var images = PendingImages.ToArray();
         PendingImages.Clear();
-        PendingImageCount = 0;
 
         // Capture the reactive values on the UI thread (Reference<T> must only be read/written
         // there), then run the long-lived request off-thread.
@@ -388,7 +232,7 @@ partial class ChatboxModel
             if (_pendingPrompts.Count > 0)
             {
                 var text = _pendingPrompts.Dequeue();
-                PendingPrompts = _pendingPrompts.Count;
+                PendingPromptsCount = _pendingPrompts.Count;
                 try
                 {
                     await SendPromptNowAsync(text);
@@ -432,14 +276,12 @@ partial class ChatboxModel
     internal void StageImagesFromMessage(MessageItem message)
     {
         PendingImages.Clear();
-        PendingImageCount = 0;
         foreach (var part in message.Parts)
         {
             if (part.Type != "file") continue;
             var attachment = AttachmentFromPart(part);
             if (attachment is null) continue;
             PendingImages.Add(attachment);
-            PendingImageCount = PendingImages.Count;
         }
     }
 
@@ -550,15 +392,6 @@ partial class ChatboxModel
     private bool sawRunningStatus;
 
     /// <summary>
-    /// Set when the user requests an interrupt (Stop button or an interrupt-then-send) and
-    /// cleared when the server confirms the next running turn (first non-idle status). Guards
-    /// auto-continue against the stop-signal race: session.status idle can be processed before
-    /// the final message.updated lands the MessageAbortedError marker on the assistant message,
-    /// so <see cref="LastAssistantMessageInterrupted"/> alone can miss a mid-thinking Stop.
-    /// </summary>
-    private bool interruptRequested;
-
-    /// <summary>
     /// True between an automatic continue firing and the server confirming the restarted turn
     /// with its first non-idle status event. Any further stop signal for that same stop (the
     /// server emits session.status idle and the final message.updated carrying finish in either
@@ -572,7 +405,6 @@ partial class ChatboxModel
     /// </summary>
     public async Task InterruptAsync()
     {
-        interruptRequested = true;
         try
         {
             await Opencode.AbortAsync(Head.Id);
@@ -592,13 +424,13 @@ partial class ChatboxModel
     /// goes busy for the duration (Stop aborts the command); the server 409s a concurrent run,
     /// so a busy session surfaces an error instead of sending.
     /// </summary>
-    public async Task SendShellAsync(string command)
+    public async Task<SentStatus> SendShellAsync(string command)
     {
         await EnsureSessionAsync();
         if (Head.IsBusy)
         {
             Toasts.ShowWarning("Wait for the current turn to finish before running a shell command.", "Session busy");
-            return;
+            return SentStatus.Error;
         }
         try
         {
@@ -640,10 +472,12 @@ partial class ChatboxModel
                     });
                 }
             });
+            return SentStatus.Sent;
         }
         catch (Exception ex)
         {
             Toasts.ShowError(ex.Message, "Shell command failed");
+            return SentStatus.Error;
         }
     }
 
@@ -690,7 +524,6 @@ partial class ChatboxModel
         SettingsStore.AutoContinueOnThinking
         && autoContinueStreak < MaxAutoContinues
         && !AwaitingAutoContinueRun
-        && !interruptRequested
         && !LastAssistantMessageInterrupted()
         && LastAssistantMessageEndsOnThinking();
 
@@ -707,7 +540,7 @@ partial class ChatboxModel
         if (AwaitingAutoContinueRun) return;
         if (autoContinued) autoContinued = false; // the restarted turn's own stop — decide fresh
 
-        if (SettingsStore.AutoContinueOnThinking && !LastAssistantMessageInterrupted() && !interruptRequested
+        if (SettingsStore.AutoContinueOnThinking && !LastAssistantMessageInterrupted()
             && LastAssistantMessageEndsOnThinking() && autoContinueStreak < MaxAutoContinues)
         {
             autoContinued = true;
@@ -725,4 +558,23 @@ partial class ChatboxModel
         autoContinueStreak = 0;
         ShowContinue = ShouldShowContinue();
     }
+}
+public enum SentStatus
+{
+    /// <summary>
+    /// Request was not processed as it is empty
+    /// </summary>
+    Empty,
+    /// <summary>
+    /// Request was sent
+    /// </summary>
+    Sent,
+    /// <summary>
+    /// Request was queued
+    /// </summary>
+    Queued,
+    /// <summary>
+    /// Some error have occurred. A toast has already been shown with the details.
+    /// </summary>
+    Error
 }

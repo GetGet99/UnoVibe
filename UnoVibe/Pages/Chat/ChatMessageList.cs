@@ -242,7 +242,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task OnMessageRevertRequested(MessageItem message)
     {
         await StoreToUpdate.Active.RevertToMessageAsync(message);
-        Sessions.EnsureChatbox(Sessions.ActiveSessionId!).ReplaceFromMessage(message);
+        Sessions.ActiveChatbox.ReplaceFromMessage(message);
         scrollHost.ForceScrollToBottom();
     }
 

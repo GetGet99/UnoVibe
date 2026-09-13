@@ -93,8 +93,8 @@ public partial class ChatPage : Page
 
         var head = Sessions.Register(forked);
 
-        Sessions.EnsureChatbox(sessionId).ReplaceFromMessage(message);
         Sessions.ActiveSessionId = head.Id;
+        Sessions.ActiveChatbox.ReplaceFromMessage(message);
         
         return;
     }

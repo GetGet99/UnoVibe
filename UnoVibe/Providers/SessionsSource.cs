@@ -15,6 +15,7 @@ namespace UnoVibe.Providers;
     string ActiveSessionDirectory => `(Sessions.ActiveSessionId is null ? Sessions.NewSessionDirectory : Sessions.Head(Sessions.ActiveSessionId)?.Directory) ?? connection.ServerDirectory`;
     ChatParameters ActiveChatParams => `GetActiveChatParams()`;
     SessionHead? ActiveHead => `Head(ActiveSessionId)`;
+    ChatboxModel ActiveChatbox => `GetActiveChatbox()`;
     """)]
 partial class SessionsSource
 {
@@ -24,8 +25,9 @@ partial class SessionsSource
     ToastService Toasts;
     NotificationService Notifications;
     DispatcherQueue Dispatcher;
-    record KeyedChatParams(string Directory, ChatParameters ChatParams);
-    readonly ReactiveKeyedSet<string, KeyedChatParams> chatParamsNullSessions = new(x => x.Directory);
+    record Keyed<T>(string Directory, T Value);
+    readonly ReactiveKeyedSet<string, Keyed<ChatParameters>> chatParamsNullSessions = new(x => x.Directory);
+    readonly ReactiveKeyedSet<string, Keyed<ChatboxModel>> chatBoxNullSessions = new(x => x.Directory);
     readonly ReactiveKeyedSet<SessionId, SessionHead> sessions = new(x => x.Id);
     readonly ReactiveSet<string> directoriesWithoutSession = [];
     readonly ReactiveKeyedSet<SessionId, ChatboxModel> chatboxes = new(x => x.SessionId) { RerunReadFromKey = false };
@@ -38,7 +40,7 @@ partial class SessionsSource
             chatboxes.Add(cb = new(Opencode, Toasts, this, Dispatcher, sessId));
         return cb;
     }
-    public ChatParameters GetActiveChatParams()
+    private ChatParameters GetActiveChatParams()
     {
         if (ActiveSessionId is not null)
         {
@@ -46,10 +48,25 @@ partial class SessionsSource
         }
         var directory = ActiveSessionDirectory;
         if (chatParamsNullSessions.TryGetValue(directory, out var kv))
-            return kv.ChatParams;
+            return kv.Value;
         var chatParams = new ChatParameters();
         chatParamsNullSessions.Add(new(directory, chatParams));
         return chatParams;
+    }
+    private ChatboxModel GetActiveChatbox()
+    {
+        if (ActiveSessionId is {} sessId)
+        {
+            if (Chatbox(sessId) is not {} cb)
+                chatboxes.Add(cb = new(Opencode, Toasts, this, Dispatcher, sessId));
+            return cb;
+        }
+        var directory = ActiveSessionDirectory;
+        if (chatBoxNullSessions.TryGetValue(directory, out var kv))
+            return kv.Value;
+        var chatbox = new ChatboxModel(Opencode, Toasts, this, Dispatcher, null);
+        chatBoxNullSessions.Add(new(directory, chatbox));
+        return chatbox;
     }
 
     [QuickMarkupConstructor]
@@ -151,6 +168,7 @@ partial class SessionsSource
         if (assistent.Finish is not null)
         {
             var meetsContinueCriteria = outcome is not ChatOutcome.Interrupted;
+            var meetsAutoContinueCriteria = meetsContinueCriteria;
 
             if (meetsContinueCriteria)
             {
@@ -162,15 +180,16 @@ partial class SessionsSource
                         var lastPart = parts[^1];
                         // Ended on thinking — auto-continue to get the actual response.
                         meetsContinueCriteria = lastPart is ReasoningPart;
+                        meetsAutoContinueCriteria = meetsContinueCriteria && SettingsStore.AutoContinueOnThinking;
                     }
                 }
                 catch
                 {
-                    // Best-effort: if the fetch fails, fall back to no auto-continue.
+                    // Best-effort: if the fetch fails, fall back to no (auto-)continue.
                     meetsContinueCriteria = false;
+                    meetsAutoContinueCriteria = false;
                 }
             }
-            var meetsAutoContinueCriteria = meetsContinueCriteria;
 
             if (!(Chatbox(sessId)?.TurnStopAction(meetsContinueCriteria, meetsAutoContinueCriteria) ?? false))
             {
@@ -188,7 +207,7 @@ partial class SessionsSource
     {
         UpsertSession(properties.Info);
     }
-    SessionHead UpsertSession(Integration.SessionInfo sessInfo)
+    SessionHead UpsertSession(SessionInfo sessInfo)
     {
         var sessId = new SessionId(sessInfo.Id);
 

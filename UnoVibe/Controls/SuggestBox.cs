@@ -401,4 +401,5 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         if (SubmitRequested is { } handler)
             _ = handler(this, text);
     }
+    public void PasteFromClipboard() => input.PasteFromClipboard();
 }
