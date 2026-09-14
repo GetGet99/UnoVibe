@@ -2,7 +2,7 @@ namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
     using QuickMarkup.WinUI;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     bool Expanded = false;
     bool Hovering = false;
     <setup>
@@ -13,7 +13,7 @@ namespace UnoVibe.Controls.ToolViews;
             <StackPanel Orientation=Horizontal Spacing=8>
                 <ToolBusyIndicator Part=`Part` />
                 <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 Foreground=`Hovering ? theme.PrimaryText : theme.SecondaryText` VerticalAlignment=Center />
-                <TextBlock Text=`ToolViewShared.EditTitle(Part)` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                <TextBlock Text=`Part.DisplayName` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>
         </Button>
         if (`Expanded`)

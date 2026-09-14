@@ -2,14 +2,14 @@ namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
     using QuickMarkup.WinUI;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     bool InputExpanded = false;
     bool OutputExpanded = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <ToolViewTitle Part=`Part` Text=`ToolViewShared.Generic(Part)` />
+        <ToolViewTitle Part=`Part` Text=`Part.DisplayName` />
         if (`Part.ToolInput.Length > 0`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>

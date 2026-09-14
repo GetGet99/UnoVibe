@@ -145,43 +145,6 @@ public sealed class PatchPartItem : ChatPartItem
     public override string Type => "patch";
     public required string Hash { get; set; }
     public List<string> Files { get; set; } = [];
-
-    public List<PatchFileItem> ParseFiles()
-    {
-        var list = new List<PatchFileItem>();
-        foreach (var fileJson in Files)
-        {
-            if (string.IsNullOrEmpty(fileJson)) continue;
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(fileJson);
-                var el = doc.RootElement;
-                var file = new PatchFileItem
-                {
-                    Type = GetString(el, "type"),
-                    RelativePath = GetString(el, "relativePath"),
-                    FilePath = GetString(el, "filePath"),
-                    Patch = GetString(el, "patch"),
-                    MovePath = GetString(el, "movePath"),
-                    Additions = GetInt(el, "additions"),
-                    Deletions = GetInt(el, "deletions"),
-                };
-                if (file.Type.Length > 0 && file.RelativePath.Length > 0) list.Add(file);
-            }
-            catch (System.Text.Json.JsonException) { }
-        }
-        return list;
-
-        static string GetString(System.Text.Json.JsonElement el, string name) =>
-            el.ValueKind == System.Text.Json.JsonValueKind.Object && el.TryGetProperty(name, out var prop)
-                ? prop.GetString() ?? ""
-                : "";
-
-        static int GetInt(System.Text.Json.JsonElement el, string name) =>
-            el.ValueKind == System.Text.Json.JsonValueKind.Object && el.TryGetProperty(name, out var prop)
-                ? prop.ValueKind == System.Text.Json.JsonValueKind.Number && prop.TryGetInt32(out var value) ? value : 0
-                : 0;
-    }
 }
 
 public sealed class AgentPartItem : ChatPartItem
