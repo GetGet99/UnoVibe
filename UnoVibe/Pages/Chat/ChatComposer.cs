@@ -19,7 +19,6 @@ namespace UnoVibe.Pages.Chat;
     inject bool IsCompact;
     inject ChatPage ChatP;
     inject bool SettingsOpen;
-    inject SessionId? ActiveSessionId;
     inject SessionsStateProvider Sessions;
     inject `UnoVibe.Integration.OpencodeClient` Opencode;
     inject ToastsProvider Toasts;
@@ -374,7 +373,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 await ChatP.RedoLastAsync();
                 break;
             case "rename":
-                if (ActiveSessionId is null)
+                if (Sessions.ActiveSessionId is null)
                     Toasts.ShowWarning("There is no conversation to rename yet.", "/rename");
                 else
                     UIs.BeginRenameAndFocus();

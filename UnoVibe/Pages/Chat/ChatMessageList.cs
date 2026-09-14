@@ -129,8 +129,8 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     [QuickMarkupConstructor]
     private void Ctor()
     {
-        UIs.ScrollChatToBottomRequested += scrollHost.ForceScrollToBottom;
         Init();
+        UIs.ScrollChatToBottomRequested += scrollHost.ForceScrollToBottom;
 
         // Scrolling keyed off the message panel's laid-out size: SizeChanged fires after the
         // frame's layout pass, so ScrollableHeight reflects the freshly-rendered content

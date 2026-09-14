@@ -68,13 +68,14 @@ public partial class McpStatusView : IQuickMarkupComponent
     [QuickMarkupConstructor]
     private void Ctor()
     {
-        Init();
+        var dispatcher = DispatcherQueue.GetForCurrentThread();
         Sessions.ActiveSessionDirectoryComp.Watch(directory =>
         {
-            if (directory == McpService.Directory) return;
+            if (directory == McpService?.Directory) return;
             McpService?.Dispose();
-            McpService = new(Opencode, Events, Toasts, MarkupNode.DispatcherQueue, directory);
+            McpService = new(Opencode, Events, Toasts, dispatcher, directory);
         }, immediete: true);
+        Init();
         // The /mcps built-in command (fired from the chat composer) reveals this section.
         UIs.McpSectionRequested += () => _ = RevealMcpSectionAsync();
     }

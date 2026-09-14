@@ -22,7 +22,7 @@ public class EventsProvider : IDisposable
     {
         if (registered.ContainsKey(directory)) return;
         registered[directory] = [];
-        _ = Task.Run(() => client.ReadEventAsync(channel.Writer, cts.Token));
+        _ = Task.Run(() => client.ReadEventAsync(channel.Writer, cts.Token, directory));
         pumpTask ??= Task.Run(() => PumpAsync());
     }
 

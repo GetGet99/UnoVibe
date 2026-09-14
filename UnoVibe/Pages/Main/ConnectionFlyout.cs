@@ -46,10 +46,10 @@ namespace UnoVibe.Pages.Main;
             </>>
                 <TextBlock Text="Password" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                 <TextBlock Grid.Column=1 Text=`ShowPassword ? Connection.Password : MaskPassword(Connection.Password)` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`ShowPassword ? Connection.Password : "Hidden — click the eye to reveal"` />
-                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`Connection.Password.Length > 0 ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip=`ShowPassword ? "Hide password" : "Show password"` @Click+=`ShowPassword = !ShowPassword`>
+                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`!string.IsNullOrEmpty(Connection.Password) ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip=`ShowPassword ? "Hide password" : "Show password"` @Click+=`ShowPassword = !ShowPassword`>
                     <AppSymbolIcon Symbol=View FontSize=11 />
                 </Button>
-                <Button Grid.Column=3 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`Connection.Password.Length > 0 ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip="Copy password" @Click+=`CopyToClipboard("Password", Connection.Password)`>
+                <Button Grid.Column=3 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`!string.IsNullOrEmpty(Connection.Password) ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip="Copy password" @Click+=`CopyToClipboard("Password", Connection.Password)`>
                     <AppSymbolIcon Symbol=Copy FontSize=11 />
                 </Button>
             </Grid>
@@ -63,8 +63,8 @@ public partial class ConnectionFlyout : IQuickMarkupComponent<Flyout>
     /// Renders the connection password while hidden: a fixed-width bullet mask, or "None"
     /// when the server has no password. The real value is never shown by default.
     /// </summary>
-    private static string MaskPassword(string password) =>
-        password.Length == 0 ? "None" : "••••••••";
+    private static string MaskPassword(string? password) =>
+        string.IsNullOrEmpty(password) ? "None" : "••••••••";
 
     /// <summary>Copies a connection value to the system clipboard and confirms with a toast.</summary>
     private void CopyToClipboard(string label, string text)
