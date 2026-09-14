@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 
 namespace UnoVibe.States;
@@ -402,14 +403,21 @@ partial class ChatMessagesState : IDisposable
         if (e.SessionId != SessionId.Id) return;
         if (e.Tool is null) return;
         if (!_messagesById.TryGetValue(e.Tool.MessageId, out var message)) return;
-        var part = message.Parts.FirstOrDefault(p => p.CallId == e.Tool.CallId);
+        var part = message.Parts.OfType<ToolCallPartItem>().FirstOrDefault(p => p.CallId == e.Tool.CallId);
         if (part is null) return;
 
         part.QuestionRequestId = e.Id;
         if (e.Questions is { Count: > 0 })
         {
-            part.Questions = e.Questions;
-            MessageJsonHelper.PopulateQuestionForm(part, e.Questions);
+            part.Questions = e.Questions.Select(q => new QuestionInfo
+            {
+                Question = q.Question,
+                Header = q.Header,
+                Options = q.Options.Select(o => new QuestionOption { Label = o.Label, Description = o.Description }).ToList(),
+                Multiple = q.Multiple ?? false,
+                Custom = q.Custom ?? false,
+            }).ToList();
+            MessageJsonHelper.PopulateQuestionForm(part, part.Questions);
         }
     }
 
@@ -465,8 +473,15 @@ partial class ChatMessagesState : IDisposable
                 part.QuestionRequestId = question.Id;
                 if (question.Questions is { Count: > 0 })
                 {
-                    part.Questions = question.Questions;
-                    MessageJsonHelper.PopulateQuestionForm(part, question.Questions);
+                    part.Questions = question.Questions.Select(q => new QuestionInfo
+                    {
+                        Question = q.Question,
+                        Header = q.Header,
+                        Options = q.Options.Select(o => new QuestionOption { Label = o.Label, Description = o.Description }).ToList(),
+                        Multiple = q.Multiple,
+                        Custom = q.Custom,
+                    }).ToList();
+                    MessageJsonHelper.PopulateQuestionForm(part, part.Questions);
                 }
             }
         }

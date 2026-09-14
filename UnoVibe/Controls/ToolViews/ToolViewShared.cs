@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Controls.ToolViews;
 
@@ -110,7 +111,7 @@ public static class ToolViewShared
     public static string TodoTitle(ToolCallPartItem p) =>
         p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Writing todos...";
 
-    public static string TodoLine(TodoItem todo)
+    public static string TodoLine(TodoInfo todo)
     {
         var mark = todo.Status switch
         {

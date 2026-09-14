@@ -18,17 +18,17 @@ static class WindowsHelper
     /// Skia Windows target still falls back to Uno's classic <c>FolderPicker</c>, where the start
     /// path is not controlled.
     /// </summary>
-    public static async Task<string?> PickFolderAsync(Window window, string startPath)
+    public static async Task<string?> PickFolderAsync(Window window, string? startPath)
     {
 #if WASDK
         var picker = new Microsoft.Windows.Storage.Pickers.FolderPicker(window.AppWindow.Id);
-        if (startPath.Length > 0)
+        if (startPath is not null)
             picker.SuggestedStartFolder = startPath;
 #elif DESKTOP_LINUX || (DESKTOP_MACOS && false) // MacOS currently fails, so I'd like to do this instead.
         // `FolderPicker` / `PickFolderResult` resolve to the platform polyfill registered in
         // UnoVibe/Polyfills/Linux (or MacOS) — see AGENTS.md "Polyfills".
         var picker = new FolderPicker(window);
-        if (startPath.Length > 0)
+        if (startPath is not null)
             picker.SuggestedStartFolder = startPath;
 #else
         var picker = new Windows.Storage.Pickers.FolderPicker();

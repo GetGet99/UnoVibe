@@ -173,22 +173,19 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
 
         Connecting = true;
         Status = $"Connecting to {clean}...";
-        var store = Controller.Store;
-        store.Configure(clean, password);
-        store.DisplayLabel = clean;
-        await store.ConnectAsync();
+        var connection = await OpencodeConnection.FromAsync(url, username: null, password);
         Connecting = false;
 
-        if (store.ConnectionStatus == "Connected")
+        if (connection.ConnectionStatus == "Connected")
         {
             // Never persist the password itself — only record that the server needs one,
             // so a later click on the recent entry can prompt for it.
             RecentConnectionsStore.UpsertServer(clean, password is { Length: > 0 });
-            Controller.ShowMain();
+            Controller.ShowMain(connection);
         }
         else
         {
-            Status = store.ConnectionStatus;
+            Status = connection.ConnectionStatus;
         }
     }
 
@@ -221,14 +218,14 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
     {
         try
         {
-            var path = await WindowsHelper.PickFolderAsync(Controller.Window, Controller.Store.ServerDirectory);
+            var path = await WindowsHelper.PickFolderAsync(Controller.Window, startPath: null);
             if (path is null) return;
             var (ok, password) = ResolveUiFolderPassword();
             if (!ok) return;
-            if (await StartServeCoreAsync(path, password))
+            if (await StartServeCoreAsync(path, password) is {} conn)
             {
                 RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, SaveFolderPassword, CustomPassword);
-                Controller.ShowMain();
+                Controller.ShowMain(conn);
             }
         }
         catch (Exception ex)
@@ -243,7 +240,7 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
     /// non-empty → use it. On success the folder is recorded in the recent list.
     /// Returns true when connected.
     /// </summary>
-    private async Task<bool> StartServeCoreAsync(string folder, string? password)
+    private async Task<OpencodeConnection?> StartServeCoreAsync(string folder, string? password)
     {
         Connecting = true;
         Status = "Starting opencode serve...";
@@ -255,24 +252,21 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
             serve.Dispose();
             Status = result;
             Connecting = false;
-            return false;
+            return null;
         }
 
         Status = $"Server ready at {result}";
-        var store = Controller.Store;
-        store.AttachServeProcess(serve);
-        store.Configure(result, serve.Password);
-        await store.ConnectAsync();
+        var connection = await OpencodeConnection.FromAsync(serve);
         Connecting = false;
 
-        if (store.ConnectionStatus != "Connected")
+        if (connection.ConnectionStatus != "Connected")
         {
-            Status = store.ConnectionStatus;
-            return false;
+            Status = connection.ConnectionStatus;
+            return null;
         }
 
         RecentConnectionsStore.UpsertFolder(folder);
-        return true;
+        return connection;
     }
 
     /// <summary>
@@ -285,11 +279,11 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
         switch (startup.Kind)
         {
             case LaunchKind.Folder:
-                if (await StartServeCoreAsync(startup.Value, startup.ResolveFolderPassword()))
-                    Controller.ShowMain();
+                if (await StartServeCoreAsync(startup.StartParam, startup.Password) is {} conn)
+                    Controller.ShowMain(conn);
                 break;
             case LaunchKind.Server:
-                await ConnectCoreAsync(startup.Value, startup.ResolveServerPassword());
+                await ConnectCoreAsync(startup.StartParam, startup.Password);
                 break;
         }
     }
@@ -304,10 +298,10 @@ public partial class ConnectPage : IQuickMarkupComponent<Page>
         {
             var (ok, password) = ResolveUiFolderPassword();
             if (!ok) return;
-            if (await StartServeCoreAsync(item.Detail, password))
+            if (await StartServeCoreAsync(item.Detail, password) is {} conn)
             {
                 RecentConnectionsStore.SaveSecurity(UseGeneratedPassword, SaveFolderPassword, CustomPassword);
-                Controller.ShowMain();
+                Controller.ShowMain(conn);
             }
         }
         else
