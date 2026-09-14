@@ -1,8 +1,5 @@
-using UnoVibe.Helpers;
-using UnoVibe.Integration;
+using System.Diagnostics.CodeAnalysis;
 using UnoVibe.Integration.Events;
-using UnoVibe.Models;
-using UnoVibe.Providers;
 
 namespace UnoVibe.States;
 
@@ -43,6 +40,7 @@ partial class ChatMessagesState : IDisposable
     SessionsStateProvider Sessions;
 
     [QuickMarkupConstructor]
+    [MemberNotNull(nameof(Opencode), nameof(Toasts), nameof(Events), nameof(Models), nameof(Sessions), nameof(SessionId))]
     void Ctor(OpencodeClient opencode, ToastsProvider toasts,
               EventsProvider events, ModelsProvider models,
               SessionsStateProvider sessions, SessionId sessionId)

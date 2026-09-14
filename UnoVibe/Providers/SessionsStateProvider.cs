@@ -6,7 +6,7 @@ namespace UnoVibe.Providers;
 [QuickMarkup("""
     string? NewSessionDirectory;
     SessionId? ActiveSessionId;
-    string ActiveSessionDirectory => `(ActiveSessionId is null ? NewSessionDirectory : Head(ActiveSessionId)?.Directory) ?? connection.ServerDirectory`;
+    string ActiveSessionDirectory => `(ActiveSessionId is null ? NewSessionDirectory : Head(ActiveSessionId)?.Directory) ?? Connection.ServerDirectory`;
     ChatParameters ActiveChatParams => `GetActiveChatParams()`;
     SessionHead? ActiveHead => `Head(ActiveSessionId)`;
     ChatboxState ActiveChatbox => `GetActiveChatbox()`;

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace UnoVibe.Controls.ToolViews;
 
@@ -32,31 +31,6 @@ public static class ToolViewShared
     {
         if (string.IsNullOrEmpty(toolName)) return null;
         return ToolDisplayNames.TryGetValue(toolName, out var label) ? label : toolName;
-    }
-
-    public static (string Title, string Body) ReasoningSummary(PartItem p)
-    {
-        var content = p.Text.Replace("[REDACTED]", "").Trim();
-        if (content.Length == 0) return ("", "");
-        var match = Regex.Match(content, @"^\*\*([^*\n]+)\*\*(?:\r?\n\r?\n|$)");
-        if (!match.Success) return ("", content);
-        return (match.Groups[1].Value.Trim(), content.Substring(match.Length).Trim());
-    }
-
-    public static string ReasoningLabel(PartItem p)
-    {
-        var (title, _) = ReasoningSummary(p);
-        return title.Length > 0 ? "Thinking: " + title : "Thinking";
-    }
-
-    public static string ThoughtLabel(PartItem p)
-    {
-        var (title, _) = ReasoningSummary(p);
-        var text = "Thought";
-        if (title.Length > 0) text += ": " + title;
-        var duration = FormatDuration(p.Time.DurationMs);
-        if (duration.Length > 0) text += " · " + duration;
-        return text;
     }
 
     public static string FormatDuration(long ms)
