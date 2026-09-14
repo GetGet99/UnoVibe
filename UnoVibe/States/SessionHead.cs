@@ -24,6 +24,7 @@ namespace UnoVibe.States;
     """)]
 public partial class SessionHead
 {
+    public long Created { get; private set; }
     public SessionId Id { get; private set; }
     /// <summary>ID of the parent session when this is a subagent session (spawned by a <c>task</c> tool call), else "".</summary>
     public SessionId? ParentId { get; set; }
@@ -45,12 +46,13 @@ public partial class SessionHead
     }
 
     [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Id), nameof(Directory))]
-    void Ctor(SessionId id, string directory)
+    [MemberNotNull(nameof(Id), nameof(Directory), nameof(Created))]
+    void Ctor(SessionId id, string directory, long created)
     {
         Id = id;
         Directory = directory;
-        Init(id, directory);
+        Created = created;
+        Init(id, directory, created);
     }
     // QuickMarkup Computed<string> (backing field TimeLabelComp): reads the reactive `Updated`
     // field, so it caches and re-evaluates automatically whenever Updated changes — the sidebar's
@@ -69,7 +71,7 @@ public partial class SessionHead
 
     public static SessionHead From(Integration.SessionInfo theirs)
     {
-        SessionHead sess = new(new(theirs.Id), theirs.Directory)
+        SessionHead sess = new(new(theirs.Id), theirs.Directory, theirs.Time.Created)
         {
             Title = theirs.Title,
             ChatParams = {

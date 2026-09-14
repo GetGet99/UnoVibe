@@ -3,6 +3,7 @@ namespace UnoVibe.Pages.Chat;
 [QuickMarkup("""
     using UnoVibe.Controls;
     using UnoVibe.States;
+    using Microsoft.UI;
     inject ChatMessagesState? ChatState;
     inject bool IsCompact;
     <setup>

@@ -10,6 +10,8 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.WinUI;
     inject bool IsCompact;
     inject ChatMessagesState? ChatState;
+    inject SessionsStateProvider Sessions;
+    `List<SessionHead>` Subagents => `Sessions.SubagentsHeadOf(ChatState?.SessionId).ToList()`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -23,16 +25,16 @@ namespace UnoVibe.Pages.Chat;
                         <TextBlock Text=`FormatStatusMessage()` FontSize=12 Foreground=`theme.SystemCaution` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
                     </StackPanel>
                 </Border>
-            if (`StoreToUpdate.SubagentCount > 0`)
+            if (`Subagents.Count > 0`)
             {
                 <StackPanel Spacing=6>
-                    <TextBlock Text=`$"Subagents ({StoreToUpdate.SubagentCount})"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
+                    <TextBlock Text=`$"Subagents ({Subagents.Count})"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
                     <ScrollViewer HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
                         <StackPanel Orientation=Horizontal Spacing=6>
-                            foreach (var s in `StoreToUpdate.ActiveSubagents`; `s.Head.Id`)
+                            foreach (var s in `Subagents`; `s.Head.Id`)
                             {
                                 <Button Padding=`new Thickness(10,  6, 10,  6)` CornerRadius=6 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1
-                                        @Click+=`await StoreToUpdate.SwitchSessionAsync(s.Id)`
+                                        @Click+=`Sessions.ActiveSessionId = s.Id`
                                         ToolTipService.ToolTip=`s.Head.Title`>
                                     <StackPanel Orientation=Horizontal Spacing=6>
                                         <SessionIndicator State=`s.Head.State` />

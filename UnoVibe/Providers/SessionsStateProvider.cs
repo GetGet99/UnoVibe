@@ -266,4 +266,10 @@ public partial class SessionsStateProvider
             .GroupBy(s => s.Directory)
             .Select(g => (g.Key, GetBranch(g.Key), g.ToList()))
         );
+
+    public IEnumerable<SessionHead> SubagentsHeadOf(SessionId? sessId) =>
+        sessId is null ? [] :
+        sessions
+        .Where(s => s.ParentId == sessId)
+        .OrderByDescending(s => s.Created).ThenByDescending(s => s.Id);
 }
