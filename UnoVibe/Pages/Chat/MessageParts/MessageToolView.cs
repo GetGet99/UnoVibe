@@ -1,4 +1,4 @@
-namespace UnoVibe.Pages.Chat;
+namespace UnoVibe.Pages.Chat.MessageParts;
 
 [QuickMarkup("""
     using UnoVibe.Controls.ToolViews;
@@ -38,6 +38,4 @@ namespace UnoVibe.Pages.Chat;
             <ToolViewGeneric Part=`Part` />
     </root>
     """)]
-partial class MessageToolView : IQuickMarkupComponent {
-
-}
+partial class MessageToolView : IQuickMarkupComponent;

@@ -1,4 +1,4 @@
-namespace UnoVibe.Pages.Chat;
+namespace UnoVibe.Pages.Chat.MessageParts;
 
 [QuickMarkup("""
     using UnoVibe.Controls.ToolViews;
@@ -6,6 +6,7 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.Infra.Collections;
     using Windows.UI.Text;
     required ErrorPartItem Part;
+    required MessageItem Message;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
