@@ -4,8 +4,10 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Controls;
     using UnoVibe.States;
     inject ChatMessagesState? ChatState;
+    inject bool IsCompact;
     <setup>
         var theme = ThemeBrushes.Global;
+        var transparent = new SolidColorBrush(Colors.Transparent);
     </setup>
     <Button
         Background=`transparent`

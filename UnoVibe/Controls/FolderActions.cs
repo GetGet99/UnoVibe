@@ -11,7 +11,7 @@ namespace UnoVibe.Controls;
     using Microsoft.UI;
     inject SessionsStateProvider Sessions;
     inject ToastsProvider Toasts;
-    inject? bool IsSidebarView;
+    inject bool IsSidebarView;
     required string Directory;
     bool ShowFileManager = false;
     bool ShowNewSession = true;

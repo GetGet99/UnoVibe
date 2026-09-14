@@ -8,7 +8,7 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Controls;
     using UnoVibe.States;
     using QuickMarkup.WinUI;
-    inject? bool IsCompact;
+    inject bool IsCompact;
     inject ChatMessagesState? ChatState;
     <setup>
         var theme = ThemeBrushes.Global;

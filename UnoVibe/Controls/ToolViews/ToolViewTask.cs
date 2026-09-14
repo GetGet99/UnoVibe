@@ -18,7 +18,7 @@ namespace UnoVibe.Controls.ToolViews;
             Padding=`new Thickness(10,  8, 10,  8)` HorizontalAlignment=Left MaxWidth=680 Margin=`new Thickness(0, 2, 0, 2)`
             IsEnabled=`Part.ToolSessionId.Length > 0`
             ToolTipService.ToolTip=`Part.ToolSessionId.Length > 0 ? "Open the subagent session" : "Waiting for the subagent session…"`
-            @Click+=`Sessions.ActiveSession = new(Part.ToolSessionId)`>
+            @Click+=`Sessions.ActiveSessionId = new(Part.ToolSessionId)`>
         <Grid ColumnSpacing=8 ColumnDefinitions=<>
             <ColumnDefinition Width=Auto />
             <ColumnDefinition />

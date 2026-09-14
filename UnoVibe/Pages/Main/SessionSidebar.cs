@@ -15,8 +15,8 @@ namespace UnoVibe.Pages.Main;
     inject ToastsProvider Toasts;
     inject Window HostWindow;
     inject bool SettingsOpen;
-    inject? bool IsCompact;
-    inject? bool IsSidebarView;
+    inject bool IsCompact;
+    inject bool IsSidebarView;
     inject OpencodeConnection Connection;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -89,7 +89,7 @@ namespace UnoVibe.Pages.Main;
                     <ColumnDefinition Width=Auto />
                     <ColumnDefinition Width=Auto />
                 </>>
-                    <TextBlock Text=`Store.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                    <TextBlock Text=`Connection.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                     <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" @Click+=`OpenFolderAndStartSessionAsync()`>
                         <AppSymbolIcon Symbol=Folder FontSize=11 />
                     </Button>

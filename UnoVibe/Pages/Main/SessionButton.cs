@@ -7,7 +7,7 @@ namespace UnoVibe.Pages.Main;
     using Microsoft.UI;
     required SessionHead Session;
     inject SessionsStateProvider Sessions;
-    inject? bool IsSidebarView;
+    inject bool IsSidebarView;
     <setup>
         var theme = ThemeBrushes.Global;
         var transparent = new SolidColorBrush(Colors.Transparent);

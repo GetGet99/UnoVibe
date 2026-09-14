@@ -16,7 +16,7 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     inject Window HostWindow;
-    inject? bool IsCompact;
+    inject bool IsCompact;
     inject ChatPage ChatP;
     inject bool SettingsOpen;
     inject SessionId? ActiveSessionId;

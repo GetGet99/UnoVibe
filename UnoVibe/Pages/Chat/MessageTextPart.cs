@@ -10,7 +10,7 @@ namespace UnoVibe.Pages.Chat;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Windows.UI.Text;
-    required PartItem Part;
+    required TextPartItem Part;
     MessageItem? Message;
     bool PlainMode = false;
     <setup>
