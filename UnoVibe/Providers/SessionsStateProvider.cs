@@ -258,13 +258,13 @@ public partial class SessionsStateProvider
     string? GetBranch(string directory)
         => Branches.TryGetValue(directory, out var db) ? db.Value : null;
 
-    public IEnumerable<(string Directory, string? Branch, List<SessionHead> Sessions)> SessionSidebar =>
-        directoriesWithoutSession.Select(x => (x, GetBranch(x), (List<SessionHead>)[])).Concat(
+    public IEnumerable<SessionGroupModel> SessionSidebar =>
+        directoriesWithoutSession.Select(x => new SessionGroupModel(x, GetBranch(x), [])).Concat(
             sessions
             .Where(s => !s.IsSubagent)
             .OrderByDescending(s => s.Updated).ThenByDescending(s => s.Id)
             .GroupBy(s => s.Directory)
-            .Select(g => (g.Key, GetBranch(g.Key), g.ToList()))
+            .Select(g => new SessionGroupModel(g.Key, GetBranch(g.Key), g.ToList()))
         );
 
     public IEnumerable<SessionHead> SubagentsHeadOf(SessionId? sessId) =>
@@ -273,3 +273,4 @@ public partial class SessionsStateProvider
         .Where(s => s.ParentId == sessId)
         .OrderByDescending(s => s.Created).ThenByDescending(s => s.Id);
 }
+public record SessionGroupModel(string Directory, string? Branch, List<SessionHead> Sessions);

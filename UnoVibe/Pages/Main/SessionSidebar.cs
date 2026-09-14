@@ -43,38 +43,7 @@ namespace UnoVibe.Pages.Main;
                     }
                     foreach (var group in `Sessions.SessionSidebar`; `group.Directory`)
                     {
-                        <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
-                            <Grid ColumnDefinitions=<>
-                                <ColumnDefinition />
-                                <ColumnDefinition Width=Auto />
-                            </> ColumnSpacing=4>
-                                <StackPanel Orientation=Horizontal Spacing=4>
-                                    <TextBlock Text=`DisplayPath(group.Directory)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                    if (`group.Branch is not null`)
-                                    {
-                                        <TextBlock Text=`$"⎇ {group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                                    }
-                                </StackPanel>
-                                // TODO: When attached property support falling back to element properly, do that instead of wrapping in Grid.
-                                <Grid Grid.Column=1 VerticalAlignment=Center>
-                                    <FolderActions Directory=`group.Directory` />
-                                </Grid>
-                            </Grid>
-                            if (`group.Sessions.Count == 0`)
-                            {
-                                <TextBlock Text="No sessions yet" FontSize=11 Foreground=`theme.TertiaryText` Margin=`new Thickness(0, 6, 0, 0)` />
-                            }
-                            foreach (var s in `ShowMoreDirectories.Contains(group.Directory) ? group.Sessions : group.Sessions.Take(MaxVisibleSessions)`; `s.Head.Id`)
-                            {
-                                <SessionButton Session=`s.Head` />
-                            }
-                            if (`group.Sessions.Count > MaxVisibleSessions`)
-                            {
-                                <Button Margin=`new Thickness(0, 4, 0, 0)` Padding=`new Thickness(8, 4, 8, 4)` HorizontalAlignment=Left Background=`transparent` BorderThickness=0 @Click+=`OnToggleShowMore(group.Directory)`>
-                                    <TextBlock Text=`group.IsExpanded ? "Show less" : $"Show more ({group.Sessions.Count - MaxVisibleSessions})"` FontSize=11 Foreground=`theme.SecondaryText` />
-                                </Button>
-                            }
-                        </StackPanel>
+                        <SessionGroup Group=`group` />
                     }
                 </StackPanel>
             </ScrollViewer>
@@ -118,16 +87,6 @@ public partial class SessionSidebar : IQuickMarkupComponent
         new(0, 0, 1, 0)
 #endif
         ;
-    /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
-    private const int MaxVisibleSessions = 5;
-
-    private void OnToggleShowMore(string directory)
-    {
-        // if unable to remove, then add it!
-        // yes this is toggle logic
-        if (!ShowMoreDirectories.Remove(directory))
-            ShowMoreDirectories.Add(directory);
-    }
 
     /// <summary>
     /// Opens a folder picker and starts a new session in the picked folder. The session is
@@ -150,9 +109,4 @@ public partial class SessionSidebar : IQuickMarkupComponent
             Toasts.ShowError(ex.Message, "Folder picker failed");
         }
     }
-
-    /// <summary>
-    /// Path relative to the connected server's directory via <see cref="PathDisplayHelper.Relative"/>.
-    /// </summary>
-    private string DisplayPath(string fullPath) => PathDisplayHelper.Relative(fullPath, Connection.ServerDirectory);
 }

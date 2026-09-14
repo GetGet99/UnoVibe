@@ -15,6 +15,7 @@ namespace UnoVibe.Pages.Connect;
 /// panels stay bidirectionally in sync with the page.
 /// </summary>
 [QuickMarkup("""
+    using UnoVibe.Services;
     using QuickMarkup.WinUI;
     provide bool Connecting = false;
     provide bool ShowConnectForm = false;

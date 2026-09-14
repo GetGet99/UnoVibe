@@ -31,14 +31,14 @@ namespace UnoVibe.Pages.Chat;
                     <TextBlock Text=`$"Subagents ({Subagents.Count})"` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` />
                     <ScrollViewer HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
                         <StackPanel Orientation=Horizontal Spacing=6>
-                            foreach (var s in `Subagents`; `s.Head.Id`)
+                            foreach (var s in `Subagents`; `s.Id`)
                             {
                                 <Button Padding=`new Thickness(10,  6, 10,  6)` CornerRadius=6 Background=`theme.CardBackground` BorderBrush=`theme.CardStroke` BorderThickness=1
                                         @Click+=`Sessions.ActiveSessionId = s.Id`
-                                        ToolTipService.ToolTip=`s.Head.Title`>
+                                        ToolTipService.ToolTip=`s.Title`>
                                     <StackPanel Orientation=Horizontal Spacing=6>
-                                        <SessionIndicator State=`s.Head.State` />
-                                        <TextBlock Text=`s.Head.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
+                                        <SessionIndicator State=`s.State` />
+                                        <TextBlock Text=`s.Title` FontSize=12 TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                                     </StackPanel>
                                 </Button>
                             }
