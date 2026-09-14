@@ -15,7 +15,7 @@ namespace UnoVibe.Pages.Chat;
         if (`Part.Type == "text" && !((TextPartItem)Part).Synthetic`)
         {
             if (`((TextPartItem)Part).Text.Trim().Length > 0`)
-                <MessageTextPart Part=`(TextPartItem)Part` Message=`Message` RevertRequested+=`OnPartRevertRequested` ForkRequested+=`OnPartForkRequested` />
+                <MessageTextPart Part=`(TextPartItem)Part` Message=`Message` RevertRequested+=`x => OnPartRevertRequested?.Invoke(x)` ForkRequested+=`x => OnPartForkRequested?.Invoke(x)` />
         }
         else if (`Part.Type == "aborted"`)
             <MessageAbortedView />
@@ -37,4 +37,8 @@ namespace UnoVibe.Pages.Chat;
             <TextBlock Text=`$"[{Part.Type}]"` FontSize=11 Foreground=`theme.TertiaryText` IsTextSelectionEnabled=true />
     </root>
     """)]
-partial class MessagePartView : IQuickMarkupFragmentComponent;
+partial class MessagePartView : IQuickMarkupFragmentComponent
+{
+    public event MessageTextPart.RevertHandler? OnPartRevertRequested;
+    public event MessageTextPart.ForkHandler? OnPartForkRequested;
+}

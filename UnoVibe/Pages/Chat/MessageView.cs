@@ -22,7 +22,7 @@ namespace UnoVibe.Pages.Chat;
                             HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left` />
             <StackPanel Spacing=6>
                 foreach (var p in `Message.Parts`)
-                    <MessagePartView Part=`p` Message=`Message` />
+                    <MessagePartView Part=`p` Message=`Message` OnPartRevertRequested+=`OnPartRevertRequested` OnPartForkRequested+=`OnPartForkRequested` />
             </StackPanel>
         </StackPanel>
     </Grid>

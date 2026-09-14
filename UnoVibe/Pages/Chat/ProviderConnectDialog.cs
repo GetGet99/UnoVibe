@@ -232,10 +232,9 @@ public partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog
     /// <summary>Raised after a credential is stored (and the model options refreshed) — hide and close the dialog.</summary>
     public event Action? Completed;
 
-    OpencodeClient Client { get; set; }
-
-    ToastsProvider Toasts { get; set; }
-    ModelsProvider Models { get; set; }
+    OpencodeClient Client { get; set; } = null!;
+    ToastsProvider Toasts { get; set; } = null!;
+    ModelsProvider Models { get; set; } = null!;
 
     // Current method's prompt definition and the collected answers.
     private AuthPrompt[] _prompts = Array.Empty<AuthPrompt>();
