@@ -30,10 +30,10 @@ namespace UnoVibe.Pages.Chat;
     // command entry; Esc, the ✕ button, or submitting leaves it again. Submit runs
     // POST /session/{id}/shell instead of a prompt.
     bool ShellMode = false;
-    `IReadOnlyList<string>` SelectionVarients => `
+    `IReadOnlyList<string>` SelectionVariants => `
         Sessions.ActiveChatParams.Model is not {} model
         ? EmptyList
-        : Models.ModelOptions[Sessions.ActiveChatParams.Model].Varients`;
+        : Models.ModelOptions[Sessions.ActiveChatParams.Model].Variants`;
     bool IsBusy => `Sessions.ActiveHead?.IsBusy ?? false`;
     private bool IsEnabled = true; // Should be disabled if there is an active permission prompt
     ChatboxState Chatbox => `Sessions.ActiveChatbox`;
@@ -47,7 +47,7 @@ namespace UnoVibe.Pages.Chat;
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
         </>>
-            if (`Message.Images > 0`)
+            if (`Message.Images.Count > 0`)
                 <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
                     HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
                     <StackPanel Orientation=Horizontal>
@@ -112,9 +112,9 @@ namespace UnoVibe.Pages.Chat;
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
                         variantCombo = <ComboBox
-                            ItemsSource=`SelectionVarients`
+                            ItemsSource=`SelectionVariants`
                             SelectedItem=`Sessions.ActiveChatParams.Variant`
-                            IsEnabled=`SelectionVarients.Count > 0`
+                            IsEnabled=`SelectionVariants.Count > 0`
                             ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value) ?? "Default"` /> }
                             SelectedItem+=>`x => Sessions.ActiveChatParams.Variant = x as string`
                             MinWidth=`IsCompact ? 76 : 90`
@@ -389,7 +389,7 @@ public partial class ChatComposer : IQuickMarkupComponent<Grid>
                 await ChatP.UndoLastAsync();
                 break;
             case "variants":
-                if (SelectionVarients.Count is 0)
+                if (SelectionVariants.Count is 0)
                     Toasts.ShowWarning("The selected model has no reasoning variants.", "No variants");
                 else
                     OpenCombo(variantCombo);

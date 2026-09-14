@@ -29,7 +29,7 @@ namespace UnoVibe.Pages.Main;
                     <StackPanel Orientation=Horizontal Spacing=6>
                         <TextBlock Text=`McpExpanded ? "▼" : "▶"` FontSize=9 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
                         <TextBlock Text="MCP" FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-                        <TextBlock Text=`McpService.Si,,ary` FontSize=10 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
+                        <TextBlock Text=`McpService.Summary` FontSize=10 Foreground=`theme.TertiaryText` VerticalAlignment=Center />
                     </StackPanel>
                 </Button>
                 <Button Grid.Column=1 Padding=`new Thickness(6, 3, 6, 3)` @Click+=`_ = McpService.RefreshMcpStatusAsync()` ToolTipService.ToolTip="Refresh MCP status" Visibility=`McpExpanded ? Visibility.Visible : Visibility.Collapsed`>

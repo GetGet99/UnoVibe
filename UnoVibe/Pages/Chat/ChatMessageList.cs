@@ -42,7 +42,7 @@ namespace UnoVibe.Pages.Chat;
                         // Undo: the server keeps reverted messages until the next prompt, so
                         // hide everything at/after the revert point (the card replaces them).
                         if (`(ChatState?.RevertMessageId ?? "").Length == 0 || StringComparer.Ordinal.Compare(m.Id, ChatState?.RevertMessageId ?? "") < 0`)
-                            <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`if (Sessions.ActiveSessionId is {} id) UIs.ForkAndSwitchSession(id, message)` />
+                            <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` @ForkRequested+=`if (Sessions.ActiveSessionId is {} id) UIs.ForkAndSwitchSession(id, message)` />
                     }
                     if (`(ChatState?.RevertMessageId ?? "").Length > 0`)
                     {

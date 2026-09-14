@@ -23,7 +23,7 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     using Microsoft.UI.Xaml.Controls.Primitives;
-    private Model? SelectedModel => `Sessions.Head(Sessions.ActiveSessionId)?.Model`;
+    private Model? SelectedModel => `Sessions.Head(Sessions.ActiveSessionId)?.ChatParams.Model`;
     private string SelectedModelNameOrDefaultHint => `SelectedModel is not {} model ? "Select model" : Models.ModelOptions[model].Name`;
     public double FontSize = 12;
     inject SessionsStateProvider Sessions;
@@ -156,7 +156,7 @@ public partial class ModelPicker : IQuickMarkupComponent<Grid>
 
     // ── Filtering ────────────────────────────────────────────────────────────────
 
-    private static IEnumerable<ModelOption> FilterModels(ObservableCollection<ModelOption> source, string query)
+    private static IEnumerable<ModelOption> FilterModels(IEnumerable<ModelOption> source, string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return source;
         var q = query.Trim();
