@@ -19,14 +19,12 @@ partial class ChatboxState
     public async Task<bool> TurnStopActionAsync(ChatOutcome outcome, string messageId)
     {
         if (SessionId is not {} sessId) return false;
-        if (outcome is not ChatOutcome.Interrupted)
+        if (outcome is ChatOutcome.Interrupted)
         {
             // interrupt means intentional stop by user
             // so don't do anything else
             return false;
         }
-        if (Head!.IsBusy)
-            return false;
         Lazy<Task<bool>> endedWithReasoning = new(() => HasMessageEndedWithReasoningAsync(messageId));
         var canContinue = outcome is ChatOutcome.Error || await endedWithReasoning.Value;
         var canAutoContinue =

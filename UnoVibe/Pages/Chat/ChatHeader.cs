@@ -90,7 +90,7 @@ namespace UnoVibe.Pages.Chat;
                 <FolderActions Directory=`Sessions.ActiveSessionDirectory` ShowFileManager=true ShowNewSession=false />
                 <Button Padding=`new Thickness(6, 4, 6, 4)` VerticalAlignment=Center
                         ToolTipService.ToolTip="Fork full session"
-                        IsEnabled=`IsSubagent` @Click+=`if (Sessions.ActiveSessionId is {} sessId) UIs.ForkAndSwitchSession(sessId)`>
+                        IsEnabled=`!IsSubagent` @Click+=`if (Sessions.ActiveSessionId is {} sessId) UIs.ForkAndSwitchSession(sessId)`>
                     <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=11 />
                 </Button>
                 <ChatCost />

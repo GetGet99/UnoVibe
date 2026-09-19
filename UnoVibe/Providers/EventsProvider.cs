@@ -70,7 +70,10 @@ public class EventsProvider : IDisposable
         }
     }
     private void UnregisterDelegate(string? directory, string eventType, Delegate handler)
-        => Unregister(directory, eventType, delegateMapping[handler]);
+    {
+        if (delegateMapping.TryGetValue(handler, out var raw))
+            Unregister(directory, eventType, raw);
+    }
     public void Register(string directory) => SubscribeToDirectory(directory);
     public void RegisterMessageUpdated(string? directory, Action<string, MessageUpdatedEvent> handler)
         => Register(directory, EventTypes.MessageUpdated, MakeHandler(handler, AppJsonContext.Default.MessageUpdatedEvent));

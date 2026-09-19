@@ -78,7 +78,6 @@ namespace UnoVibe.Pages.Main;
     """)]
 public partial class SessionSidebar : IQuickMarkupComponent
 {
-    ReactiveSet<string> ShowMoreDirectories = [];
     Thickness SessionSidebarBorder =>
 #if WASDK
         // WASDK title bar have the same mica color as body so would make sense to have top border too
