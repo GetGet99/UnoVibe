@@ -1,5 +1,3 @@
-using UnoVibe.Services;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -18,7 +16,6 @@ namespace UnoVibe.Pages.Chat;
 [QuickMarkup("""
     using Microsoft.UI.Xaml;
     using Microsoft.UI.Xaml.Controls;
-    using UnoVibe.Services;
     using QuickMarkup.WinUI;
     public string Mode = "";
     public bool IsBusy = false;

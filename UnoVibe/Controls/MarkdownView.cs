@@ -1,10 +1,8 @@
-using System.Text;
 using Markdig;
 using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.UI.Xaml.Documents;
-using UnoVibe.Services;
 using Windows.UI.Text;
 using MarkdigBlock = Markdig.Syntax.Block;
 using MarkdigInline = Markdig.Syntax.Inlines.Inline;
@@ -214,7 +212,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         // theme (black-on-dark after a flip). Left unset, Uno's theme walk keeps it current.
         var tb = new TextBlock
         {
-            FontFamily = CodeFonts.Current,
+            FontFamily = CodeFontsHelper.Current,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
@@ -377,7 +375,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
                             BuildInlines(p.Inline, tb.Inlines, default);
                             break;
                         case CodeBlock code:
-                            tb.Inlines.Add(new Run { Text = code.Lines.ToString(), FontFamily = CodeFonts.Current });
+                            tb.Inlines.Add(new Run { Text = code.Lines.ToString(), FontFamily = CodeFontsHelper.Current });
                             break;
                     }
                 }
@@ -445,7 +443,7 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         Child = new TextBlock
         {
             Text = raw,
-            FontFamily = CodeFonts.Current,
+            FontFamily = CodeFontsHelper.Current,
             FontSize = 12,
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,
@@ -551,10 +549,10 @@ public partial class MarkdownView : IQuickMarkupComponent<UIElement>
         if (style.FontSize > 0) run.FontSize = style.FontSize;
         if (style.Code)
         {
-            run.FontFamily = CodeFonts.Current;
+            run.FontFamily = CodeFontsHelper.Current;
             // Secondary accent (hue-shifted from the primary) so snippets read distinct from
             // accent-colored links; falls back to the attention color when no solid accent exists.
-            run.Foreground = AccentPalette.InlineCodeBrush(_theme) ?? _theme.SystemAttention;
+            run.Foreground = AccentPaletteHelper.InlineCodeBrush(_theme) ?? _theme.SystemAttention;
         }
         target.Add(run);
     }

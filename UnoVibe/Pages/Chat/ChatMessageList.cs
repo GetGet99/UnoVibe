@@ -1,6 +1,4 @@
 using System.Collections.Specialized;
-using UnoVibe.Models;
-using UnoVibe.Services;
 
 namespace UnoVibe.Pages.Chat;
 
@@ -10,13 +8,16 @@ namespace UnoVibe.Pages.Chat;
 /// hint, and all stick-to-bottom autoscroll logic.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Services;
-    using UnoVibe.Models;
     using UnoVibe.Controls;
+    using UnoVibe.Helpers;
+    using UnoVibe.States;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
-    inject ChatStore Store;
-    inject ChatPage ChatP;
+    inject UIServiceProvider UIs;
+    inject SessionsStateProvider Sessions;
+    inject OpencodeConnection Connection;
+    inject ChatMessagesState? ChatState;
+    ChatboxState Chatbox => `Sessions.ActiveChatbox`;
     string PermissionStage = "choose";
     string RejectText = "";
     // Mirrors the turn.autocontinue setting for the inline switch shown next to the Continue
@@ -27,30 +28,30 @@ namespace UnoVibe.Pages.Chat;
     </setup>
     <root>
         <Grid>
-            scrollHost = <ScrollViewer>
+            scrollHost = <StickyScrollViewer>
                 messagePanel = <StackPanel Padding=16>
-                    if (`Store.Active.HiddenMessages > 0`)
+                    if (`ChatState?.TruncatedMessagesCount > 0`)
                         <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10,  8, 10,  8)` Margin=`new Thickness(0, 0, 0, 8)`>
-                            <TextBlock Text=`$"History truncated: {Store.Active.HiddenMessages} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
+                            <TextBlock Text=`$"History truncated: {ChatState?.TruncatedMessagesCount} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                         </Border>
                     // Keyed by message id so QuickMarkup reuses MessageView blocks across
                     // collection resets (session switches/rebuilds) instead of recreating
                     // every element; the revert filter below then only toggles visibility.
-                    foreach (var m in `Store.Active.Messages`; `m.Id`)
+                    foreach (var m in `ChatState?.Messages`; `m.Id`)
                     {
                         // Undo: the server keeps reverted messages until the next prompt, so
                         // hide everything at/after the revert point (the card replaces them).
-                        if (`Store.Active.RevertMessageId.Length == 0 || StringComparer.Ordinal.Compare(m.Id, Store.Active.RevertMessageId) < 0`)
+                        if (`(ChatState?.RevertMessageId ?? "").Length == 0 || StringComparer.Ordinal.Compare(m.Id, ChatState?.RevertMessageId ?? "") < 0`)
                             <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`OnMessageForkRequested` />
                     }
-                    if (`Store.Active.RevertMessageId.Length > 0`)
+                    if (`(ChatState?.RevertMessageId ?? "").Length > 0`)
                     {
                         <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                 BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                             <StackPanel Spacing=6>
                                 <StackPanel Orientation=Horizontal Spacing=8>
                                     <AppSymbolIcon Symbol=Undo FontSize=14 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
-                                    <TextBlock Text=`Store.Active.RevertCountLabel` FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
+                                    <TextBlock Text=`ChatState?.RevertCount == 1 ? "1 message reverted" : $"{ChatState?.RevertCount} messages reverted"` FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
                                 </StackPanel>
                                 <StackPanel Orientation=Horizontal Spacing=8>
                                     <Button Content="Redo" @Click+=`await RedoLastMessageAsync()` CornerRadius=6 Padding=`new Thickness(10,  4, 10,  4)` />
@@ -59,20 +60,12 @@ namespace UnoVibe.Pages.Chat;
                             </StackPanel>
                         </Border>
                     }
-                    if (`Store.Active.IsRetrying`)
+                    if (`ChatState?.Retry.IsRetrying == true`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                 BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
-                            <StackPanel Spacing=6>
-                                <StackPanel Orientation=Horizontal Spacing=8>
-                                    <ProgressRing Width=14 Height=14 IsActive=true VerticalAlignment=Center />
-                                    <TextBlock Text="Auto-retrying" FontSize=12 FontWeight=`FontWeights.SemiBold` VerticalAlignment=Center />
-                                </StackPanel>
-                                if (`Store.Active.RetryMessage.Length > 0`)
-                                    <TextBlock Text=`Store.Active.RetryMessage` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                <TextBlock Text=`Store.Active.RetryCountdown` FontSize=11 Foreground=`theme.SystemCaution` TextWrapping=Wrap />
-                            </StackPanel>
+                            <ChatRetryCard />
                         </Border>
-                    if (`Store.Active.ShowContinue`)
+                    if (`Chatbox.ShowContinue`)
                         <StackPanel Orientation=Horizontal Spacing=8 Margin=`new Thickness(0, 8, 0, 0)` HorizontalAlignment=Left>
                             <Button Content="⟳ Continue" CornerRadius=6 VerticalAlignment=Center
                                     ToolTipService.ToolTip=`"Sends a message with content \"continue\" to resume the work from the last incomplete step."`
@@ -81,17 +74,17 @@ namespace UnoVibe.Pages.Chat;
                                           FontSize=12 VerticalAlignment=Center
                                           ToolTipService.ToolTip=`"When on, a turn that stops with the chat ending on an unfinished Thinking block is continued automatically — no completion notification and no sidebar check mark. Same as the \"Auto-continue on thinking stop\" setting."` />
                         </StackPanel>
-                    if (`Store.ActivePermission is not null`)
+                    if (`ChatState?.ActivePermission is not null`)
                     {
                         <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
                                 BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
                             <StackPanel Spacing=8>
                                 <StackPanel Spacing=2>
-                                    <TextBlock Text=`Store.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                    if (`(Store.ActivePermission?.Body?.Length ?? 0) > 0`)
-                                        <TextBlock Text=`Store.ActivePermission?.Body ?? ""` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                    if (`(Store.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
-                                        <TextBlock Text=`Store.ActivePermission?.PatternsText ?? ""` FontSize=10 Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    <TextBlock Text=`ChatState?.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    if (`(ChatState?.ActivePermission?.Body?.Length ?? 0) > 0`)
+                                        <TextBlock Text=`ChatState?.ActivePermission?.Body ?? ""` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                                    if (`(ChatState?.ActivePermission?.PatternsText?.Length ?? 0) > 0`)
+                                        <TextBlock Text=`ChatState?.ActivePermission?.PatternsText ?? ""` FontSize=10 Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                                 </StackPanel>
                                 if (`PermissionStage == "reject"`)
                                     <StackPanel Spacing=8>
@@ -111,69 +104,56 @@ namespace UnoVibe.Pages.Chat;
                         </Border>
                     }
                 </StackPanel>
-            </ScrollViewer>
-            if (`Store.Active.Messages.Reactive.Count == 0`)
+            </StickyScrollViewer>
+            if (`ChatState?.Messages.Reactive.Count == 0`)
                 <StackPanel HorizontalAlignment=Center VerticalAlignment=Center Padding=`new Thickness(16, 0, 16, 0)` Spacing=6 IsHitTestVisible=false>
                     <AppSymbolIcon Symbol=Folder FontSize=22 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
-                    <TextBlock Text=`NewChatPath()` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
-                               TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=520 ToolTipService.ToolTip=`Store.ActiveDirectory().Length > 0 ? Store.ActiveDirectory() : Store.ServerDirectory` />
+                    <TextBlock Text=`PathDisplayHelper.Relative(Sessions.ActiveSessionDirectory, Connection.ServerDirectory)` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
+                               TextTrimming=`TextTrimming.CharacterEllipsis` MaxWidth=520 ToolTipService.ToolTip=`Sessions.ActiveSessionDirectory` />
                 </StackPanel>
         </Grid>
     </root>
     """)]
 public partial class ChatMessageList : IQuickMarkupComponent<Grid>
 {
-    /// <summary>
-    /// True while the user is pinned to the bottom of the message list; follow-the-stream
-    /// autoscroll only runs in this state. Set by <see cref="OnScrollViewChanged"/> from any
-    /// scroll (scrolling away from the bottom disables it, reaching the bottom re-enables it),
-    /// and re-pinned by <see cref="ForceScrollToBottom"/> on explicit app actions (send,
-    /// continue, undo, redo, permission).
-    /// </summary>
-    private bool _stickToBottom = true;
-
-    /// <summary>Pixels from the very bottom that still count as "at the bottom" for stickiness.</summary>
-    private const double StickToBottomThreshold = 40;
 
     /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
     private DispatcherQueue? dispatcher;
 
     /// <summary>
-    /// The SessionStore whose Messages collection this component is currently hooked to. Hooking
-    /// tracks the router's Active store so a session switch re-wires the CollectionChanged
-    /// handler (and part hooks) to the newly-active store's collection.
+    /// The ChatMessagesState whose Messages collection this component is currently hooked to.
+    /// Re-hooked whenever ChatState changes (session switch).
     /// </summary>
-    private SessionStore? _hookedStore;
+    private ChatMessagesState? _hookedChatState;
 
     [QuickMarkupConstructor]
     private void Ctor()
     {
         Init();
+        UIs.ScrollChatToBottomRequested += scrollHost.ForceScrollToBottom;
 
-        scrollHost.ViewChanged += OnScrollViewChanged;
         // Scrolling keyed off the message panel's laid-out size: SizeChanged fires after the
         // frame's layout pass, so ScrollableHeight reflects the freshly-rendered content
         // (new session messages, streaming parts). Scrolling earlier — right when a message is
         // added to the collection — targets a stale ScrollableHeight of 0 and leaves the
         // viewport at the top.
-        messagePanel.SizeChanged += (_, _) => ScrollToBottom();
-        // Messages live on the active SessionStore, which swaps on every session switch
-        // (router keeps one cached store per session). Re-hook the CollectionChanged handler
-        // and part hooks whenever the router's Active store changes.
-        Store.ActiveStoreChanged += HookActiveStore;
-        HookActiveStore();
+        messagePanel.SizeChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
+        // Messages live on ChatState, which swaps on every session switch.
+        // Re-hook the CollectionChanged handler and part hooks whenever ChatState changes.
+        ChatStateProp.Watch(HookChatState);
+        HookChatState(ChatState);
 
-        Store.ActivePermissionProp.Watch(_newReq =>
+        // Watch permission changes on ChatState — reset the UI state and scroll to the card.
+        ChatStateProp.Watch(newChat =>
         {
-            PermissionStage = "choose";
-            RejectText = "";
-            _ = ScrollToPermissionAsync();
+            newChat?.ActivePermissionProp.Watch(newReq =>
+            {
+                if (newReq != ChatState?.ActivePermission) return;
+                PermissionStage = "choose";
+                RejectText = "";
+                _ = ScrollToPermissionAsync();
+            });
         });
-
-        // One-second tick that keeps the end-of-chat retry card's countdown live.
-        var countdown = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        countdown.Tick += (_, _) => Store.Active.UpdateRetryCountdown();
-        countdown.Start();
 
         // The inline auto-continue switch next to the Continue button mirrors the
         // turn.autocontinue setting two-way: toggling persists immediately (live-apply, like the
@@ -183,6 +163,18 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         dispatcher = DispatcherQueue.GetForCurrentThread();
         AutoContinueOnProp.Watch(on => SettingsStore.SetValue(SettingsStore.AutoContinueKey, on ? "true" : "false"));
         SettingsStore.Changed += OnSettingsChanged;
+    }
+
+    private void HookChatState(ChatMessagesState? newState)
+    {
+        _hookedChatState?.Messages.CollectionChanged -= OnMessagesChanged;
+        _hookedChatState = newState;
+        if (newState is not null)
+        {
+            newState.Messages.CollectionChanged += OnMessagesChanged;
+            foreach (var message in newState.Messages) HookParts(message);
+        }
+        scrollHost.ForceScrollToBottom();
     }
 
     private void OnSettingsChanged()
@@ -198,19 +190,7 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private async Task ScrollToPermissionAsync()
     {
         await Task.Yield();
-        ForceScrollToBottom();
-    }
-
-    private void HookActiveStore()
-    {
-        if (_hookedStore is not null)
-            _hookedStore.Messages.CollectionChanged -= OnMessagesChanged;
-        _hookedStore = Store.Active;
-        _hookedStore.Messages.CollectionChanged += OnMessagesChanged;
-        foreach (var message in _hookedStore.Messages) HookParts(message);
-        // The markup foreach re-renders with the new collection; re-pin so the freshly-loaded
-        // history autoscrolls into view.
-        _stickToBottom = true;
+        scrollHost.ForceScrollToBottom();
     }
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -218,14 +198,14 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
         // A full list rebuild (session switch / new session / configure) restarts pinned to
         // the bottom; the freshly-loaded messages then autoscroll into view.
         if (e.Action == NotifyCollectionChangedAction.Reset)
-            _stickToBottom = true;
+            scrollHost.ForceScrollToBottom();
         if (e.NewItems is not null)
             foreach (MessageItem message in e.NewItems) HookParts(message);
-        ScrollToBottom();
+        scrollHost.ScrollToBottomIfStick();
     }
 
     private void HookParts(MessageItem message) =>
-        message.Parts.CollectionChanged += (_, _) => ScrollToBottom();
+        message.Parts.CollectionChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
 
     /// <summary>
     /// Resumes a turn that stopped with an error. Sends a "continue" user message — the agent
@@ -234,15 +214,16 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     /// </summary>
     private async Task ContinueAsync()
     {
-        await Store.Active.SendAsync("continue");
-        ForceScrollToBottom();
+        await Chatbox.SendManualContinueAsync();
+        scrollHost.ForceScrollToBottom();
     }
 
     /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
     private async Task RedoLastMessageAsync()
     {
-        await Store.Active.RedoLastMessageAsync();
-        ForceScrollToBottom();
+        if (ChatState is not null)
+            await ChatState.RedoLastMessageAsync();
+        scrollHost.ForceScrollToBottom();
     }
 
     /// <summary>
@@ -251,96 +232,41 @@ public partial class ChatMessageList : IQuickMarkupComponent<Grid>
     /// </summary>
     private async Task OnMessageRevertRequested(MessageItem message)
     {
-        await Store.Active.RevertToMessageAsync(message);
-        ChatP.SetChatText(Store.Active.RevertPromptText);
-        ForceScrollToBottom();
+        if (ChatState is not null)
+            await ChatState.RevertToMessageAsync(message);
+        Sessions.ActiveChatbox.Message = ChatboxMessage.From(message);
+        scrollHost.ForceScrollToBottom();
     }
 
-    /// <summary>
-    /// Fork the conversation at a specific user message (web/TUI parity): create a new session
-    /// containing the history up to that message, switch to it, restore the forked-at message's
-    /// prompt into the composer, then scroll to the end.
-    /// </summary>
-    private async Task OnMessageForkRequested(MessageItem message)
+    private Task OnMessageForkRequested(MessageItem m)
     {
-        await Store.ForkFromMessageAsync(message);
-        ChatP.SetChatText(Store.Active.ForkPromptText);
-        ForceScrollToBottom();
+        if (Sessions.ActiveSessionId is {} id)
+            UIs.ForkAndSwitchSession(id, m);
+        return Task.CompletedTask;
     }
 
     private async Task AllowPermissionOnceAsync()
     {
-        var req = Store.ActivePermission;
+        var req = ChatState?.ActivePermission;
         if (req is null) return;
-        await Store.ReplyPermissionAsync(req.Id, "once");
+        await ChatState!.ReplyPermissionAsync(req.Id, "once");
     }
 
     private async Task AllowPermissionAlwaysAsync()
     {
-        var req = Store.ActivePermission;
+        var req = ChatState?.ActivePermission;
         if (req is null) return;
-        await Store.ReplyPermissionAsync(req.Id, "always");
+        await ChatState!.ReplyPermissionAsync(req.Id, "always");
     }
 
     private void StartReject() => PermissionStage = "reject";
 
     private async Task RejectPermissionAsync()
     {
-        var req = Store.ActivePermission;
+        var req = ChatState?.ActivePermission;
         if (req is null) return;
-        await Store.ReplyPermissionAsync(req.Id, "reject", RejectText.Trim());
+        await ChatState!.ReplyPermissionAsync(req.Id, "reject", RejectText.Trim());
     }
 
     private void CancelPermission() => PermissionStage = "choose";
-
-    /// <summary>
-    /// The active chat's folder, shown as a centered empty-state label in the chat body while
-    /// there are no messages so the user knows which directory the session belongs to. Resolves
-    /// the session's directory (or the pending folder for an unsaved draft), falling back to the
-    /// server's directory, then displays it relative to the server directory — the same
-    /// reference point the sidebar uses — via the shared <see cref="PathDisplay"/> helper.
-    /// </summary>
-    private string NewChatPath()
-    {
-        var dir = Store.ActiveDirectory();
-        if (dir.Length == 0) dir = Store.ServerDirectory;
-        if (dir.Length == 0) return "";
-        return PathDisplay.Relative(dir, Store.ServerDirectory);
-    }
-
-    /// <summary>
-    /// Follow-the-stream autoscroll: only runs while the user is pinned to the bottom, so a
-    /// manual scroll-up leaves the viewport alone until the user scrolls back down to the
-    /// bottom. The primary trigger is <c>messagePanel.SizeChanged</c>, which fires after the
-    /// frame's layout pass — the moment ScrollableHeight reflects the newly-rendered content.
-    /// </summary>
-    private void ScrollToBottom()
-    {
-        if (scrollHost is null || !_stickToBottom) return;
-        scrollHost.ChangeView(null, scrollHost.ScrollableHeight, null, true);
-    }
-
-    /// <summary>
-    /// Explicit app-action scroll (send, continue, undo/redo, permission): re-pins the view
-    /// to the bottom regardless of the user's current position, then autoscrolls.
-    /// </summary>
-    public void ForceScrollToBottom()
-    {
-        if (scrollHost is null) return;
-        _stickToBottom = true;
-        ScrollToBottom();
-    }
-
-    /// <summary>
-    /// Tracks whether the user is pinned to the bottom. Every ViewChanged event is honored
-    /// (including intermediate drag/inertia frames) so a scroll-up disables autoscroll
-    /// immediately and a scroll-down to the bottom re-enables it. Our own programmatic
-    /// scrolls use ChangeView with disableAnimation, which raises exactly one
-    /// non-intermediate event at the bottom, so they never falsely unpin.
-    /// </summary>
-    private void OnScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
-    {
-        if (scrollHost is null) return;
-        _stickToBottom = scrollHost.ScrollableHeight - scrollHost.VerticalOffset <= StickToBottomThreshold;
-    }
 }

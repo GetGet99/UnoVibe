@@ -1,12 +1,8 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     bool Expanded = false;
     bool Hovering = false;
     <setup>
@@ -17,7 +13,7 @@ namespace UnoVibe.Controls.ToolViews;
             <StackPanel Orientation=Horizontal Spacing=8>
                 <ToolBusyIndicator Part=`Part` />
                 <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 Foreground=`Hovering ? theme.PrimaryText : theme.SecondaryText` VerticalAlignment=Center />
-                <TextBlock Text=`ToolViewShared.WriteTitle(Part)` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                <TextBlock Text=`Part.DisplayName` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>
         </Button>
         if (`Expanded`)
@@ -26,7 +22,7 @@ namespace UnoVibe.Controls.ToolViews;
                 <CodeView Text=`Part.ToolContent` FilePath=`Part.ToolFilePath` />
             else if (`Part.ToolOutput.Length > 0`)
                 <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                    <TextBlock Text=`ToolViewShared.Truncate(Part.ToolOutput, 4000)` FontSize=12 FontFamily=`CodeFonts.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                    <TextBlock Text=`ToolViewShared.Truncate(Part.ToolOutput, 4000)` FontSize=12 FontFamily=`CodeFontsHelper.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
                 </Border>
         }
         if (`Part.ToolError.Length > 0`)

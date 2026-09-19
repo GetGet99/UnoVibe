@@ -1,19 +1,15 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <ToolViewTitle Part=`Part` Text=`ToolViewShared.Read(Part)` />
+        <ToolViewTitle Part=`Part` Text=`Part.DisplayName` />
         if (`Part.LoadedFiles.Length > 0`)
-            <TextBlock Text=`ToolViewShared.Truncate(ToolViewShared.Loaded(Part), 2000)` FontSize=11 FontFamily=`CodeFonts.Current` Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+            <TextBlock Text=`ToolViewShared.Truncate(Part.LoadedFilesText, 2000)` FontSize=11 FontFamily=`CodeFontsHelper.Current` Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
         if (`Part.ToolError.Length > 0`)
             <TextBlock Text=`Part.ToolError` FontSize=11 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
     </StackPanel>

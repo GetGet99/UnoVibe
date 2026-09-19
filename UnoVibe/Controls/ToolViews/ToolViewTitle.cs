@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 /// <summary>
@@ -7,10 +5,8 @@ namespace UnoVibe.Controls.ToolViews;
 /// the title text. Mirrors the TUI's per-tool spinner while a call is in flight.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     string Text = "";
     bool SemiBold = false;
     bool Emphasized = false;
@@ -23,7 +19,7 @@ namespace UnoVibe.Controls.ToolViews;
             <ToolBusyIndicator Part=`Part` />
             <TextBlock Text=`Text` FontSize=12
                        FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal`
-                       FontFamily=`CodeFont ? CodeFonts.Current : DefaultFont`
+                       FontFamily=`CodeFont ? CodeFontsHelper.Current : DefaultFont`
                        Foreground=`Emphasized ? theme.PrimaryText : theme.SecondaryText`
                        TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             if (`Part.Interrupted`)

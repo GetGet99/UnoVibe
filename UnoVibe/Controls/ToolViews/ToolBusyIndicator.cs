@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 /// <summary>
@@ -9,14 +7,13 @@ namespace UnoVibe.Controls.ToolViews;
 /// so callers get 0 or 1 element.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        if (`ToolViewShared.Busy(Part)`)
+        if (`Part.IsBusy`)
             <ProgressRing Width=14 Height=14 IsActive=true Foreground=`Part.ToolStatus == "pending" ? theme.SystemNeutral : theme.SystemCaution` VerticalAlignment=Center />
     </root>
     """)]

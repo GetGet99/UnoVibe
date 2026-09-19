@@ -1,13 +1,10 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
-    using UnoVibe.Services;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
-    required PartItem Part;
+    inject SessionsStateProvider Sessions;
+    inject OpencodeConnection Connection;
+    required ToolCallPartItem Part;
     bool Expanded = false;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -18,7 +15,7 @@ namespace UnoVibe.Controls.ToolViews;
                 if (`WorkdirLabel().Length > 0`)
                     <TextBlock Text=`"Running in " + WorkdirLabel()` FontSize=11 Foreground=`theme.TertiaryText`
                                 TextWrapping=Wrap IsTextSelectionEnabled=true />
-                <ToolViewTitle Part=`Part` Text=`ToolViewShared.Shell(Part)` SemiBold=true Emphasized=true CodeFont=`Part.ToolCommand.Length > 0` />
+                <ToolViewTitle Part=`Part` Text=`Part.DisplayName` SemiBold=true Emphasized=true CodeFont=`Part.ToolCommand.Length > 0` />
             </StackPanel>
         </Border>
         if (`Part.ShellOutput.Length > 0`)
@@ -47,8 +44,6 @@ public partial class ToolViewShell : IQuickMarkupComponent
     /// </summary>
     private string WorkdirLabel()
     {
-        var dir = Store.ActiveDirectory();
-        if (dir.Length == 0) dir = Store.ServerDirectory;
-        return ToolViewShared.ShellWorkdir(Part, dir);
+        return ToolViewShared.ShellWorkdir(Part, Sessions.ActiveSessionDirectory);
     }
 }

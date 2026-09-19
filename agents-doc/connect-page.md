@@ -48,11 +48,11 @@ button (next to the password boxes) that opens a confirmation flyout warning it 
 plain text on the device (`SetSavePassword`); the `savePassword` flag in `recent.json` gates it and
 `SaveSecurity(useGenerated, savePassword, customPassword)` only writes `customPassword` when opted in.
 
-The spawned server is owned by `ChatStore.AttachServeProcess(...)` so it survives navigation —
+The spawned server is owned by `OpencodeConnection.AttachServeProcess(...)` so it survives navigation —
 do not re-introduce a `using var serve` that disposes it early.
 
 **Recent history persistence:**
-`Services/RecentConnectionsStore.cs` keeps an `ObservableCollection<RecentConnection>` (model in
+`Helpers/RecentConnectionsStore.cs` keeps an `ObservableCollection<RecentConnection>` (model in
 `Models/RecentConnection.cs`) saved as JSON at
 `Windows.Storage.ApplicationData.Current.LocalFolder.Path/recent.json` (Skia desktop resolves this
 to `~/.local/share/UnoVibe/<AppId>/LocalState/` on Linux — e.g.

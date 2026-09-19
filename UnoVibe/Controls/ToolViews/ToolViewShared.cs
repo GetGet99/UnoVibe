@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text.Json;
-using System.Text.RegularExpressions;
-using UnoVibe.Models;
+using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Controls.ToolViews;
 
@@ -36,31 +34,6 @@ public static class ToolViewShared
         return ToolDisplayNames.TryGetValue(toolName, out var label) ? label : toolName;
     }
 
-    public static (string Title, string Body) ReasoningSummary(PartItem p)
-    {
-        var content = p.Text.Replace("[REDACTED]", "").Trim();
-        if (content.Length == 0) return ("", "");
-        var match = Regex.Match(content, @"^\*\*([^*\n]+)\*\*(?:\r?\n\r?\n|$)");
-        if (!match.Success) return ("", content);
-        return (match.Groups[1].Value.Trim(), content.Substring(match.Length).Trim());
-    }
-
-    public static string ReasoningLabel(PartItem p)
-    {
-        var (title, _) = ReasoningSummary(p);
-        return title.Length > 0 ? "Thinking: " + title : "Thinking";
-    }
-
-    public static string ThoughtLabel(PartItem p)
-    {
-        var (title, _) = ReasoningSummary(p);
-        var text = "Thought";
-        if (title.Length > 0) text += ": " + title;
-        var duration = FormatDuration(p.Time.DurationMs);
-        if (duration.Length > 0) text += " · " + duration;
-        return text;
-    }
-
     public static string FormatDuration(long ms)
     {
         if (ms <= 0) return "";
@@ -82,13 +55,14 @@ public static class ToolViewShared
         var h = (ms % 86400000) / 3600000;
         return $"{days}d {h}h";
     }
+
     /// <summary>
     /// True while a tool part is not finished: either the model is still streaming
     /// the tool-call arguments ("pending") or the tool call is executing ("running").
     /// </summary>
-    public static bool Busy(PartItem p) => p.ToolStatus is "pending" or "running";
+    public static bool Busy(ToolCallPartItem p) => p.IsBusy;
 
-    public static string Shell(PartItem p) =>
+    public static string Shell(ToolCallPartItem p) =>
         p.ToolCommand.Length > 0
             ? "$ " + p.ToolCommand
             : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running command...";
@@ -100,7 +74,7 @@ public static class ToolViewShared
     /// the session directory fall back to the raw workdir. Mirrors the TUI's
     /// <c>workdirDisplay</c> (relative-to-location, hidden when it resolves to ".").
     /// </summary>
-    public static string ShellWorkdir(PartItem p, string referenceDir)
+    public static string ShellWorkdir(ToolCallPartItem p, string referenceDir)
     {
         var workdir = p.ToolWorkdir;
         if (workdir.Length == 0 || referenceDir.Length == 0) return workdir;
@@ -118,14 +92,14 @@ public static class ToolViewShared
         return workdir;
     }
 
-    public static string Glob(PartItem p)
+    public static string Glob(ToolCallPartItem p)
     {
         var name = p.ToolPattern.Length > 0 ? "Glob \"" + p.ToolPattern + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Globbing...";
         var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
         return "✱ " + name + count;
     }
 
-    public static string Grep(PartItem p)
+    public static string Grep(ToolCallPartItem p)
     {
         var name = p.ToolPattern.Length > 0 ? "Grep \"" + p.ToolPattern + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Grepping...";
         if (p.ToolSearchPath.Length > 0) name += " in " + p.ToolSearchPath;
@@ -134,10 +108,10 @@ public static class ToolViewShared
         return "✱ " + name + count;
     }
 
-    public static string TodoTitle(PartItem p) =>
+    public static string TodoTitle(ToolCallPartItem p) =>
         p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Writing todos...";
 
-    public static string TodoLine(TodoItem todo)
+    public static string TodoLine(TodoInfo todo)
     {
         var mark = todo.Status switch
         {
@@ -148,36 +122,11 @@ public static class ToolViewShared
         return mark + " " + todo.Content;
     }
 
-    public static List<TodoItem> ParseTodos(PartItem p) => ParseTodos(p.TodoJson);
-
-    public static List<TodoItem> ParseTodos(string json)
-    {
-        var list = new List<TodoItem>();
-        if (string.IsNullOrEmpty(json)) return list;
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var todo = new TodoItem
-                {
-                    Content = GetString(el, "content"),
-                    Status = GetString(el, "status"),
-                    Priority = GetString(el, "priority"),
-                };
-                if (todo.Content.Length > 0) list.Add(todo);
-            }
-        }
-        catch (JsonException) { }
-        return list;
-    }
-
-    public static string QuestionTitle(PartItem p) =>
+    public static string QuestionTitle(ToolCallPartItem p) =>
         p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Asking question...";
 
     /// <summary>Friendly line for a question tool that ended in an error (e.g. the user dismissed it).</summary>
-    public static string QuestionError(PartItem p)
+    public static string QuestionError(ToolCallPartItem p)
     {
         var error = p.ToolError;
         if (error.StartsWith("Tool execution failed: ", StringComparison.Ordinal))
@@ -185,15 +134,14 @@ public static class ToolViewShared
         return error.Length > 0 ? error : "Question dismissed";
     }
 
-    public static List<QuestionItem> ParseQuestions(PartItem p) => ParseQuestions(p.Questions, p.AnswerJson);
+    public static List<QuestionItem> ParseQuestions(ToolCallPartItem p) => ParseQuestions(p.Questions, p.Answers);
 
-    public static List<QuestionItem> ParseQuestions(List<Integration.QuestionInfo> questionsInfo, string answersJson)
+    public static List<QuestionItem> ParseQuestions(List<Integration.QuestionInfo> questionsInfo, List<List<string>> answers)
     {
         var list = new List<QuestionItem>();
         if (questionsInfo.Count == 0) return list;
         try
         {
-            var answers = ParseAnswers(answersJson);
             var i = 0;
             foreach (var qInfo in questionsInfo)
             {
@@ -211,56 +159,25 @@ public static class ToolViewShared
         return list;
     }
 
-    private static List<List<string>> ParseAnswers(string json)
-    {
-        var list = new List<List<string>>();
-        if (string.IsNullOrEmpty(json)) return list;
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var inner = new List<string>();
-                if (el.ValueKind == JsonValueKind.Array)
-                    foreach (var a in el.EnumerateArray())
-                        if (a.GetString() is { } s && s.Length > 0) inner.Add(s);
-                list.Add(inner);
-            }
-        }
-        catch (JsonException) { }
-        return list;
-    }
-
-    private static string GetString(JsonElement el, string name) =>
-        el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var prop)
-            ? prop.GetString() ?? ""
-            : "";
-
-    private static int GetInt(JsonElement el, string name) =>
-        el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var prop)
-            ? prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value) ? value : 0
-            : 0;
-
-    public static string WebFetch(PartItem p) =>
+    public static string WebFetch(ToolCallPartItem p) =>
         "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Fetching");
 
-    public static string Skill(PartItem p) =>
+    public static string Skill(ToolCallPartItem p) =>
         "→ " + (p.ToolSkillName.Length > 0 ? "Skill \"" + p.ToolSkillName + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Reading skill");
 
-    public static string Read(PartItem p) =>
+    public static string Read(ToolCallPartItem p) =>
         "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Reading");
 
-    public static string Loaded(PartItem p)
+    public static string Loaded(ToolCallPartItem p)
     {
         if (p.LoadedFiles.Length == 0) return "";
         return string.Join("\n", p.LoadedFiles.Split('\n').Select(l => "↳ Loaded " + l));
     }
 
-    public static string Edit(PartItem p) =>
+    public static string Edit(ToolCallPartItem p) =>
         "← " + (p.ToolFilePath.Length > 0 ? "Edit " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Editing");
 
-    public static string Write(PartItem p) =>
+    public static string Write(ToolCallPartItem p) =>
         "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Writing");
 
     /// <summary>
@@ -268,7 +185,7 @@ public static class ToolViewShared
     /// (the TUI itself does not surface these numbers, but the diff has enough
     /// information to compute them).
     /// </summary>
-    public static string EditTitle(PartItem p)
+    public static string EditTitle(ToolCallPartItem p)
     {
         var (added, removed) = DiffStats(p.Diff);
         if (added + removed == 0) return Edit(p);
@@ -288,7 +205,7 @@ public static class ToolViewShared
         return (added, removed);
     }
 
-    public static string WriteTitle(PartItem p)
+    public static string WriteTitle(ToolCallPartItem p)
     {
         var title = Write(p);
         // The written file's content lives in input.content (ToolContent); fall back to the
@@ -297,45 +214,15 @@ public static class ToolViewShared
         return lineCount > 0 ? $"{title}  ({lineCount} lines)" : title;
     }
 
-    public static List<PatchFileItem> ParsePatchFiles(PartItem p) => ParsePatchFiles(p.PatchJson);
-
-    public static List<PatchFileItem> ParsePatchFiles(string json)
-    {
-        var list = new List<PatchFileItem>();
-        if (string.IsNullOrEmpty(json)) return list;
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var file = new PatchFileItem
-                {
-                    Type = GetString(el, "type"),
-                    RelativePath = GetString(el, "relativePath"),
-                    FilePath = GetString(el, "filePath"),
-                    Patch = GetString(el, "patch"),
-                    MovePath = GetString(el, "movePath"),
-                    Additions = GetInt(el, "additions"),
-                    Deletions = GetInt(el, "deletions"),
-                };
-                if (file.Type.Length > 0 && file.RelativePath.Length > 0) list.Add(file);
-            }
-        }
-        catch (JsonException) { }
-        return list;
-    }
-
     /// <summary>
     /// Header for an <c>apply_patch</c> card: the touched file for a single-file patch,
     /// "N files" otherwise, "Preparing patch..." while in flight. Mirrors the web client's
     /// "Patch" card title/subtitle and the TUI's pending label.
     /// </summary>
-    public static string Patch(PartItem p)
+    public static string Patch(ToolCallPartItem p)
     {
-        var files = ParsePatchFiles(p);
-        if (files.Count == 1) return "← Patch " + files[0].RelativePath;
-        if (files.Count > 1) return $"← Patch {files.Count} files";
+        if (p.PatchFiles.Count == 1) return "← Patch " + p.PatchFiles[0].RelativePath;
+        if (p.PatchFiles.Count > 1) return $"← Patch {p.PatchFiles.Count} files";
         if (Busy(p)) return "Preparing patch...";
         // Server without per-file metadata: fall back to the first line of the tool title
         // (the "Success. Updated the following files:..." summary).
@@ -344,7 +231,7 @@ public static class ToolViewShared
     }
 
     /// <summary>Per-file label mirroring the TUI's "Created/Deleted/Moved/Patched" block titles.</summary>
-    public static string PatchFileLine(PatchFileItem f)
+    public static string PatchFileLine(Integration.Events.ApplyPatchFileMeta f)
     {
         var label = f.Type switch
         {
@@ -368,18 +255,18 @@ public static class ToolViewShared
         return value[value.Length - 1] == '\n' ? count - 1 : count;
     }
 
-    public static string Generic(PartItem p) =>
+    public static string Generic(ToolCallPartItem p) =>
         "⚙ " + (p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running tool...");
 
     /// <summary>Title for a subagent-spawning <c>task</c> tool call. The state.title is the model's short description.</summary>
-    public static string Task(PartItem p)
+    public static string Task(ToolCallPartItem p)
     {
         var name = p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Delegating...";
         return "✳ " + name;
     }
 
     /// <summary>Status line for a <c>task</c> tool card: agent type + live state + open hint.</summary>
-    public static string TaskStatus(PartItem p)
+    public static string TaskStatus(ToolCallPartItem p)
     {
         var type = p.ToolSubagentType.Length > 0 ? p.ToolSubagentType : "subagent";
         return p.ToolStatus switch
@@ -401,24 +288,24 @@ public static class ToolViewShared
     public const int ShellMaxLines = 10;
     public const int ShellMaxChars = ShellMaxLines * 120;
 
-    public static bool ShellOverflow(PartItem p) => CollapseShellOutput(p).Overflow;
+    public static bool ShellOverflow(ToolCallPartItem p) => CollapseShellOutput(p).Overflow;
 
-    public static string ShellCollapsed(PartItem p) => CollapseShellOutput(p).Output;
+    public static string ShellCollapsed(ToolCallPartItem p) => CollapseShellOutput(p).Output;
 
-    private static (string Output, bool Overflow) CollapseShellOutput(PartItem p)
+    private static (string Output, bool Overflow) CollapseShellOutput(ToolCallPartItem p)
     {
         var output = p.ShellOutput.Length > 0 ? p.ShellOutput : p.ToolOutput;
         if (output.Length == 0) return (output, false);
         return CollapseLines(output, ShellMaxLines, ShellMaxChars);
     }
 
-    public static bool GenericInputOverflow(PartItem p) => GenericCollapse(p.ToolInput).Overflow;
+    public static bool GenericInputOverflow(ToolCallPartItem p) => GenericCollapse(p.ToolInput).Overflow;
 
-    public static string GenericInputCollapsed(PartItem p) => GenericCollapse(p.ToolInput).Output;
+    public static string GenericInputCollapsed(ToolCallPartItem p) => GenericCollapse(p.ToolInput).Output;
 
-    public static bool GenericOutputOverflow(PartItem p) => GenericCollapse(p.ToolOutput).Overflow;
+    public static bool GenericOutputOverflow(ToolCallPartItem p) => GenericCollapse(p.ToolOutput).Overflow;
 
-    public static string GenericOutputCollapsed(PartItem p) => GenericCollapse(p.ToolOutput).Output;
+    public static string GenericOutputCollapsed(ToolCallPartItem p) => GenericCollapse(p.ToolOutput).Output;
 
     private static (string Output, bool Overflow) GenericCollapse(string value)
     {
@@ -440,7 +327,7 @@ public static class ToolViewShared
 
         var preview = string.Join("\n", lines.Take(maxLines));
         if (preview.Length > maxChars)
-            return (preview.Substring(0, Math.Max(0, maxChars - 1)) + "…", true);
+            return (string.Concat(preview.AsSpan(0, Math.Max(0, maxChars - 1)), "…"), true);
 
         return (preview + "\n…", true);
     }
@@ -461,4 +348,14 @@ public static class ToolViewShared
             preview = preview.Substring(0, Math.Max(0, maxChars - 1));
         return (preview, true);
     }
+
+    private static string GetString(JsonElement el, string name) =>
+        el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var prop)
+            ? prop.GetString() ?? ""
+            : "";
+
+    private static int GetInt(JsonElement el, string name) =>
+        el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var prop)
+            ? prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var value) ? value : 0
+            : 0;
 }

@@ -1,9 +1,7 @@
 #if DESKTOP_LINUX
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Tmds.DBus.Protocol;
 using UnoVibe.Polyfills.Linux.DBus;
-using Windows.ApplicationModel;
 
 // Supplies the Windows App SDK's toast-notification API surface
 // (Microsoft.Windows.AppNotifications.*) on the desktop-Linux target, so the shared code in
@@ -48,7 +46,7 @@ namespace Microsoft.Windows.AppNotifications
     /// </summary>
     public sealed class AppNotificationManager
     {
-        private const string NotificationService = "org.freedesktop.Notifications";
+        private const string NotificationProvider = "org.freedesktop.Notifications";
         private static readonly ObjectPath NotificationPath = new("/org/freedesktop/Notifications");
 
         // All UnoVibe windows carry this WM_CLASS (X11XamlRootHost.SetWMClass uses
@@ -121,7 +119,7 @@ namespace Microsoft.Windows.AppNotifications
                 using var connection = new DBusConnection(sessionAddress);
                 await connection.ConnectAsync().ConfigureAwait(false);
 
-                var service = new DBusService(connection, NotificationService);
+                var service = new DBusService(connection, NotificationProvider);
                 // The generated D-Bus client is also named "Notifications" (namespace
                 // UnoVibe.Polyfills.Linux.DBus); `var` sidesteps the name.
                 var notifications = service.CreateNotifications(NotificationPath);

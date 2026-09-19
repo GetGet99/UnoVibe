@@ -1,23 +1,19 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     bool InputExpanded = false;
     bool OutputExpanded = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <ToolViewTitle Part=`Part` Text=`ToolViewShared.Generic(Part)` />
+        <ToolViewTitle Part=`Part` Text=`Part.DisplayName` />
         if (`Part.ToolInput.Length > 0`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                <TextBlock Text=`InputExpanded ? Part.ToolInput : ToolViewShared.GenericInputCollapsed(Part)` FontSize=12 FontFamily=`CodeFonts.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                <TextBlock Text=`InputExpanded ? Part.ToolInput : ToolViewShared.GenericInputCollapsed(Part)` FontSize=12 FontFamily=`CodeFontsHelper.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>
             if (`ToolViewShared.GenericInputOverflow(Part)`)
                 <Button Background=`theme.LayerFill` BorderThickness=0 CornerRadius=4 Padding=`new Thickness(8, 2, 8, 2)` HorizontalAlignment=Left Click+=`(s, e) => InputExpanded = !InputExpanded`>
@@ -27,7 +23,7 @@ namespace UnoVibe.Controls.ToolViews;
         if (`Part.ToolOutput.Length > 0`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
-                <TextBlock Text=`OutputExpanded ? Part.ToolOutput : ToolViewShared.GenericOutputCollapsed(Part)` FontSize=12 FontFamily=`CodeFonts.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                <TextBlock Text=`OutputExpanded ? Part.ToolOutput : ToolViewShared.GenericOutputCollapsed(Part)` FontSize=12 FontFamily=`CodeFontsHelper.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>
             if (`ToolViewShared.GenericOutputOverflow(Part)`)
                 <Button Background=`theme.LayerFill` BorderThickness=0 CornerRadius=4 Padding=`new Thickness(8, 2, 8, 2)` HorizontalAlignment=Left Click+=`(s, e) => OutputExpanded = !OutputExpanded`>

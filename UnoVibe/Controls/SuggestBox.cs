@@ -1,7 +1,4 @@
-using System.Collections.ObjectModel;
-using Microsoft.UI;
 using Microsoft.UI.Input;
-using Microsoft.UI.Xaml;
 
 namespace UnoVibe.Controls;
 
@@ -149,15 +146,25 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
     /// Clears the input text. Includes an Uno workaround (briefly toggling <c>AcceptsReturn</c>) so a
     /// multiline TextBox actually repaints empty.
     /// </summary>
-    public void Clear() => _ = ClearCoreAsync();
+    public void Clear() => _ = SetTextProgrammaticallyAsync("");
 
-    private async Task ClearCoreAsync()
+    /// <summary>
+    /// Includes an Uno workaround (briefly toggling <c>AcceptsReturn</c>) so a
+    /// multiline TextBox actually repaints empty.
+    /// </summary>
+    public void SwapText(string newText, out string oldText)
+    {
+        oldText = input.Text;
+        _ = SetTextProgrammaticallyAsync(newText);
+    }
+
+    private async Task SetTextProgrammaticallyAsync(string newText)
     {
         if (input is null) return;
         _programmaticTextChange = true;
         try
         {
-            input.Text = "";
+            input.Text = newText;
         }
         finally
         {
@@ -298,7 +305,7 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         if (item.Action is not null)
         {
             CloseSuggestions();
-            _ = ClearCoreAsync();
+            _ = SetTextProgrammaticallyAsync("");
             input.Focus(FocusState.Programmatic);
             if (CommandTriggered is { } handler)
                 _ = handler(this, item);
@@ -401,4 +408,5 @@ public partial class SuggestBox : IQuickMarkupComponent<TextBox>
         if (SubmitRequested is { } handler)
             _ = handler(this, text);
     }
+    public void PasteFromClipboard() => input.PasteFromClipboard();
 }

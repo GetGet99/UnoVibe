@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 namespace UnoVibe.Models;
 
 /// <summary>One selectable option of a choice-type setting: a stored value plus a display label.</summary>

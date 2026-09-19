@@ -66,7 +66,7 @@ color.
   a cached `StyleDictionary.DefaultDark`/`DefaultLight`; brushes come from a `BrushFromHex`
   `SolidColorBrush` cache (`ColorCode.Styling.Style` is aliased — `Style` clashes with
   `Microsoft.UI.Xaml.Style`). Code blocks use the configured **Code font** setting
-  (`SettingsStore.CodeFont`, resolved by `Services/CodeFonts.cs` — see
+  (`SettingsStore.CodeFont`, resolved by `Helpers/CodeFontsHelper.cs` — see
   [`settings.md`](settings.md)).
   **Live re-theming:** brushes are baked into elements at build time, so both `MarkdownView`
   and `CodeView` re-render on their root element's `ActualThemeChanged`: `MarkdownView` carries

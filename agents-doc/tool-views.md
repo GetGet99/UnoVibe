@@ -2,7 +2,7 @@
 
 Reference for how opencode tool calls render in the chat.
 **Read this file when** editing `UnoVibe/Controls/ToolViews/*`, `DiffView`, `CodeView`,
-`CodeHighlighter`, or the tool-call parsing in `ChatStore.ApplyToolState`.
+`CodeHighlighter`, or the tool-call parsing in `EventsProvider.ApplyToolState`.
 
 ## apply_patch rendering
 

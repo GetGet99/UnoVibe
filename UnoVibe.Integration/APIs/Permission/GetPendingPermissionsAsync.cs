@@ -3,7 +3,7 @@ namespace UnoVibe.Integration;
 /// <summary>
 /// Plain DTO for a pending permission request from <c>GET /permission</c>.
 /// </summary>
-public sealed class PermissionRequestItem
+public sealed class PermissionRequestDto
 {
     public string Id { get; set; } = "";
 
@@ -13,12 +13,12 @@ public sealed class PermissionRequestItem
     public string Permission { get; set; } = "";
     public string[] Patterns { get; set; } = [];
     public string[] Always { get; set; } = [];
-    public PermissionToolInfo? Tool { get; set; }
+    public PermissionRequestToolInfo? Tool { get; set; }
     public JsonElement Metadata { get; set; }
 }
 
 /// <summary>Nested <c>tool</c> object inside a permission request.</summary>
-public sealed class PermissionToolInfo
+public sealed class PermissionRequestToolInfo
 {
     [JsonPropertyName("messageID")]
     public string MessageId { get; set; } = "";
@@ -32,7 +32,7 @@ partial class OpencodeClient
     /// <summary>
     /// Lists pending permission requests for the workspace directory.
     /// </summary>
-    public Task<Result<List<PermissionRequestItem>>> GetPendingPermissionsAsync(string? directory = null,
+    public Task<Result<List<PermissionRequestDto>>> GetPendingPermissionsAsync(string? directory = null,
         CancellationToken ct = default)
-        => GetResultAsync(DirectoryUrl("/permission", directory), AppJsonContext.Default.ListPermissionRequestItem, ct);
+        => GetResultAsync(DirectoryUrl("/permission", directory), AppJsonContext.Default.ListPermissionRequestDto, ct);
 }

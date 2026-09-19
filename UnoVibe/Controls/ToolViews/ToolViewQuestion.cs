@@ -1,34 +1,28 @@
-using UnoVibe.Models;
-using UnoVibe.Services;
-using UnoVibe.Controls.ToolViews;
-using QuickMarkup.WinUI;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
-    using UnoVibe.Services;
     using UnoVibe.Controls.ToolViews;
+    using UnoVibe.States;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
-    required PartItem Part;
+    required ToolCallPartItem Part;
+    inject ChatMessagesState? ChatState;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=6>
-        <ToolViewTitle Part=`Part` Text=`ToolViewShared.QuestionTitle(Part)` />
-        if (`Part.AnswerJson.Length > 0`)
+        <ToolViewTitle Part=`Part` Text=`Part.DisplayName` />
+        if (`Part.Answers.Count > 0`)
         {
-            foreach (var q in `ToolViewShared.ParseQuestions(Part)`)
+            foreach (index; var q in `Part.Questions`)
             {
                 <StackPanel Spacing=2>
                     <TextBlock Text=`q.Question` FontSize=12 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                    <TextBlock Text=`q.Answer` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true
+                    <TextBlock Text=`index < Part.Answers.Count ? string.Join(", ", Part.Answers[index]) : ""` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true
                                Padding=`new Thickness(8, 0, 0, 0)` />
                 </StackPanel>
             }
         }
-        else if (`Part.QuestionRequestId.Length > 0 && Part.QuestionForm.Count > 0 && ToolViewShared.Busy(Part)`)
+        else if (`Part.QuestionRequestId.Length > 0 && Part.QuestionForm.Count > 0 && Part.IsBusy`)
         {
             foreach (var q in `Part.QuestionForm`)
                 <ToolViewQuestionItem Q=`q` />
@@ -39,14 +33,14 @@ namespace UnoVibe.Controls.ToolViews;
         }
         else
         {
-            foreach (var q in `ToolViewShared.ParseQuestions(Part)`)
+            foreach (var q in `Part.Questions`)
             {
                 <StackPanel Spacing=2>
                     <TextBlock Text=`q.Question` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true />
                 </StackPanel>
             }
             if (`Part.ToolStatus == "error" && Part.ToolError.Length > 0`)
-                <TextBlock Text=`ToolViewShared.QuestionError(Part)` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                <TextBlock Text=`Part.ErrorText` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
         }
     </StackPanel>
     """)]
@@ -68,12 +62,14 @@ public partial class ToolViewQuestion : IQuickMarkupComponent
         }
 
         if (Part.QuestionRequestId.Length == 0 || answers.Count == 0) return;
-        await Store.ReplyQuestionAsync(Part.QuestionRequestId, answers);
+        if (ChatState is not null)
+            await ChatState.ReplyQuestionAsync(Part.QuestionRequestId, answers);
     }
 
     private async Task RejectAsync()
     {
         if (Part.QuestionRequestId.Length == 0) return;
-        await Store.RejectQuestionAsync(Part.QuestionRequestId);
+        if (ChatState is not null)
+            await ChatState.RejectQuestionAsync(Part.QuestionRequestId);
     }
 }

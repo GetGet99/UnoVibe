@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 /// <summary>
@@ -10,11 +8,9 @@ namespace UnoVibe.Controls.ToolViews;
 /// server omits the per-file metadata (older servers only surface <c>state.metadata.diff</c>).
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Models;
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
-    using UnoVibe.Services;
-    required PartItem Part;
+    required ToolCallPartItem Part;
     bool Expanded = false;
     bool Hovering = false;
     <setup>
@@ -25,22 +21,22 @@ namespace UnoVibe.Controls.ToolViews;
             <StackPanel Orientation=Horizontal Spacing=8>
                 <ToolBusyIndicator Part=`Part` />
                 <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 Foreground=`Hovering ? theme.PrimaryText : theme.SecondaryText` VerticalAlignment=Center />
-                <TextBlock Text=`ToolViewShared.Patch(Part)` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                <TextBlock Text=`Part.DisplayName` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>
         </Button>
         if (`Expanded`)
         {
-            foreach (var f in `ToolViewShared.ParsePatchFiles(Part)`)
+            foreach (var f in `Part.PatchFiles`)
                 <Border Background=`theme.SolidBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)` Margin=`new Thickness(0, 2, 0, 2)`>
                     <StackPanel Spacing=4>
                         <TextBlock Text=`ToolViewShared.PatchFileLine(f)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
                         if (`f.Type == "delete"`)
-                            <TextBlock Text=`f.Deletions > 0 ? $"-{f.Deletions} line" + (f.Deletions == 1 ? "" : "s") : "Deleted"` FontSize=12 FontFamily=`CodeFonts.Current` Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
+                            <TextBlock Text=`f.Deletions > 0 ? $"-{f.Deletions} line" + (f.Deletions == 1 ? "" : "s") : "Deleted"` FontSize=12 FontFamily=`CodeFontsHelper.Current` Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
                         else if (`f.Patch.Length > 0`)
                             <DiffView Diff=`f.Patch` />
                     </StackPanel>
                 </Border>
-            if (`Part.Diff.Length > 0 && ToolViewShared.ParsePatchFiles(Part).Count == 0`)
+            if (`Part.Diff.Length > 0 && Part.PatchFiles.Count == 0`)
                 <DiffView Diff=`Part.Diff` />
         }
         if (`Part.ToolError.Length > 0`)

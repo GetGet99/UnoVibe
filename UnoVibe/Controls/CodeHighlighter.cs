@@ -2,7 +2,6 @@ using ColorCode;
 using ColorCode.Common;
 using ColorCode.Parsing;
 using ColorCode.Styling;
-using Microsoft.UI.Text;
 using Microsoft.UI.Xaml.Documents;
 using Windows.UI;
 using Windows.UI.Text;
@@ -24,7 +23,7 @@ namespace UnoVibe.Controls;
 /// cached internally, so warm parses run in ~0.1 ms — fine for MarkdownView's per-delta
 /// re-render. The style dictionary is picked from the target element's resolved
 /// <see cref="FrameworkElement.ActualTheme"/> (falling back to the system background-color
-/// poll <see cref="AccentPalette"/> uses when no element is given), so callers can re-colorize
+/// poll <see cref="AccentPaletteHelper"/> uses when no element is given), so callers can re-colorize
 /// on <c>ActualThemeChanged</c> to keep already-rendered blocks readable across theme flips.
 /// </summary>
 public static class CodeHighlighter
@@ -178,7 +177,7 @@ public static class CodeHighlighter
     /// <summary>
     /// Dark/light detection for palette picking: the element's resolved ActualTheme when available
     /// (honors any app-level RequestedTheme override), else the WinUI system background color —
-    /// the same heuristic <see cref="AccentPalette"/> uses.
+    /// the same heuristic <see cref="AccentPaletteHelper"/> uses.
     /// </summary>
     public static bool IsDarkTheme(FrameworkElement? themeSource)
     {

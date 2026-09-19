@@ -1,8 +1,5 @@
-using System;
-using System.IO;
 using Microsoft.Extensions.Logging;
-using Uno.Resizetizer;
-using UnoVibe.Services;
+using UnoVibe.Models.Startup;
 
 namespace UnoVibe;
 
@@ -21,7 +18,7 @@ public partial class App : Application
 #endif
     }
 
-    /// <summary>All open windows. Each window scopes to its own <see cref="ChatStore"/>.</summary>
+    /// <summary>All open windows. Each window scopes to its own <see cref="ChatStoreToBeRemoved"/>.</summary>
     public static List<WindowController> Windows { get; } = new();
 
     protected Window? MainWindow { get; private set; }
@@ -29,7 +26,7 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         ReactiveInitializer.InitReactiveScheduler();
-        Notifications.Initialize();
+        NotificationsHelper.Initialize();
 
         MainWindow = CreateWindow().Window;
     }
@@ -45,53 +42,17 @@ public partial class App : Application
         var controller = new WindowController();
         Windows.Add(controller);
 
-        var startup = ValidateFolderTarget(StartupArgs.Parse());
+        var startup = CLIHelper.Parse(Environment.GetCommandLineArgs());
         if (startup.Kind == LaunchKind.None)
             controller.ShowConnect();
         else
             controller.ShowConnect(startup);
 
-        controller.Window.SetWindowIcon();
-
-        controller.Window.Closed += (_, _) =>
-        {
-            Windows.Remove(controller);
-            TryDispose(controller.Store);
-        };
+        controller.Disposed += () => Windows.Remove(controller);
 
         controller.Window.Activate();
-        Notifications.RegisterWindow(controller.Window);
+        NotificationsHelper.RegisterWindow(controller.Window);
         return controller;
-    }
-
-    /// <summary>
-    /// Validates a folder launch target before the window is built: a path that resolves
-    /// to a file fails the launch (a folder is required), and a missing folder is created
-    /// so `opencode serve` has somewhere to run (VSCode-style open). Server/None targets
-    /// pass through unchanged.
-    /// </summary>
-    private static StartupArgs ValidateFolderTarget(StartupArgs startup)
-    {
-        if (startup.Kind != LaunchKind.Folder) return startup;
-
-        var full = Path.GetFullPath(startup.Value);
-        if (File.Exists(full))
-            FailLaunch($"'{startup.Value}' is a file, not a folder.");
-        if (!Directory.Exists(full)) Directory.CreateDirectory(full);
-        return startup with { Value = full };
-    }
-
-    /// <summary>Terminates the app with a console error, mirroring a CLI launch failure.</summary>
-    private static void FailLaunch(string message)
-    {
-        Console.Error.WriteLine($"UnoVibe: {message}");
-        Console.Error.WriteLine("Usage: UnoVibe [folder-or-http-url] [--password [password]]");
-        Environment.Exit(1);
-    }
-
-    private static void TryDispose(ChatStore store)
-    {
-        try { store.Dispose(); } catch { /* best effort on shutdown */ }
     }
 
     /// <summary>

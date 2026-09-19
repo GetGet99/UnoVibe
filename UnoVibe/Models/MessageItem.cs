@@ -1,5 +1,3 @@
-using UnoVibe.Services;
-
 namespace UnoVibe.Models;
 
 public partial class MessageItem
@@ -17,5 +15,5 @@ public partial class MessageItem
     public long TokensCacheWrite { get; set; }
     /// <summary>True when this message was aborted by a user interrupt.</summary>
     public bool Interrupted { get; set; }
-    public ObservableCollection<PartItem> Parts { get; } = new();
+    public ObservableCollection<ChatPartItem> Parts { get; } = new();
 }
