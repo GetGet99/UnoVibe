@@ -42,7 +42,7 @@ namespace UnoVibe.Pages.Chat;
                     <TextBlock Text="Output*" FontSize=12 Foreground=`theme.SecondaryText` />
                     <TextBlock Grid.Column=1 Text=`(ChatState?.Tokens.Output ?? 0).ToString("N0")` FontSize=12 TextAlignment=Right />
                 </Grid>
-                if (`(ChatState?.Tokens.Reasoning ?? 0) > 0`)
+                if (`ChatState?.Tokens.Reasoning`)
                     <Grid ColumnSpacing=12 ColumnDefinitions=<>
                         <ColumnDefinition Width=96 />
                         <ColumnDefinition />
@@ -50,7 +50,7 @@ namespace UnoVibe.Pages.Chat;
                         <TextBlock Text="Reasoning*" FontSize=12 Foreground=`theme.SecondaryText` />
                         <TextBlock Grid.Column=1 Text=`(ChatState?.Tokens.Reasoning ?? 0).ToString("N0")` FontSize=12 TextAlignment=Right />
                     </Grid>
-                if (`(ChatState?.Tokens.CacheRead ?? 0) > 0`)
+                if (`ChatState?.Tokens.CacheRead`)
                     <Grid ColumnSpacing=12 ColumnDefinitions=<>
                         <ColumnDefinition Width=96 />
                         <ColumnDefinition />
@@ -58,7 +58,7 @@ namespace UnoVibe.Pages.Chat;
                         <TextBlock Text="Cache read*" FontSize=12 Foreground=`theme.SecondaryText` />
                         <TextBlock Grid.Column=1 Text=`(ChatState?.Tokens.CacheRead ?? 0).ToString("N0")` FontSize=12 TextAlignment=Right />
                     </Grid>
-                if (`(ChatState?.Tokens.CacheWrite ?? 0) > 0`)
+                if (`ChatState?.Tokens.CacheWrite`)
                     <Grid ColumnSpacing=12 ColumnDefinitions=<>
                         <ColumnDefinition Width=96 />
                         <ColumnDefinition />

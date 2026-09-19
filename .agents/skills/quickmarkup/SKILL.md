@@ -69,7 +69,7 @@ User MyUser => async `Api.FetchUserAsync(Id)`; // creates AsyncComputed<User>, p
 
 References auto-notify the UI on change. Computed variables cache and re-evaluate when dependencies change. Computed variables are lazily initialized — not evaluated until first accessed.
 
-> **Note:** A reference declared as a reference type without a default value (e.g. `string Text;`) is initialized to `null`, which produces a QuickMarkup warning (`QM1014`). Assign a default value or declare the type as nullable (`string? Text;`) to avoid warning.
+> **Note:** A reference declared as a reference type without a default value (e.g. `string Text;`) is initialized to `null`, which produces a QuickMarkup warning (`QM1014`). Assign a default value `string Text = "";`, make it required `required string Text;`, or declare the type as nullable `string? Text;` to avoid warning.
 
 References get a `*Prop` backing field and computed get a `*Comp` backing field on the partial class, accessible directly if needed. Async computed gets `*Async` backing field (`AsyncComputed<T>`), plus `*Status` (`AsyncComputedState`) and `*Failure` (`Exception?`) properties. The value property throws if not yet loaded — check `*Status` first.
 
@@ -268,7 +268,7 @@ Contexts form a hierarchy: grandparent → parent → child. A child can find pr
 
 Comments use `//` or `/* */`. **Not** `<!-- -->`.
 
-### Property Values
+### Property and Reference Values
 
 Values are **not** quoted (unlike XML/XAML). Use raw values directly.
 
@@ -284,6 +284,24 @@ Values are **not** quoted (unlike XML/XAML). Use raw values directly.
 | null/default | keyword | `Tag=null` / `Target=default` |
 | C# expression | backticks | `` Text=`$"Count: {Counter}"` `` |
 | Alternate C# literal (backward compatability legacy syntax of above) | `/-...-/` | `Source=/-new Uri("ms-appx:///icon.png")-/` |
+
+### Wrap non QuickMarkup primitive value in backticks
+
+For things that are not mentioned above, need to wrap in backtick. Even if value is constant. These are C# expression, not QuickMarkup expression.
+
+Not wrapping in backtick will not compile and will usually result in parser error.
+
+```quickmarkup incorrect syntax
+double Value = double.MaxValue; // incorrect syntax
+
+<StackPaenl Spacing=MyStaticClass.Spacing /> // incorrect syntax
+```
+
+```quickmarkup
+double Value = `double.MaxValue`; // correct syntax
+
+<StackPaenl Spacing=`MyStaticClass.Spacing` /> // correct syntax
+```
 
 ### Automatic `new` (single-argument constructors)
 
@@ -420,6 +438,60 @@ else <TextBlock Text="Fallback" />
 ```
 
 The `else` branch is required for single-child content positions (e.g., `Content`).
+
+#### Non-boolean conditions (Booleanish)
+
+The `if` condition accepts **any type** for foreign expression, not just `bool`. The value is automatically coerced to `bool` via `Booleanish.Condition(...)`, following the truthiness rules:
+
+```quickmarkup
+// String — truthy when non-empty
+if (`myString`) { <TextBlock Text="Has content" /> }
+
+// Numeric — truthy when non-zero
+if (`itemCount`) { <TextBlock Text="Has items" /> }
+
+// Object — truthy when non-null
+if (`selectedItem`) { <TextBlock Text=`selectedItem.Name` /> }
+```
+
+##### Truthiness rules
+
+| Value | Truthy? | Types |
+|-------|---------|------|
+| `true` | Yes | `bool` |
+| `false` | No | `bool` |
+| `""` (empty string) | No | `string` |
+| `"text"` (non-empty) | Yes | `string` |
+| `0` or `NaN` | No | Relevant supported numeric types |
+| non-zero, non-NaN numbers | Yes | Relevant supported numeric types |
+| `null` | No | Any reference type or nullable struct |
+| non-null objects and values* not listed above | Yes | Any type |
+
+Supported numeric types: `sbyte`, `short`, `int`, `long`, `nint`, `byte`, `ushort`, `uint`, `ulong`, `nuint`, `char`, `float`, `double`, `decimal` (also `BigInteger`, `Int128`, `UInt128`, `Half` for .NET 5+)
+
+Any type not listed above (e.g., custom classes and structs) defaults to `true` when non-null and `false` when null.
+
+*Default struct values `default(StructType)` except cases listed above and `null` (for nullable struct) are considered as `true`. Be careful!
+
+##### Non-foreign expression
+
+`if` condition does not accept expression not wrapped in backtick other than `true` and `false` to prevent user errors.
+
+These are allowed for temporary allow/disallow before proper logic is decided.
+
+```quickmarkup
+if (false) {
+    <TextBlock Text="Temporary disabled path" />
+}
+
+if (true) {
+    <TextBlock Text="Coming soon!" />
+} else {
+    <TextBlock Text="Temporary disabled WIP path" />
+}
+```
+
+Note: This us for informational purpose only and may or may not be a recommended pattern. Consult user and codebase rules/instructions.
 
 #### Notes about using it on ObservableCollection.
 

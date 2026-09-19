@@ -17,7 +17,7 @@ namespace UnoVibe.Pages.Main;
         </> ColumnSpacing=4>
             <StackPanel Orientation=Horizontal Spacing=4>
                 <TextBlock Text=`DisplayPath(Group.Directory)` FontSize=11 FontWeight=`FontWeights.SemiBold` Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                if (`Group.Branch is not null`)
+                if (`Group.Branch`)
                 {
                     <TextBlock Text=`$"⎇ {Group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                 }

@@ -27,7 +27,7 @@ namespace UnoVibe.Pages.Main;
             <ChatPage Grid.Column=1 Visibility=`!IsCompact || !IsSidebarView ? Visibility.Visible : Visibility.Collapsed` />
         </Grid>
         <Grid HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(16, 12, 16, 0)`>
-            if (`Toasts.CurrentToast is not null`)
+            if (`Toasts.CurrentToast`)
                 <Border HorizontalAlignment=Right VerticalAlignment=Top MaxWidth=440 CornerRadius=8
                         Padding=`new Thickness(14, 10, 14, 10)`
                         Background=`ToastBackground(Toasts.CurrentToast)`
@@ -37,7 +37,7 @@ namespace UnoVibe.Pages.Main;
                         <ColumnDefinition Width=Auto />
                     </>>
                         <StackPanel Grid.Column=0 Spacing=4>
-                            if (`(Toasts.CurrentToast?.Title?.Length ?? 0) > 0`)
+                            if (`Toasts.CurrentToast?.Title`)
                                 <TextBlock Text=`Toasts.CurrentToast?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold`
                                             Foreground=`ToastAccent(Toasts.CurrentToast)` TextWrapping=Wrap IsTextSelectionEnabled=true />
                             <TextBlock Text=`Toasts.CurrentToast?.Message ?? ""` FontSize=12 Foreground=`theme.PrimaryText`

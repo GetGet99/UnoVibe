@@ -17,7 +17,7 @@ namespace UnoVibe.Pages.Chat;
     </setup>
     <root>
         <StackPanel Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 4)` Spacing=6>
-            if (`ChatState?.Retry.IsRetrying == true`)
+            if (`ChatState?.Retry.IsRetrying`)
                 <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(10,  6, 10,  6)`
                         BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` HorizontalAlignment=Stretch>
                     <StackPanel Orientation=Horizontal Spacing=8>
