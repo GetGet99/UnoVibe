@@ -41,7 +41,7 @@ namespace UnoVibe.Pages.Chat;
                     {
                         // Undo: the server keeps reverted messages until the next prompt, so
                         // hide everything at/after the revert point (the card replaces them).
-                        if (`(ChatState?.RevertMessageId is {} str && str != "") || StringComparer.Ordinal.Compare(m.Id, str) < 0`)
+                        if (`(ChatState?.RevertMessageId ?? "").Length == 0 || StringComparer.Ordinal.Compare(m.Id, ChatState?.RevertMessageId ?? "") < 0`)
                             <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`OnMessageForkRequested` />
                     }
                     if (`ChatState?.RevertMessageId`)
@@ -105,7 +105,7 @@ namespace UnoVibe.Pages.Chat;
                     }
                 </StackPanel>
             </StickyScrollViewer>
-            if (`ChatState?.Messages.Reactive.Count ?? 0 == 0`)
+            if (`(ChatState?.Messages.Reactive.Count ?? 0) == 0`)
                 <StackPanel HorizontalAlignment=Center VerticalAlignment=Center Padding=`new Thickness(16, 0, 16, 0)` Spacing=6 IsHitTestVisible=false>
                     <AppSymbolIcon Symbol=Folder FontSize=22 Foreground=`theme.TertiaryText` HorizontalAlignment=Center />
                     <TextBlock Text=`PathDisplayHelper.Relative(Sessions.ActiveSessionDirectory, Connection.ServerDirectory)` FontSize=13 Foreground=`theme.SecondaryText` TextAlignment=Center TextWrapping=Wrap
