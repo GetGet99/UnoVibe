@@ -30,6 +30,7 @@
     -->
     <UnoFeatures>
       SkiaRenderer;
+      SpellChecking
     </UnoFeatures>
   </PropertyGroup>
 
@@ -56,6 +57,12 @@
     <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">$(DefineConstants);DESKTOP_LINUX</DefineConstants>
     <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(DefineConstants);DESKTOP_MACOS</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="./Services/SessionStoreToBeRemoved.cs" />
+    <Compile Remove="./Services/OpencodeClientExtensionsToBeRemoved.cs" />
+    <Compile Remove="./Services/ChatStoreToBeRemoved.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../UnoVibe.Integration/UnoVibe.Integration.csproj" />

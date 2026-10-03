@@ -1,6 +1,3 @@
-using UnoVibe.Models;
-using UnoVibe.Services;
-
 namespace UnoVibe.Pages.Connect;
 
 /// <summary>
@@ -10,8 +7,6 @@ namespace UnoVibe.Pages.Connect;
 /// the page via <see cref="OpenRecentRequested"/> / <see cref="RemoveRecentRequested"/>.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Services;
-    using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
@@ -69,7 +64,7 @@ namespace UnoVibe.Pages.Connect;
         </Border>
     </root>
     """)]
-public partial class RecentListPanel : IQuickMarkupComponent<Border>
+partial class RecentListPanel : IQuickMarkupComponent<Border>
 {
     /// <summary>Handler for <see cref="OpenRecentRequested"/>.</summary>
     public delegate Task OpenRecentHandler(RecentConnection item);

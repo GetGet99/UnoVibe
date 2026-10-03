@@ -1,5 +1,3 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -9,12 +7,10 @@ namespace UnoVibe.Pages.Chat;
 /// and action row align right for user messages and left for assistant messages.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe;
-    using UnoVibe.Models;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Windows.UI.Text;
-    required PartItem Part;
+    required TextPartItem Part;
     MessageItem? Message;
     bool PlainMode = false;
     <setup>
@@ -60,7 +56,7 @@ namespace UnoVibe.Pages.Chat;
         </StackPanel>
     </StackPanel>
     """)]
-public partial class MessageTextPart : IQuickMarkupComponent
+partial class MessageTextPart : IQuickMarkupComponent
 {
     /// <summary>Handler for <see cref="RevertRequested"/>.</summary>
     public delegate Task RevertHandler(MessageItem message);

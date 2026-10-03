@@ -19,4 +19,4 @@ namespace UnoVibe.Controls;
     double FontSize = 16;
     <FontIcon Glyph=`((char)Symbol).ToString()` FontSize=`FontSize` />
     """)]
-public partial class AppSymbolIcon : IQuickMarkupComponent<FontIcon>;
+partial class AppSymbolIcon : IQuickMarkupComponent<FontIcon>;

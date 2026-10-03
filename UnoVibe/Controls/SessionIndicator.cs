@@ -1,8 +1,5 @@
-using UnoVibe.Services;
-
 namespace UnoVibe.Controls;
 [QuickMarkup("""
-    using UnoVibe.Services;
     SessionState State;
     <Grid Width=14 Height=14 VerticalAlignment=Center>
         if (`State is SessionState.Working`) {

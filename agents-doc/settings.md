@@ -4,7 +4,7 @@ Reference for the app-settings system and how a setting flows from data to UI.
 **Read this file when** editing `SettingsStore`, `SettingsPage`, `CodeFonts`, `SystemFonts`,
 `FolderLauncher`'s editor command, or adding a new setting.
 
-App settings live in a static `Services/SettingsStore.cs` — one source of truth for every window
+App settings live in a static `Stores/SettingsStore.cs` — one source of truth for every window
 (static = shared in-process) and, via a `FileSystemWatcher` on `settings.json`, every process
 (reload on external write, debounced + loop-guarded by the last-written content; `Changed` notifies
 open settings pages to re-read on the UI thread).
@@ -41,13 +41,13 @@ open settings pages to re-read on the UI thread).
   It is deliberately **not** applied to UI chrome: tool title/header labels (except the shell command
   line), expand/collapse chevrons + "Show more/less" buttons, the `/`-command suggestion list,
   permission bodies, question text, or `ToolError` lines.
-  `Services/CodeFonts.cs` resolves the setting into a `FontFamily` everyone binds to
+  `Helpers/CodeFontsHelper.cs` resolves the setting into a `FontFamily` everyone binds to
   (`CodeFonts.Current`); the empty-string default maps to a font that ships with the OS —
   **Consolas** on Windows, **DejaVu Sans Mono** on Linux (the fontconfig `monospace` default on
   nearly every distro), **Menlo** on macOS — because a single hardcoded `Consolas` silently fell
   back to the default sans font (no monospace) on Linux/macOS where the Microsoft font doesn't
   exist. Any other installed monospaced font name works verbatim, or the `monospace` generic on
-  Linux. The picker lists every font installed on the device, enumerated once (lazily, on first
-  settings open) by `Services/SystemFonts.cs`: SkiaSharp's `SKFontManager.Default.FontFamilies`
+  Linux. The   picker lists every font installed on the device, enumerated once (lazily, on first
+  settings open) by `Helpers/SystemFontsHelper.cs`: SkiaSharp's `SKFontManager.Default.FontFamilies`
   on desktop (the same font manager that resolves `FontFamily` in the Skia renderer), and
   Win2D's `CanvasTextFormat.GetSystemFontFamilies()` (DirectWrite) on the `net10.0-windows` target.

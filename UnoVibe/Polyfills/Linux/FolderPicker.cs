@@ -18,7 +18,7 @@ namespace UnoVibe.Polyfills.Linux;
 /// is honored — the dialog opens at an arbitrary path — via the XDG desktop portal's
 /// <c>org.freedesktop.portal.FileChooser</c> <c>current_folder</c> option, over the session D-Bus.
 /// </summary>
-public sealed class FolderPicker
+sealed class FolderPicker
 {
     private const string Service = "org.freedesktop.portal.Desktop";
     private const string ObjectPath = "/org/freedesktop/portal/desktop";

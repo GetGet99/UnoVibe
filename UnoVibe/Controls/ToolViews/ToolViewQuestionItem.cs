@@ -1,9 +1,6 @@
-using UnoVibe.Models;
-
 namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
-    using UnoVibe.Models;
     using QuickMarkup.WinUI;
     required QuestionFormItem Q;
     <StackPanel Spacing=4>
@@ -26,4 +23,4 @@ namespace UnoVibe.Controls.ToolViews;
             <TextBox Text<=>`Q.CustomText` PlaceholderText="Type a custom answer..." AcceptsReturn=true TextWrapping=Wrap IsEnabled=`Q.CustomSelected` />
     </StackPanel>
     """)]
-public partial class ToolViewQuestionItem : IQuickMarkupComponent;
+partial class ToolViewQuestionItem : IQuickMarkupComponent;

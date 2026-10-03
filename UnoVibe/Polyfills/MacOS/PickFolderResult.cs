@@ -10,7 +10,7 @@ namespace UnoVibe.Polyfills.MacOS;
 /// <c>Microsoft.Windows.Storage.Pickers.PickFolderResult</c> (a lightweight object carrying the
 /// picked folder path). A cancelled dialog is surfaced as a null result instead.
 /// </summary>
-public sealed class PickFolderResult
+sealed class PickFolderResult
 {
     internal PickFolderResult(string path) => Path = path;
 

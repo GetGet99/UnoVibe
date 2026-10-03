@@ -1,9 +1,6 @@
-using QuickMarkup.WinUI;
 using Microsoft.UI.Xaml.Documents;
-using Microsoft.UI.Text;
 using Windows.UI.Text;
 using UnoVibe.Controls.ToolViews;
-using UnoVibe.Services;
 
 namespace UnoVibe.Controls;
 
@@ -35,7 +32,7 @@ namespace UnoVibe.Controls;
         host = <StackPanel Spacing=2 />
     </root>
     """)]
-public partial class DiffView : IQuickMarkupComponent<UIElement>
+partial class DiffView : IQuickMarkupComponent<UIElement>
 {
     public const int DiffMaxLines = 60;
     public const int DiffMaxChars = DiffMaxLines * 160;
@@ -73,7 +70,7 @@ public partial class DiffView : IQuickMarkupComponent<UIElement>
         };
         var text = new TextBlock
         {
-            FontFamily = CodeFonts.Current,
+            FontFamily = CodeFontsHelper.Current,
             FontSize = 12,
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,

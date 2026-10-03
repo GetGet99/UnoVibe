@@ -1,7 +1,7 @@
 # opencode server integration
 
 Reference for how UnoVibe talks to `opencode serve` and reacts to its events.
-**Read this file when** working on `OpencodeClient`, `ChatStore.Apply`, `ServeProcess`,
+**Read this file when** working on `OpencodeClient`, `EventsProvider`, `OpencodeServeProcess`,
 permission/question handling, MCP, or anything that touches the server API or the SSE event stream.
 Client-side session state (send modes, revert, fork, retry/continue, autoscroll) lives in
 [`session-state.md`](session-state.md); sidebar rendering lives in [`session-sidebar.md`](session-sidebar.md).
@@ -23,7 +23,7 @@ Poll `GET /global/health` until it returns `{"healthy":true,...}`.
 
 `GET /event` (long-lived stream; **scoped to the request's instance directory** —
 events for sessions in other directories are filtered out server-side, so
-`ChatStore.StartFolderEventStream` opens an extra `/event?directory=<path>` stream per opened sidebar
+`EventsProvider` opens an extra `/event?directory=<path>` stream per opened sidebar
 folder, feeding the same channel; `PumpAsync` dedupes by SSE event id because a folder equal to the
 server's default instance would otherwise deliver every event twice).
 
@@ -42,7 +42,7 @@ the app).
 - `GET /session` — list; **scoped by project + directory** — the server's `Session.list` filters by
   the instance's project ID, so sessions created in *other directories* of a different project
   (via `POST /session?directory=`) are NOT in the default list, which is why
-  `ChatStore.RefreshSessionsAsync` additionally fetches `GET /session?directory=<path>` per opened
+  `SessionsStateProvider` additionally fetches `GET /session?directory=<path>` per opened
   sidebar folder and merges the results; but worktree directories of the same repo share the project
   ID and DO show up in the default list — see "[SSE events](#sse-events)" for why each such directory
   still needs its own event stream.
@@ -60,17 +60,17 @@ On the first prompt the server runs a `title` agent with the small model (`provi
 and replaces the default via `session.setTitle` (source: `session/prompt.ts` `SessionPrompt.ensureTitle`;
 regex in `session/session.ts` `isDefaultTitle`).
 The write emits a `session.updated` event carrying `{ sessionID, info }`, which
-`ChatStore.ApplySessionUpsert` applies to the sidebar + header.
+`SessionsStateProvider` applies to the sidebar + header.
 UnoVibe creates sessions without a title, displays `"New Chat"` for default-titled sessions
 (`NormalizeTitle`), and surfaces the generated name when the event arrives.
-Manual rename (`ChatStore.RenameSessionAsync`, header ✎ button) calls `PATCH /session/:id` and
+Manual rename (`SessionsStateProvider.RenameSessionAsync`, header ✎ button) calls `PATCH /session/:id` and
 short-circuits future auto-naming because the title no longer matches `isDefaultTitle`.
 
 ## Subagents
 
 The `task` tool spawns a child session whose `SessionInfo` carries a `parentID`
 (field `SessionInfo.ParentId`; `IsSubagent` = `ParentId` non-empty).
-`ChatStore` keeps subagent `SessionInfo`s in `Sessions` (needed for `SwitchSessionAsync` lookup)
+`SessionsStateProvider` keeps subagent `SessionInfo`s in `Sessions` (needed for `SwitchSessionAsync` lookup)
 but **filters them out of `ReconcileDirectoryGroups`**, so they never appear in the
 sidebar — mirroring the TUI (`parentID === undefined` filter).
 
@@ -79,10 +79,10 @@ Entry point is the tool call itself:
 `state.input.subagent_type` into `PartItem.ToolSessionId`/`ToolParentSessionId`/`ToolSubagentType`,
 and `MessageView` dispatches `tool == "task"` to `ToolViewTask` — a clickable card
 (✳ title + subagent-type pill + status line + ✓/✕/■) that calls
-`ChatStore.SwitchSessionAsync(part.ToolSessionId)` on click.
+`SessionsStateProvider.SwitchSessionAsync(part.ToolSessionId)` on click.
 
 Opening a subagent session shows a **back button before the title** in the ChatPage header
-(`Store.ParentSessionId.Length > 0`) that calls `ChatStore.GoToParentAsync()`; `ParentSessionId` is
+(`SessionsStateProvider.ParentSessionId.Length > 0`) that calls `SessionsStateProvider.GoToParentAsync()`; `ParentSessionId` is
 set in `SwitchSessionAsync` (with a `GET /session/:id` fallback via `OpencodeClient.GetSessionAsync`
 when the child isn't in the sidebar list) and reset in
 `Configure`/`NewSessionAsync`/`EnsureSessionAsync`/`ApplySessionDeleted`.
@@ -97,12 +97,12 @@ when the child isn't in the sidebar list) and reset in
 
 **Pending permission requests are per workspace directory (instance).**
 `OpencodeClient.GetPendingPermissionsAsync`/`ReplyPermissionAsync` take a `directory` and are called
-with the active session's instance (`ChatStore.SyncPendingPermissionsAsync` uses `ActiveDirectory()`;
+with the active session's instance (`SessionsStateProvider.SyncPendingPermissionsAsync` uses `ActiveDirectory()`;
 `ReplyPermissionAsync` resolves the request's session directory via `PermissionDirectory`), so replies
 reach the instance that owns the request (folder-opened sessions live in a non-default instance —
 a directory-less reply would 404).
 
-`ChatStore` keeps a pending-request queue (`ActivePermission` = oldest pending) that is
+`SessionsStateProvider` keeps a pending-request queue (`ActivePermission` = oldest pending) that is
 **rebuilt from the authoritative server list** on connect/session-switch
 (`SyncPendingPermissionsAsync` clears `_permissions` then re-adds requests for the active session,
 deduped by `AddPermissionRequest`) — the server is the source of truth because a request can vanish
@@ -126,16 +126,16 @@ is pending.
 `session.status` events carry
 `{ sessionID, status: {type:"idle"|"busy"|"retry", attempt?, message?, action?, next?} }`;
 the TUI treats anything `!= "idle"` as busy and shows the retry message.
-`ChatStore.StatusMessage` surfaces the retry banner.
+`SessionsStateProvider.StatusMessage` surfaces the retry banner.
 
 `session.status`, `message.updated`, and the `question.*` events are intentionally **not**
-session-filtered in `Apply` — `ChatStore` tracks per-session busy state (`SessionFlags.Status` →
-`SessionInfo.IsBusy`) to drive the sidebar spinner, and polls `GET /session/status` at connect to
+session-filtered in `Apply` — `SessionsStateProvider` tracks per-session busy state (`SessionHead.IsBusy`)
+to drive the sidebar spinner, and polls `GET /session/status` at connect to
 catch sessions already busy before the SSE stream attached (the server only emits status on
 transitions).
 
 Background session activity: when a *background* session's turn completes (`session.status` → idle
-while not active), `ChatStore` sets `IsRead = false` on the session's `SessionHead` and records the
+while not active), `SessionsStateProvider` sets `IsRead = false` on the session's `SessionHead` and records the
 turn outcome (`SessionHead.Outcome`, a `ChatOutcome` enum: `Success`/`Error`/`Interrupted`/`None`,
 derived from the last assistant `message.updated` `info.error`). Viewing the session sets
 `IsRead = true`, which suppresses the indicator. **Right-clicking a sidebar session** opens a
@@ -164,7 +164,7 @@ the appropriate glyph/color for each `SessionState` value.
 - **Pending questions are per workspace directory (instance), like permissions** — the server's
   pending map lives in `InstanceState` (`question/index.ts`), so `ReplyQuestionAsync`/
   `RejectQuestionAsync`/`GetPendingQuestionsAsync` take a `directory` and are called with the
-  owning session's instance (`ChatStore.QuestionDirectory`/`DirectoryOf`, `SyncPendingQuestionsAsync`
+  owning session's instance (`SessionsStateProvider.QuestionDirectory`/`DirectoryOf`, `SyncPendingQuestionsAsync`
   uses `ActiveDirectory()`), so a reply reaches the instance holding the request
   (folder-opened sessions live in a non-default instance — a directory-less reply 404s
   `QuestionNotFoundError`). A 404 reply/reject drops the stale request so the next pending
@@ -177,12 +177,12 @@ Error message strings may contain surrounding literal quotes — `UnwrapErrorMes
 
 **Auto-retry card:**
 The active turn's auto-retry (`status type "retry"` with `attempt`/`message`/`next` unix-ms) drives
-an **end-of-chat retry card** (`ChatStore.IsRetrying`/`RetryMessage`/`RetryAttempt`/`RetryNextMs`;
+an **end-of-chat retry card** (`ChatboxState.IsRetrying`/`RetryMessage`/`RetryAttempt`/`RetryNextMs`;
 `ChatPage` ticks a `DispatcherTimer` every second calling `UpdateRetryCountdown` for the live
 "retrying in Ns · attempt #N" line — the header `StatusMessage` banner also still shows it).
 
 **Continue button:**
-A stopped-with-error turn shows a **"⟳ Continue" button** (`SessionStore.ShowContinue`), set at
+A stopped-with-error turn shows a **"⟳ Continue" button** (`ChatboxState.ShowContinue`), set at
 `session.status` idle or when the final `message.updated` lands after idle (the server emits idle
 before the error-carrying `message.updated`, since `halt` runs before `cleanup`), and computed by
 `ShouldShowContinue()` = `LastAssistantMessageErrored()` (last assistant message has an `error` part)
@@ -190,7 +190,7 @@ before the error-carrying `message.updated`, since `halt` runs before `cleanup`)
 a turn that stops mid-reasoning or finishes reasoning-only often carries no `error` part to latch
 onto); aborts never qualify (interrupt → "aborted" part).
 The button (a bare left-aligned button — no card, since the error part box above already surfaces
-the error; tooltip explains it sends a `"continue"` message) just calls `Store.SendAsync("continue")`
+the error; tooltip explains it sends a `"continue"` message) just calls `ChatboxState.SendAsync("continue")`
 — there is **no server continue API**; the agent prompt (`prompt/beast.txt`) tells the model to
 resume from the last incomplete todo step (matches the TUI, which only lets the user type it).
 Flags reset in `ResetTurnFlags()` on connect/new/switch/delete and before each send.
@@ -209,10 +209,10 @@ share the same MCP servers from that directory's `opencode.json` `mcp` key; the 
 `?directory=`/`x-opencode-directory` instance header.
 There is **no push event for MCP status changes** (only `mcp.tools.changed` /
 `mcp.browser.open.failed`), so clients poll `/mcp` at connect, on session switch, and after each
-toggle — exactly what `ChatStore.RefreshMcpStatusAsync` does.
+toggle — exactly what `McpService.RefreshMcpStatusAsync` does.
 
 UnoVibe shows a collapsible **MCP section in `SessionSidebar`** (status dot + name + status/error +
-Connect/Disconnect toggle, summary `N active, M error`); `ChatStore.ToggleMcpAsync` calls
+Connect/Disconnect toggle, summary `N active, M error`); `McpService.ToggleMcpAsync` calls
 connect/disconnect/authenticate based on current status (mirrors the web client's `toggleMcp`):
 connected → disconnect, `needs_auth` → **`POST /mcp/{name}/auth/authenticate`**, anything else →
 connect. A `needs_auth` toggle therefore runs the server-side OAuth flow: the **server** opens the
@@ -230,7 +230,7 @@ API def: `server/routes/instance/httpapi/groups/mcp.ts`.
 
 ## Unhandled events
 
-`ChatStore.Apply` has `// TODO:` placeholder `case`s (with `break;`) for every other event the
+`EventsProvider.Apply` has `// TODO:` placeholder `case`s (with `break;`) for every other event the
 server's `/event` stream emits:
 `session.deleted/error/diff/idle/compacted`, `file.edited`, `file.watcher.updated`,
 `todo.updated`, `lsp.updated`, `command.executed`,
@@ -239,7 +239,7 @@ server's `/event` stream emits:
 Handled: `session.created`/`session.updated`, `session.status`, `message.removed`,
 `question.replied`/`question.rejected` (pending-attention counters),
 `mcp.tools.changed` (→ `RefreshMcpStatusAsync`),
-and `vcs.branch.updated` (→ `ChatStore.RefreshBranches`).
+and `vcs.branch.updated` (→ `SessionsStateProvider.RefreshBranches`).
 
 The `session.next.*` streaming events exist in the schema but are not published by the current CLI
 server. Implement a case and remove its TODO marker when adopting it.

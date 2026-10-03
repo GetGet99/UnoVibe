@@ -1,6 +1,3 @@
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Media;
-
 namespace UnoVibe;
 
 /// <summary>
@@ -9,7 +6,7 @@ namespace UnoVibe;
 /// content; otherwise the root grid falls back to the theme <c>SolidBackground</c> brush
 /// (kept in sync with theme changes). Assign content via <see cref="Child"/>.
 /// </summary>
-public class MicaWindow : Window
+class MicaWindow : Window
 {
     private readonly Grid _root = new();
 

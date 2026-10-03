@@ -1,8 +1,6 @@
 #if DESKTOP_LINUX
 // Registers the Linux polyfill result type as the app-wide `PickFolderResult`.
 // See AGENTS.md -> "Polyfills".
-global using PickFolderResult = UnoVibe.Polyfills.Linux.PickFolderResult;
-
 namespace UnoVibe.Polyfills.Linux;
 
 /// <summary>
@@ -10,7 +8,7 @@ namespace UnoVibe.Polyfills.Linux;
 /// <c>Microsoft.Windows.Storage.Pickers.PickFolderResult</c> (a lightweight object carrying the
 /// picked folder path). A cancelled dialog is surfaced as a null result instead.
 /// </summary>
-public sealed class PickFolderResult
+sealed class PickFolderResult
 {
     internal PickFolderResult(string path) => Path = path;
 

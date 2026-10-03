@@ -31,7 +31,7 @@ namespace Microsoft.Windows.AppNotifications
     /// <see cref="Microsoft.Windows.AppNotifications.Builder.AppNotificationBuilder.BuildNotification"/>
     /// and consumed by <see cref="AppNotificationManager.Show"/>. Carries only the text lines added
     /// to the builder; the WASDK-XML payload is an implementation detail this polyfill doesn't need.</summary>
-    public sealed class AppNotification
+    sealed class AppNotification
     {
         internal AppNotification(List<string> texts) => _texts = texts;
 
@@ -51,7 +51,7 @@ namespace Microsoft.Windows.AppNotifications
     /// cost of being attributed to Script Editor and needing Script Editor enabled in
     /// System Settings → Notifications on modern macOS). One shot per event; failures are logged.
     /// </summary>
-    public sealed class AppNotificationManager
+    sealed class AppNotificationManager
     {
         private const string OsascriptPath = "/usr/bin/osascript";
 
@@ -224,7 +224,7 @@ namespace Microsoft.Windows.AppNotifications.Builder
     /// — fluently collects the toast's text lines and produces an <see cref="AppNotification"/>.
     /// WASDK renders AddText lines as heading then body; the polyfill keeps that order (first line =
     /// heading, rest = body) so the macOS notification looks like the WinUI toast.</summary>
-    public sealed class AppNotificationBuilder
+    sealed class AppNotificationBuilder
     {
         private readonly List<string> _texts = new();
 

@@ -18,7 +18,7 @@ namespace UnoVibe.Polyfills.MacOS;
 /// is honored — the panel opens at an arbitrary path — by driving <c>NSOpenPanel</c> directly through
 /// the Objective-C runtime (<c>objc_msgSend</c>), setting <c>directoryURL</c> to the requested folder.
 /// </summary>
-public sealed class FolderPicker
+sealed class FolderPicker
 {
     public FolderPicker(Window window)
     {

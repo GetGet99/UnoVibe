@@ -6,7 +6,7 @@ namespace UnoVibe.Controls;
 /// merges results. Hosts of <see cref="SuggestBox"/> wire these up via
 /// <see cref="SuggestBox.Providers"/>.
 /// </summary>
-public interface ISuggestionProvider
+interface ISuggestionProvider
 {
     /// <summary>Trigger character that activates this provider ('/' or '@').</summary>
     char Trigger { get; }
@@ -36,7 +36,7 @@ public interface ISuggestionProvider
 ///     appear when the input starts with the trigger. Skills (<c>/quickmarkup</c>) and mentions
 ///     (<c>@path</c>) set it false and work anywhere.
 /// </summary>
-public sealed class SuggestionBoxController
+sealed class SuggestionBoxController
 {
     private readonly IReadOnlyList<ISuggestionProvider> _providers;
     private readonly string _prefixes;

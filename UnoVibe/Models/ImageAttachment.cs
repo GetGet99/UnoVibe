@@ -7,7 +7,7 @@ namespace UnoVibe.Models;
 /// A pending image attachment that will be included with the next prompt as a
 /// base64 data-URL file part (mirrors how the opencode TUI/web clients attach images).
 /// </summary>
-public sealed class ImageAttachment
+sealed class ImageAttachment
 {
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public string FileName { get; set; } = "";
@@ -43,7 +43,7 @@ public sealed class ImageAttachment
     /// <summary>Guesses the MIME type from a file extension (defaults to PNG for unknown).</summary>
     public static string MimeFromPath(string path)
     {
-        return System.IO.Path.GetExtension(path).ToLowerInvariant() switch
+        return Path.GetExtension(path).ToLowerInvariant() switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
             ".gif" => "image/gif",
@@ -60,6 +60,19 @@ public sealed class ImageAttachment
         {
             FileName = fileName,
             Mime = mime,
+            Bytes = bytes,
+            Preview = await DecodeAsync(bytes),
+        };
+    }
+
+    /// <summary>Reads an image file from disk.</summary>
+    public static async Task<ImageAttachment> CreateFromFileAsync(string path)
+    {
+        var bytes = await File.ReadAllBytesAsync(path);
+        return new ImageAttachment
+        {
+            FileName = Path.GetFileName(path),
+            Mime = MimeFromPath(path),
             Bytes = bytes,
             Preview = await DecodeAsync(bytes),
         };

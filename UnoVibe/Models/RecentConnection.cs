@@ -5,7 +5,7 @@ namespace UnoVibe.Models;
 /// launched `opencode serve` in, or an existing server URL they connected to.
 /// Plain DTO — persisted as JSON by <c>RecentConnectionsStore</c>.
 /// </summary>
-public sealed class RecentConnection
+sealed class RecentConnection
 {
     public const string FolderKind = "Folder";
     public const string ServerKind = "Server";

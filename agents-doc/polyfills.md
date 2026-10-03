@@ -20,10 +20,10 @@ On the **WASDK** target the folder picker is the Windows App SDK's
 `StoragePickersContract`, not Uno). It takes the `WindowId` (`window.AppWindow.Id`) in its
 constructor, so it needs **no** `InitializeWithWindow`; its `PickSingleFolderAsync` returns a
 `PickFolderResult` (`.Path`), not a `StorageFolder`. The `startPath` (set via `SuggestedStartFolder`)
-is the current window path, i.e. `ChatStore.ServerDirectory`. Only `DESKTOP_WINDOWS` (a Skia build
+is the current window path, i.e. `OpencodeConnection.ServerDirectory`. Only `DESKTOP_WINDOWS` (a Skia build
 running on Windows) falls back to the classic `Windows.Storage.Pickers.FolderPicker` +
 `InitializeWithWindow`, where `startPath` is ignored (that API has no exact-path control). Both call
-sites pass `Store.ServerDirectory` (`SessionSidebar`'s Open Folder / `ConnectPage`'s folder pick).
+sites pass `OpencodeConnection.ServerDirectory` (`SessionSidebar`'s Open Folder / `ConnectPage`'s folder pick).
 
 ## Conventions for every polyfill file
 

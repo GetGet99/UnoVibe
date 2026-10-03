@@ -1,6 +1,6 @@
 namespace UnoVibe.Models;
 
-public sealed class ModelOption
+sealed class ModelOption
 {
     public string ProviderId { get; set; } = "";
     public string Id { get; set; } = "";

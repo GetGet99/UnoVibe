@@ -1,8 +1,5 @@
-using Microsoft.UI.Text;
 using Microsoft.UI.Xaml.Documents;
-using QuickMarkup.WinUI;
 using UnoVibe.Controls.ToolViews;
-using UnoVibe.Services;
 
 namespace UnoVibe.Controls;
 
@@ -33,7 +30,7 @@ namespace UnoVibe.Controls;
         host = <StackPanel Spacing=2 />
     </root>
     """)]
-public partial class CodeView : IQuickMarkupComponent<UIElement>
+partial class CodeView : IQuickMarkupComponent<UIElement>
 {
     public const int CodeMaxLines = 60;
     public const int CodeMaxChars = CodeMaxLines * 160;
@@ -72,7 +69,7 @@ public partial class CodeView : IQuickMarkupComponent<UIElement>
         };
         var text = new TextBlock
         {
-            FontFamily = CodeFonts.Current,
+            FontFamily = CodeFontsHelper.Current,
             FontSize = 12,
             // No explicit Foreground: unscoped tokens inherit this brush (baking one froze them
             // to the build-time theme); left unset, Uno's theme walk keeps it current.

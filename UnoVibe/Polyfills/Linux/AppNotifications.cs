@@ -1,9 +1,7 @@
 #if DESKTOP_LINUX
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Tmds.DBus.Protocol;
 using UnoVibe.Polyfills.Linux.DBus;
-using Windows.ApplicationModel;
 
 // Supplies the Windows App SDK's toast-notification API surface
 // (Microsoft.Windows.AppNotifications.*) on the desktop-Linux target, so the shared code in
@@ -27,7 +25,7 @@ namespace Microsoft.Windows.AppNotifications
     /// <see cref="Microsoft.Windows.AppNotifications.Builder.AppNotificationBuilder.BuildNotification"/>
     /// and consumed by <see cref="AppNotificationManager.Show"/>. Carries only the text lines added
     /// to the builder; the WASDK-XML payload is an implementation detail this polyfill doesn't need.</summary>
-    public sealed class AppNotification
+    sealed class AppNotification
     {
         internal AppNotification(List<string> texts) => _texts = texts;
 
@@ -46,9 +44,9 @@ namespace Microsoft.Windows.AppNotifications
     /// implemented by every common notification daemon — GNOME, KDE Plasma, XFCE, ...). One shot per
     /// event; a new D-Bus connection is opened per toast so there is no state to leak or sync.
     /// </summary>
-    public sealed class AppNotificationManager
+    sealed class AppNotificationManager
     {
-        private const string NotificationService = "org.freedesktop.Notifications";
+        private const string NotificationProvider = "org.freedesktop.Notifications";
         private static readonly ObjectPath NotificationPath = new("/org/freedesktop/Notifications");
 
         // All UnoVibe windows carry this WM_CLASS (X11XamlRootHost.SetWMClass uses
@@ -121,7 +119,7 @@ namespace Microsoft.Windows.AppNotifications
                 using var connection = new DBusConnection(sessionAddress);
                 await connection.ConnectAsync().ConfigureAwait(false);
 
-                var service = new DBusService(connection, NotificationService);
+                var service = new DBusService(connection, NotificationProvider);
                 // The generated D-Bus client is also named "Notifications" (namespace
                 // UnoVibe.Polyfills.Linux.DBus); `var` sidesteps the name.
                 var notifications = service.CreateNotifications(NotificationPath);
@@ -321,7 +319,7 @@ namespace Microsoft.Windows.AppNotifications.Builder
     /// — fluently collects the toast's text lines and produces an <see cref="AppNotification"/>.
     /// WASDK renders AddText lines as heading then body; the polyfill keeps that order (first line =
     /// heading, rest = body) so the desktop looks like the WinUI toast.</summary>
-    public sealed class AppNotificationBuilder
+    sealed class AppNotificationBuilder
     {
         private readonly List<string> _texts = new();
 

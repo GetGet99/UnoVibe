@@ -58,7 +58,7 @@ public struct ReasoningTime
     public bool IsImage => `Mime.StartsWith("image/")`;
     public ReasoningTime Time;
     """)]
-public partial class PartItem
+partial class PartItem
 {
     public string Id { get; set; } = "";
     public string MessageId { get; set; } = "";

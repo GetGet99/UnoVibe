@@ -1,5 +1,3 @@
-using UnoVibe.Services;
-
 namespace UnoVibe.Pages.Chat;
 
 /// <summary>
@@ -11,10 +9,18 @@ namespace UnoVibe.Pages.Chat;
 /// placement properties (Grid.Row) to the component instance, not its MarkupNode.
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Services;
     using QuickMarkup.WinUI;
-    inject ChatStore Store;
+    using UnoVibe.States;
+    inject SessionsStateProvider Sessions;
+    inject ToastsProvider Toasts;
+    inject OpencodeClient Opencode;
+    inject UIServiceProvider UIs;
+    inject EventsProvider Events;
+    inject ModelsProvider Models;
     provide ChatPage ChatP = `this`;
+    provide ChatMessagesState? ChatState;
+    ChatMessagesState? ChatStateGetter => async `GetSessionAsync()`;
+    provide `AsyncComputed<ChatMessagesState>` ChatStateAsync = `ChatStateGetterAsync`;
     <root>
         <Grid RowDefinitions=<>
             <RowDefinition Height=Auto />
@@ -32,54 +38,123 @@ namespace UnoVibe.Pages.Chat;
                 chatMessageList = <ChatMessageList />
             </Grid>
             <Grid Grid.Row=3>
-                composer = <ChatComposer SendRequested+=`SendAsync` ShellCommandRequested+=`SendShellCommandAsync` />
+                composer = <ChatComposer />
             </Grid>
         </Grid>
     </root>
     """)]
-public partial class ChatPage : Page
+partial class ChatPage : Page
 {
     [QuickMarkupConstructor]
-    private void Ctor()
+    void Ctor()
     {
+        UIs.ForkAndSwitchSessionRequested += ForkAndSwitchSession;
+        UIs.ForkAndSwitchSessionWithMessageRequested += ForkAndSwitchSession;
+        WatchSession();
         Init();
-        _ = Store.ConnectAsync();
     }
-
-    private async Task SendAsync(string text, SendPromptMode? mode)
+    async Task<ChatMessagesState?> GetSessionAsync()
     {
-        var content = text.Trim();
-        if (content.Length == 0 && Store.Active.PendingImages.Count == 0) return;
-        await Store.Active.SendAsync(content, mode);
-        chatMessageList.ForceScrollToBottom();
+        if (Sessions.ActiveSessionId is {} sessionId)
+            return await ChatMessagesState.Create(Opencode, Toasts, Events, Models, Sessions, sessionId);
+        return null;
     }
 
-    /// <summary>Runs a shell-mode command in the session (composer "!" prefix, TUI parity).</summary>
-    private async Task SendShellCommandAsync(string command)
+    void WatchSession()
     {
-        await Store.Active.SendShellAsync(command);
-        chatMessageList.ForceScrollToBottom();
+        ChatStateGetterAsync.Watch(x =>
+        {
+            if (ChatState is {} value)
+            {
+                value.Dispose();
+                value = null;
+                CallGCAfterDelay(2000);
+
+            }
+            if (x.IsFailed)
+                Toasts.ShowError(
+                    x.Failure!.ToString(),
+                    "Chat State"
+                );
+            
+            ChatState = x.IsSuccess ? x.Value : null;
+        }, immediate: true);
     }
 
-    public void SetChatText(string txt) => composer.SetChatText(txt);
+    static async void CallGCAfterDelay(int ms)
+    {
+        await Task.Delay(ms).ConfigureAwait(continueOnCapturedContext: false);
+        GC.Collect();
+    }
 
-    /// <summary>Enters the header's inline rename mode (/rename built-in command entry).</summary>
-    public void BeginRename() => header.BeginRename();
-
-    /// <summary>Undo the last exchange (/undo built-in): revert past its prompt, restore the
-    /// undone prompt text into the composer, then scroll to the end.</summary>
+    /// <summary>Enters the header's imposer, then scroll to the end.</summary>
     public async Task UndoLastAsync()
     {
-        await Store.Active.UndoLastMessageAsync();
-        if (Store.Active.RevertPromptText.Length > 0)
-            composer.SetChatText(Store.Active.RevertPromptText);
-        chatMessageList.ForceScrollToBottom();
+        if (ChatState is not null)
+        {
+            await ChatState.UndoLastMessageAsync();
+        }
+        UIs.ScrollChatToBottom();
     }
 
     /// <summary>Restore reverted messages (/redo built-in), then scroll to the end.</summary>
     public async Task RedoLastAsync()
     {
-        await Store.Active.RedoLastMessageAsync();
-        chatMessageList.ForceScrollToBottom();
+        if (ChatState is not null)
+        {
+            await ChatState.RedoLastMessageAsync();
+        }
+        UIs.ScrollChatToBottom();
+    }
+
+
+    /// <summary>
+    /// Forks the conversation at a specific message (TUI/web parity: "Fork" action). Calls
+    /// POST /session/{id}/fork with the target message id — the server creates a new session
+    /// containing all messages strictly before the fork point (the forked-at message itself is
+    /// excluded) titled "&lt;original&gt; (fork #N)" — then switches to it and restores the
+    /// forked-at message's prompt (text + staged images) into the composer so the user can
+    /// continue from there. Returns the new session id, or null on failure/no session.
+    /// </summary>
+    async void ForkAndSwitchSession(SessionId sessionId, MessageItem message)
+    {
+        var forkedResult = await Opencode.ForkSessionAsync(sessionId, new()
+        {
+            MessageID = message.Id
+        });
+        if (!forkedResult.TryGetValue(out var forked, out var error))
+        {
+            Toasts.ShowError(error, "Fork failed");
+            return;
+        }
+
+        var head = Sessions.Register(forked);
+
+        Sessions.ActiveSessionId = head.Id;
+        Sessions.ActiveChatbox.Message = ChatboxMessage.From(message);
+        
+        return;
+    }
+
+
+    /// <summary>
+    /// Forks the whole active session (TUI/web parity: "Full session" fork). Calls
+    /// POST /session/{id}/fork with no message id so the server copies every message and titles
+    /// the new session "&lt;original&gt; (fork #N)", then switches to it. Unlike the per-message
+    /// fork there's no prompt to restore — the composer keeps whatever the user had. Returns the
+    /// new session id, or null on failure/no session.
+    /// </summary>
+    async void ForkAndSwitchSession(SessionId sessionId)
+    {
+        var forkedResult = await Opencode.ForkSessionAsync(sessionId, new());
+        if (!forkedResult.TryGetValue(out var forked, out var error))
+        {
+            Toasts.ShowError(error, "Fork failed");
+            return;
+        }
+
+        var head = Sessions.Register(forked);
+
+        Sessions.ActiveSessionId = head.Id;
     }
 }

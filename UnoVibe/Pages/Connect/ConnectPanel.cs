@@ -1,5 +1,3 @@
-using UnoVibe.Services;
-
 namespace UnoVibe.Pages.Connect;
 
 /// <summary>
@@ -11,7 +9,6 @@ namespace UnoVibe.Pages.Connect;
 /// password is handled here (it only touches this panel's flyout and the recent store).
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Services;
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
@@ -95,7 +92,7 @@ namespace UnoVibe.Pages.Connect;
         </StackPanel>
     </root>
     """)]
-public partial class ConnectPanel : IQuickMarkupComponent<StackPanel>
+partial class ConnectPanel : IQuickMarkupComponent<StackPanel>
 {
     /// <summary>Handler for <see cref="OpenFolderRequested"/> and <see cref="ConnectToUrlRequested"/>.</summary>
     public delegate Task ActionHandler();

@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-
 namespace UnoVibe.Models;
 
 /// <summary>One selectable option of a choice-type setting: a stored value plus a display label.</summary>
@@ -19,4 +17,4 @@ public sealed record SettingOption(string Value, string Label);
     public string Placeholder = "";
     public `ObservableCollection<SettingOption>` Options = `new()`;
     """)]
-public partial class SettingsEntry;
+partial class SettingsEntry;

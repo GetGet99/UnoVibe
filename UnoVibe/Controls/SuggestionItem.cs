@@ -4,7 +4,7 @@ namespace UnoVibe.Controls;
 /// A single row in the suggestion flyout of <see cref="SuggestBox"/>. <see cref="Kind"/> drives the
 /// badge and color so the UI can tell commands, skills, files and agents apart at a glance.
 /// </summary>
-public sealed class SuggestionItem
+sealed class SuggestionItem
 {
     /// <summary>Stable identity used by QuickMarkup's foreach as the row key (e.g. "cmd:new", "skill:quickmarkup").</summary>
     public required string Key { get; init; }

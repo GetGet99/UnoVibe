@@ -1,6 +1,6 @@
 namespace UnoVibe.Models;
 
-public sealed class QuestionItem
+sealed class QuestionItem
 {
     public string Question { get; set; } = "";
     public string Header { get; set; } = "";
