@@ -15,7 +15,7 @@ public abstract class ChatPartItem
     public abstract string Type { get; }
 }
 
-[QuickMarkup("""
+[QuickRefs("""
     public string Text = "";
     public bool Synthetic = false;
     public bool Ignored = false;
@@ -25,7 +25,7 @@ partial class TextPartItem : ChatPartItem
     public override string Type => "text";
 }
 
-[QuickMarkup("""
+[QuickRefs("""
     public string Text = "";
     """)]
 partial class ReasoningPartItem : ChatPartItem
@@ -90,7 +90,7 @@ partial class ReasoningPartItem : ChatPartItem
     }
 }
 
-[QuickMarkup("""
+[QuickRefs("""
     using Microsoft.UI.Xaml.Media.Imaging;
     public string Mime = "";
     public string Url = "";

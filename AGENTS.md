@@ -120,7 +120,7 @@ High-level goals/design:
 - **.NET 10** (`dotnet --version` → `10.0.110`). Targets: `net10.0-desktop` (Skia) and, on
   Windows only, `net10.0-windows10.0.26100.0` (WinUI) — the csproj gates the second TFM behind
   `$(OS) == 'Windows_NT'`.
-- **QuickMarkup** `0.1.23` (versions pinned in `Directory.Packages.props`, currently a
+- **QuickMarkup** `0.1.25-beta2` (versions pinned in `Directory.Packages.props`, currently a
   locally-packed build of the upstream `wt-master` repo): `QuickMarkup.Uno` for non-Windows
   targets, **`QuickMarkup.WinUI`** + **`Microsoft.WindowsAppSDK`** for `net10.0-windows`.
   Uses central package management.
@@ -364,6 +364,9 @@ Rules learned the hard way (full detail + version notes in `agents-doc/quickmark
 
 - A `[QuickMarkupConstructor]` method **must call `Init()`** (usually first) or the UI tree never
   builds.
+- Non-UI refs-only classes use `[QuickRefs]` (not `[QuickMarkup]`) with normal C# constructors —
+  no `[QuickMarkupConstructor]`/`Init()`. `[QuickMarkup]` is for UI classes only.
+  (`SessionHead`, `ChatboxState`, `ChatMessagesState`, providers, and all `Models/` reactive models.)
 - Only `Reference<T>` fields declared in the `[QuickMarkup("""...""")]` header are reactive.
   A plain `ObservableCollection.Count` in an `if` condition is NOT reactive; use `ReactiveList<T>`
   or `.Reactive.Count` (and with `&&` short-circuiting, read at least one Reference first).

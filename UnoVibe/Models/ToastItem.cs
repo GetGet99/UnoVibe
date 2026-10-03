@@ -5,7 +5,7 @@ namespace UnoVibe.Models;
 /// <c>tui.toast.show</c> event. <see cref="Variant"/> is one of
 /// "info"|"success"|"warning"|"error" and drives the accent/background colors.
 /// </summary>
-[QuickMarkup("""
+[QuickRefs("""
     public string Title = "";
     public string Message = "";
     public string Variant = "info";

@@ -3,7 +3,7 @@ using QuickMarkup.Infra.Collections;
 
 namespace UnoVibe.Models;
 
-[QuickMarkup("""
+[QuickRefs("""
     public string ToolName = "";
     public string ToolStatus = "";
     public string ToolTitle = "";

@@ -16,7 +16,7 @@ public struct ReasoningTime
 /// <c>Image</c> holds the decoded bitmap for image file parts so message thumbnails
 /// update once the async decode completes.
 /// </summary>
-[QuickMarkup("""
+[QuickRefs("""
     using Microsoft.UI.Xaml.Media.Imaging;
     public string Text = "";
     public string? ToolName;

@@ -8,7 +8,7 @@ public sealed record SettingOption(string Value, string Label);
 /// The page renders each row's control from <see cref="Kind"/> and binds <see cref="Value"/> (the
 /// UI-facing string form) back into the store via <c>SettingsStore.SetValue</c>.
 /// </summary>
-[QuickMarkup("""
+[QuickRefs("""
     public string Key = "";
     public string Label = "";
     public string Description = "";

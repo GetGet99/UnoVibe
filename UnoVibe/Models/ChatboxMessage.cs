@@ -2,7 +2,7 @@ using QuickMarkup.Infra.Collections;
 
 namespace UnoVibe.Models;
 
-[QuickMarkup("""
+[QuickRefs("""
     string Text = "";
     """)]
 partial class ChatboxMessage

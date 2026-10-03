@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using UnoVibe.Integration;
 namespace UnoVibe.States;
 
-[QuickMarkup("""
+[QuickRefs("""
     public int PendingPromptsCount;
     public bool ShowContinue;
     ChatboxMessage Message = `new()`;
@@ -16,9 +16,7 @@ partial class ChatboxState
     SessionsStateProvider Sessions { get; set; }
     OpencodeClient Opencode { get; set; }
     DispatcherQueue Dispatcher { get; set; }
-    [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Toasts), nameof(Opencode), nameof(Sessions), nameof(Dispatcher))]
-    void Ctor(OpencodeClient client, ToastsProvider toasts, SessionsStateProvider sessions, DispatcherQueue dispatcher, SessionId? sessionId)
+    public ChatboxState(OpencodeClient client, ToastsProvider toasts, SessionsStateProvider sessions, DispatcherQueue dispatcher, SessionId? sessionId)
     {
         Dispatcher = dispatcher;
         Opencode = client;

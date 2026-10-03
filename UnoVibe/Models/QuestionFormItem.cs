@@ -1,7 +1,7 @@
 namespace UnoVibe.Models;
 
 /// <summary>Reactive state for one question in an inline question-tool form.</summary>
-[QuickMarkup("""
+[QuickRefs("""
     public string Question = "";
     public string Header = "";
     public string CustomText = "";
@@ -16,7 +16,7 @@ partial class QuestionFormItem
     public ObservableCollection<QuestionOptionItem> Options { get; } = new();
 }
 
-[QuickMarkup("""
+[QuickRefs("""
     public string Label = "";
     public string Description = "";
     public bool IsSelected = false;

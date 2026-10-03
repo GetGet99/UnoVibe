@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 
@@ -13,7 +12,7 @@ namespace UnoVibe.States;
 /// Chat UI components read from this state. Formatting is the caller's responsibility —
 /// this state stores raw values.
 /// </summary>
-[QuickMarkup("""
+[QuickRefs("""
     double Cost;
     SessionTokens Tokens = `SessionTokens.Zero`;
     long ContextLimit;
@@ -40,9 +39,7 @@ partial class ChatMessagesState : IDisposable
     ModelsProvider Models;
     SessionsStateProvider Sessions;
 
-    [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Opencode), nameof(Toasts), nameof(Events), nameof(Models), nameof(Sessions), nameof(SessionId))]
-    void Ctor(OpencodeClient opencode, ToastsProvider toasts,
+    public ChatMessagesState(OpencodeClient opencode, ToastsProvider toasts,
               EventsProvider events, ModelsProvider models,
               SessionsStateProvider sessions, SessionId sessionId)
     {

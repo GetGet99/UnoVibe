@@ -5,7 +5,7 @@ namespace UnoVibe.Models;
 /// workspace directory (instance), not per session: all sessions in a directory
 /// share the same MCP servers. Reactive display fields are QuickMarkup references.
 /// </summary>
-[QuickMarkup("""
+[QuickRefs("""
     public required string Name;
     // One of "connected" | "disabled" | "failed" | "needs_auth" | "needs_client_registration".
     public string Status = "disabled";
@@ -20,6 +20,12 @@ namespace UnoVibe.Models;
     """)]
 public sealed partial class McpServerItem
 {
+    public McpServerItem(string Name, string Error)
+    {
+        this.Name = Name;
+        this.Error = Error;
+    }
+
     private static string FormatStatus(string status) => status switch
     {
         "connected" => "Connected",

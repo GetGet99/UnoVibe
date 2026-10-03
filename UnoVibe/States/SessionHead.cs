@@ -1,9 +1,8 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace UnoVibe.States;
 
-[QuickMarkup("""
+[QuickRefs("""
     bool IsRead = true; // client driven
     
     string Directory = `null!`;
@@ -45,15 +44,12 @@ partial class SessionHead
         };
     }
 
-    [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Id), nameof(Directory), nameof(Created))]
-    void Ctor(SessionId id, SessionId? parent, string directory, long created)
+    public SessionHead(SessionId id, SessionId? parent, string directory, long created)
     {
         Id = id;
         ParentId = parent;
         Directory = directory;
         Created = created;
-        Init(id, parent, directory, created);
     }
     // QuickMarkup Computed<string> (backing field TimeLabelComp): reads the reactive `Updated`
     // field, so it caches and re-evaluates automatically whenever Updated changes — the sidebar's

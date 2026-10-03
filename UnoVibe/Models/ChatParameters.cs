@@ -1,7 +1,7 @@
 
 namespace UnoVibe.Models;
 
-[QuickMarkup("""
+[QuickRefs("""
     string? Agent;
     Model? Model;
     string? Variant;

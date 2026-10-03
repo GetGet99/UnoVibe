@@ -1,9 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using QuickMarkup.Infra.Collections;
 using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 namespace UnoVibe.Providers;
-[QuickMarkup("""
+[QuickRefs("""
     string? NewSessionDirectory;
     SessionId? ActiveSessionId;
     string ActiveSessionDirectory => `(ActiveSessionId is null ? NewSessionDirectory : Head(ActiveSessionId)?.Directory) ?? Connection.ServerDirectory`;
@@ -67,16 +66,13 @@ partial class SessionsStateProvider
         return chatbox;
     }
 
-    [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Connection), nameof(Events), nameof(Toasts), nameof(Notifications), nameof(Dispatcher))]
-    void Ctor(OpencodeConnection connection, EventsProvider events, ToastsProvider toasts, NotificationProvider notification, ModelsProvider models, DispatcherQueue dispatcher) {
+    public SessionsStateProvider(OpencodeConnection connection, EventsProvider events, ToastsProvider toasts, NotificationProvider notification, ModelsProvider models, DispatcherQueue dispatcher) {
         Connection = connection;
         Events = events;
         Toasts = toasts;
         Notifications = notification;
         Dispatcher = dispatcher;
         Models = models;
-        Init(connection, events, toasts, notification, models, dispatcher);
         RegisterEvents();
         FetchInitialSessions();
         ActiveHeadComp.Watch(x =>

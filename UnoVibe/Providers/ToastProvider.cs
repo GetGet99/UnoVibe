@@ -1,22 +1,18 @@
-using System.Diagnostics.CodeAnalysis;
 using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Providers;
 
-[QuickMarkup("""
+[QuickRefs("""
     ToastItem? CurrentToast;
     """)]
 partial class ToastsProvider : IDisposable
 {
     EventsProvider Event { get; set; }
     DispatcherQueue dispatcher;
-    [QuickMarkupConstructor]
-    [MemberNotNull(nameof(Event), nameof(dispatcher))]
-    void Ctor(EventsProvider Event, DispatcherQueue dispatcher)
+    public ToastsProvider(EventsProvider Event, DispatcherQueue dispatcher)
     {
         this.Event = Event;
         this.dispatcher = dispatcher;
-        Init(Event, dispatcher);
         Event.RegisterTuiToastShow(null, ApplyToastShow);
     }
 

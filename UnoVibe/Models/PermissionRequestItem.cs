@@ -8,7 +8,7 @@ namespace UnoVibe.Models;
 /// Carries a human-readable <see cref="Title"/> / <see cref="Body"/> derived from the
 /// tool metadata so the UI can render an allow/reject prompt without knowing tool internals.
 /// </summary>
-[QuickMarkup("""
+[QuickRefs("""
     public string Id = "";
     public string SessionId = "";
     public string Permission = "";
