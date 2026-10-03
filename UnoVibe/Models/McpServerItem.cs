@@ -6,11 +6,11 @@ namespace UnoVibe.Models;
 /// share the same MCP servers. Reactive display fields are QuickMarkup references.
 /// </summary>
 [QuickRefs("""
-    public required string Name;
+    public string Name = ""; // filled by constructor
     // One of "connected" | "disabled" | "failed" | "needs_auth" | "needs_client_registration".
     public string Status = "disabled";
     // Error message carried by the "failed"/"needs_client_registration" statuses.
-    public required string Error;
+    public string Error = ""; // filled by constructor
     // True while a connect/disconnect/auth request for this server is in flight.
     public bool Connecting;
     public bool IsConnected => `Status == "connected"`;
