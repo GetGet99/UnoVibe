@@ -64,6 +64,7 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(List<AgentInfo>))]
 [JsonSerializable(typeof(List<CommandInfo>))]
 [JsonSerializable(typeof(List<SkillInfo>))]
+// TODO [Low]: Duplicate List<CommandInfo> — remove one.
 [JsonSerializable(typeof(List<CommandInfo>))]
 [JsonSerializable(typeof(List<PendingQuestion>))]
 [JsonSerializable(typeof(FileSystemEntry))]
@@ -109,6 +110,7 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(ApplyPatchFileMeta))]
 [JsonSerializable(typeof(TaskModelInfo))]
 [JsonSerializable(typeof(TodoInfo))]
+[JsonSerializable(typeof(List<TodoInfo>))]
 [JsonSerializable(typeof(FilePartSource))]
 [JsonSerializable(typeof(FileSource))]
 [JsonSerializable(typeof(SymbolSource))]
@@ -143,6 +145,7 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(List<SnapshotFileDiff>))]
 // --- Session CRUD events ---
 [JsonSerializable(typeof(SessionCrudEvent))]
+// TODO [Low]: Duplicate registration — SessionInfo already registered at top. Remove one.
 [JsonSerializable(typeof(SessionInfo))]
 [JsonSerializable(typeof(SessionModelInfo))]
 [JsonSerializable(typeof(SessionTimeInfo))]

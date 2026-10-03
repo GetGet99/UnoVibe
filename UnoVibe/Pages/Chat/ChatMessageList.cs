@@ -38,6 +38,7 @@ namespace UnoVibe.Pages.Chat;
                     // Keyed by message id so QuickMarkup reuses MessageView blocks across
                     // collection resets (session switches/rebuilds) instead of recreating
                     // every element; the revert filter below then only toggles visibility.
+                    // TODO [Low]: Null ChatState renders nothing but null enumerable in keyed foreach is fragile — use ?? Enumerable.Empty<MessageItem>() or guard.
                     foreach (var m in `ChatState?.Messages`; `m.Id`)
                     {
                         // Undo: the server keeps reverted messages until the next prompt, so
@@ -187,7 +188,7 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
 
     private void OnSettingsChanged()
     {
-        _ = dispatcher?.TryEnqueue(() =>
+        _ = dispatcher?.RunOrEnqueue(() =>
         {
             var value = SettingsStore.AutoContinueOnThinking;
             if (AutoContinueOn != value) AutoContinueOn = value;

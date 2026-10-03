@@ -1,5 +1,6 @@
 namespace UnoVibe.Integration.Events;
 
+// TODO [Low]: Speculative session.next.* surface not in SDK Event union and not emitted by current CLI — dead AOT bloat. Don't wire EventsProvider cases until server emits.
 #region Supporting types for V2 events
 
 public sealed class ModelRef

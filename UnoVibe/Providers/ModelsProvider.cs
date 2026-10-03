@@ -14,6 +14,7 @@ class ModelsProvider
     {
         Opencode = opencode;
         Toasts = toasts;
+        // TODO [Medium]: Fire-and-forget in ctor races ResolveContextLimit (ContextLimit=0 until refresh). Expose InitAsync awaited by caller or AsyncHelper.RunAndReport.
         _ = RefreshModelsAsync();
     }
 

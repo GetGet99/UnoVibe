@@ -59,9 +59,9 @@ public sealed partial class OpencodeClient : IDisposable
                 ? Result<T>.Success(value)
                 : Result<T>.Failure(ApiError.Http(0, "Empty response"));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
-            return Result<T>.Failure(ApiError.Network(ex.Message));
+            return Result<T>.Failure(ApiError.Other(ex.Message));
         }
     }
 
@@ -79,9 +79,9 @@ public sealed partial class OpencodeClient : IDisposable
                 ? Result<TOut>.Success(value)
                 : Result<TOut>.Failure(ApiError.Http(0, "Empty response"));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
-            return Result<TOut>.Failure(ApiError.Network(ex.Message));
+            return Result<TOut>.Failure(ApiError.Other(ex.Message));
         }
     }
 

@@ -40,6 +40,7 @@ namespace UnoVibe.Pages.Chat;
     string Query = "";
     int HighlightIndex = -1;
     // Filtered model list — reactive to both the source collection and the query string.
+    // TODO [High]: Models.ModelOptions is ReactiveKeyedSet — confirm Count/enumeration invalidates on Add/Clear or list won't refresh after RefreshModelsAsync.
     `IEnumerable<ModelOption>` FilteredModels => `FilterModels(Models.ModelOptions, Query)`;
     // Hint shown when there is nothing to pick ("No models available" / "No models match ...").
     string EmptyHint => `Models.ModelOptions.Count == 0 ? "No models available" : (Query.Trim().Length > 0 && !FilteredModels.Any() ? $"No models match \"{Query.Trim()}\"" : "")`;

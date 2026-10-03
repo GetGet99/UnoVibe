@@ -27,6 +27,7 @@ partial class ChatRetryCard : IQuickMarkupComponent
     [QuickMarkupConstructor]
     void Ctor()
     {
+        // TODO [Medium]: DispatcherTimer started pre-Init, never stopped — accumulates on remount. Stop on Unloaded.
         countdown = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         countdown.Tick += (_, _) => CountdownTextComp.Invalidate();
         countdown.Start();

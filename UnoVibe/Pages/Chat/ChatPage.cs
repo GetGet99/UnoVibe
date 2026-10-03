@@ -81,6 +81,7 @@ partial class ChatPage : Page
         }, immediate: true);
     }
 
+    // TODO [Medium]: Banned async void + forced GC.Collect smell — make async Task + AsyncHelper.RunAndReport or delete with GC hack.
     static async void CallGCAfterDelay(int ms)
     {
         await Task.Delay(ms).ConfigureAwait(continueOnCapturedContext: false);
@@ -116,6 +117,7 @@ partial class ChatPage : Page
     /// forked-at message's prompt (text + staged images) into the composer so the user can
     /// continue from there. Returns the new session id, or null on failure/no session.
     /// </summary>
+    // TODO [Medium]: async void event handler — exceptions after await escape. Wrap body in try/catch -> toast.
     async void ForkAndSwitchSession(SessionId sessionId, MessageItem message)
     {
         var forkedResult = await Opencode.ForkSessionAsync(sessionId, new()
@@ -144,6 +146,7 @@ partial class ChatPage : Page
     /// fork there's no prompt to restore — the composer keeps whatever the user had. Returns the
     /// new session id, or null on failure/no session.
     /// </summary>
+    // TODO [Medium]: async void — same escape risk as per-message fork. Wrap in try/catch.
     async void ForkAndSwitchSession(SessionId sessionId)
     {
         var forkedResult = await Opencode.ForkSessionAsync(sessionId, new());

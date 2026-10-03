@@ -189,7 +189,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private void OnSettingsChanged()
     {
-        _ = _dispatcher?.TryEnqueue(() => SendMode = SettingsStore.SendMode.ToString());
+        _ = _dispatcher?.RunOrEnqueue(() => SendMode = SettingsStore.SendMode.ToString());
     }
 
     private async void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -223,6 +223,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             }
         }
     }
+    // TODO [Low]: async void handler (banned form, handler-justified) — ensure exceptions can't escape; prefer async Task where markup allows.
     private async void OnPickImages()
     {
         var images = await ImageIOHelper.PickImagesAsync(HostWindow);

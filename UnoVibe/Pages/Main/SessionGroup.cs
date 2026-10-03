@@ -11,6 +11,8 @@ namespace UnoVibe.Pages.Main;
         var transparent = new SolidColorBrush(Colors.Transparent);
     </setup>
     <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
+        // TODO [Medium]: Group.Sessions is List<SessionHead> with plain Count/Take — works only if provider rebuilds groups on every change. Document contract or switch to ReactiveList.
+        // TODO [Low]: ShowMore is per-component state and resets on keyed rebuild — "Show more" collapses on every sidebar refresh.
         <Grid ColumnDefinitions=<>
             <ColumnDefinition />
             <ColumnDefinition Width=Auto />

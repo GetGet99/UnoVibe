@@ -16,7 +16,8 @@ public enum FileDiffStatus { Added, Deleted, Modified }
 
 #region Discriminated union base classes
 
-/// <summary>Base class for all opencode SSE event payloads.</summary>
+/// <summary>Base class for message info union (role=user|assistant), not SSE events. Fix wording.</summary>
+// TODO [Low]: Comment says "all opencode SSE event payloads" but this is MessageInfo role union.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "role")]
 [JsonDerivedType(typeof(UserMessageInfo), "user")]
 [JsonDerivedType(typeof(AssistantMessageInfo), "assistant")]

@@ -36,6 +36,7 @@ public sealed class ToolMetadata
     public List<ApplyPatchFileMeta>? Files { get; set; }
 
     // Task (subagent)
+    // TODO [Low]: Verify JsonPropertyName casings (parentSessionId/sessionId/jobId, Filepath->filepath, Filediff) against live /event payloads — wrong names silently stay null.
     [JsonPropertyName("parentSessionId")] public string? ParentSessionId { get; set; }
     [JsonPropertyName("sessionId")] public string? SessionId { get; set; }
     public TaskModelInfo? Model { get; set; }
@@ -56,7 +57,7 @@ public sealed class ToolMetadata
     public string? Provider { get; set; }
 
     // LSP
-    public List<object>? Result { get; set; }
+    public List<JsonElement>? Result { get; set; }
 
     // Truncation (injected by the tool wrapper for most tools)
     public bool? Truncated { get; set; }

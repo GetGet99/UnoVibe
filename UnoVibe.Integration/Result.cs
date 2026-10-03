@@ -8,7 +8,7 @@ namespace UnoVibe.Integration;
 /// </summary>
 public readonly record struct ApiError(HttpStatusCode StatusCode, string Message)
 {
-    public static ApiError Network(string message) => new(0, message);
+    public static ApiError Other(string message) => new(0, message);
     public static ApiError Http(HttpStatusCode statusCode, string message) => new(statusCode, message);
 
     public override string ToString() => DisplayMessage;

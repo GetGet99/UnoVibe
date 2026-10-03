@@ -6,7 +6,7 @@ using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Providers;
-
+// TODO [High]: SSE never reconnects/unsubscribes — single ReadEvent loop, _ = Task.Run no catch/retry, registered/delegateMapping grow, per-dir streams never torn down. Add reconnect+watchdog+Unsubscribe, clean map.
 class EventsProvider : IDisposable
 {
     OpencodeClient client;
@@ -232,6 +232,7 @@ class EventsProvider : IDisposable
 
             dispatcherQueue?.TryEnqueue(() =>
             {
+                // TODO [Medium]: If dispatcherQueue is null (constructed off-UI-thread) ?. silently drops all events. Capture DispatcherQueue.GetForCurrentThread() at root and Debug.Assert non-null.
                 foreach (var evt in batch) Apply(evt);
             });
         }
@@ -249,6 +250,7 @@ class EventsProvider : IDisposable
     /// </summary>
     private bool IsDuplicateEvent(OpencodeEvent evt)
     {
+        // TODO [Low]: Two nested locks redundant — single lock suffices. Also UnregisterDelegate never removes delegateMapping entry (leak, see file header TODO).
         lock (_seenEventIds)
         {
             lock (_seenEventIdOrder)

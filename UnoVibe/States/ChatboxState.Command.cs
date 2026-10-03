@@ -21,6 +21,7 @@ partial class ChatboxState
     private HashSet<string>? _commandNames;
     private HashSet<string>? _skillNames;
     private long _commandNamesFetchedMs;
+    // TODO [Medium]: Cache keyed only on TTL, not directory despite comment — switching dirs within 5min reuses wrong list. Store _commandNamesDirectory and refetch on change.
 
     /// <summary>
     /// True when <paramref name="name"/> (the input token after the leading <c>/</c>) should be

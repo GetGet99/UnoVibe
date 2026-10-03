@@ -529,6 +529,7 @@ partial class ChatMessagesState : IDisposable
 
     void UpdateSessionStats()
     {
+        // TODO [Medium]: Cost re-sums truncated 200-msg window + Tokens from last assistant only — long sessions under-report. Intended-or-fix; verify ChatCost cache lines.
         var last = Messages.LastOrDefault(m => m.Role == "assistant" && m.TokensOutput > 0);
         if (last is null)
         {

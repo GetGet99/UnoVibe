@@ -10,7 +10,6 @@ namespace UnoVibe.Providers;
     ChatParameters ActiveChatParams => `GetActiveChatParams()`;
     SessionHead? ActiveHead => `Head(ActiveSessionId)`;
     ChatboxState ActiveChatbox => `GetActiveChatbox()`;
-    ChatMessagesState? ChatState => async `RefershChatStateAsync()`;
     """)]
 partial class SessionsStateProvider
 {
@@ -22,6 +21,8 @@ partial class SessionsStateProvider
     DispatcherQueue Dispatcher;
     ModelsProvider Models;
     record Keyed<T>(string Directory, T Value);
+    // TODO [Medium]: chatboxes per-session never evicted except DeleteSession — ShowContinue/queues go stale across switches. Evict/LRU or reset on ActiveSessionId change.
+    // TODO [Medium]: chatParamsNullSessions/chatBoxNullSessions keyed by directory grow forever — remove when directory removed/session created.
     readonly ReactiveKeyedSet<string, Keyed<ChatParameters>> chatParamsNullSessions = new(x => x.Directory);
     readonly ReactiveKeyedSet<string, Keyed<ChatboxState>> chatBoxNullSessions = new(x => x.Directory);
     readonly ReactiveKeyedSet<SessionId, SessionHead> sessions = new(x => x.Id);
@@ -85,16 +86,6 @@ partial class SessionsStateProvider
             x?.IsRead = true;
         });
     }
-    ChatMessagesState? oldChatState;
-    async Task<ChatMessagesState?> RefershChatStateAsync()
-    {
-        oldChatState?.Dispose();
-        oldChatState = null;
-        if (ActiveSessionId is {} newSession)
-            return oldChatState = await ChatMessagesState.Create(Opencode, Toasts, Events, Models, this, newSession);
-        else
-            return null;
-    }
     void RegisterEvents()
     {
         Events.RegisterSessionCreated(null, UpsertSession);
@@ -122,6 +113,7 @@ partial class SessionsStateProvider
         var directories = new HashSet<string>();
         foreach (var session in sessionsResult)
         {
+            // TODO [Medium]: Guard skips already-known sessions so title/model changes while SSE down never heal. Add per-session refresh on SessionUpdated miss or retry button.
             if (!sessions.ContainsKey(new(session.Id)))
             {
             directories.Add(session.Directory);
@@ -184,6 +176,7 @@ partial class SessionsStateProvider
     }
 
     void MessageUpdated(string _1, MessageUpdatedEvent e)
+        // TODO [High]: AsyncHelper resumes off-UI-thread after await TurnStopActionAsync — Outcome/ShowContinue/reactive writes must marshal via Dispatcher.RunOrEnqueue.
         => AsyncHelper.RunAndReport(async () =>
         {
             var sessId = new SessionId(e.SessionId);
@@ -194,16 +187,19 @@ partial class SessionsStateProvider
             var outcome = MessageJsonHelper.ClassifyMessageOutcome(assistent);
             
             sessions[sessId]?.Outcome = outcome;
-            if (assistent.Finish is not null)
+            if (assistent.Finish is not (null or "tool-calls") && sessions[sessId] is { IsSubagent: false })
             {
                 var chatBox = Chatbox(sessId);
                 if (!(chatBox is not null && await chatBox.TurnStopActionAsync(outcome, assistent.Id)))
                 {
                     if (sessions.TryGetValue(sessId, out var head))
                     {
-                        if (ActiveSessionId != sessId)
-                            head.IsRead = false;
-                        head.IsBusy = false;
+                        Dispatcher.RunOrEnqueue(() =>
+                        {
+                            if (ActiveSessionId != sessId)
+                                head.IsRead = false;
+                            head.IsBusy = false;
+                        });
                         Notifications.NotifyCompleted(head, head.Outcome, sessId == ActiveSessionId);
                     }
                 }

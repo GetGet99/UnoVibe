@@ -134,6 +134,7 @@ static class MessageJsonHelper
                 Id = part.Id,
                 MessageId = part.MessageId,
                 Attempt = retry.Attempt,
+                // TODO [Medium]: Missing OutputLengthError arm (vs ApplyMessageError) — ErrorMessage becomes "". Share helper with ApplyMessageError.
                 ErrorMessage = retry.Error switch
                 {
                     ProviderAuthError auth => auth.Data.Message,
@@ -279,6 +280,7 @@ static class MessageJsonHelper
         if (error is AbortedError) return;
         if (message.Parts.Any(p => p.Type == "error")) return;
 
+        // TODO [Medium]: Drops OutputLength/StructuredOutput/ContextOverflow/ContentFilter -> "". Add arms (share helper with retry switch).
         string errorMessage = error switch
         {
             ProviderAuthError auth => auth.Data.Message,
@@ -378,6 +380,7 @@ static class MessageJsonHelper
     {
         foreach (var part in item.Parts)
         {
+            // TODO [Medium]: Fire-and-forget _ = LoadImageAsync() breaks AGENTS.md rule — unobserved exceptions vanish. Await or AsyncHelper.RunAndReport.
             if (part is FilePartItem file) _ = file.LoadImageAsync();
         }
     }

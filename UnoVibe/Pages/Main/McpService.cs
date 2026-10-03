@@ -4,6 +4,7 @@ namespace UnoVibe.Pages.Main;
 
 class McpService
 {
+    // TODO [Medium]: View-owned service with _ = Task.Run — Provider-shaped (window-scoped like Sessions/Events). Move to Providers/ and use AsyncHelper.RunAndReport.
     // Compact "N active, M inactive, K error" summary for the collapsed MCP sidebar header.
     // inactive = explicitly disabled; error = failed/needs_auth/needs_client_registration (mutually exclusive).
     public Reference<string> SummaryProp { get; } = new("");

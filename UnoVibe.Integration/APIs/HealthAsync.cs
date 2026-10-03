@@ -16,7 +16,7 @@ partial class OpencodeClient
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            return Result<bool>.Failure(ApiError.Network(ex.Message));
+            return Result<bool>.Failure(ApiError.Other(ex.Message));
         }
     }
 }

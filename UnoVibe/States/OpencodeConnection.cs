@@ -2,6 +2,8 @@ using UnoVibe.Integration;
 using UnoVibe.Services;
 
 namespace UnoVibe.States;
+// TODO [Medium]: Lives in States/ but is a singleton connection/client lifecycle — move to Providers/ to match lifetime.
+// TODO [Medium]: ConnectPage compares ConnectionStatus == "Connected" — expose bool IsConnected instead of string compare.
 partial class OpencodeConnection : IDisposable
 {
     private Reference<string> ConnectionStatusProp = new("Connecting...");
@@ -18,8 +20,9 @@ partial class OpencodeConnection : IDisposable
         BaseUrl = baseUrl.Trim().TrimEnd('/');
         Username = username ?? "opencode";
         if (string.IsNullOrEmpty(Username)) Username = null;
+        Password = password;
         if (string.IsNullOrEmpty(Password)) Password = null;
-        Client = new OpencodeClient(baseUrl, password, username);
+        Client = new OpencodeClient(baseUrl, username, password);
     }
 
     public static async Task<OpencodeConnection> FromAsync(OpencodeServeProcess process, CancellationToken ct = default)

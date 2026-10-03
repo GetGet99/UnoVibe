@@ -20,6 +20,7 @@ static class WindowsHelper
     /// </summary>
     public static async Task<string?> PickFolderAsync(Window window, string? startPath)
     {
+        // TODO [Low]: Length>0 -> is not null forwards "" to SuggestedStartFolder. Use !string.IsNullOrEmpty.
 #if WASDK
         var picker = new Microsoft.Windows.Storage.Pickers.FolderPicker(window.AppWindow.Id);
         if (startPath is not null)

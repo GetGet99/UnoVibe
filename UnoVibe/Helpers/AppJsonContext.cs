@@ -21,6 +21,7 @@ namespace UnoVibe.Helpers;
 [JsonSerializable(typeof(SettingsStore.SettingsFileModel))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(List<Integration.QuestionInfo>))]
+[JsonSerializable(typeof(List<TodoInfo>))]
 // --- Event types used by EventsProvider ---
 [JsonSerializable(typeof(MessageUpdatedEvent))]
 [JsonSerializable(typeof(MessagePartUpdatedEvent))]

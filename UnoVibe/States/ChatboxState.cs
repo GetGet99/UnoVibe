@@ -205,6 +205,7 @@ partial class ChatboxState
         var agent = chatParams.Agent;
         Model? model = chatParams.Model;
         var variant = chatParams.Variant;
+        // TODO [High]: Fire-and-forget Task.Run — inner catch toasts via Dispatcher, but if dispatcher fails IsBusy stays true and toast lost. Route via AsyncHelper or assert dispatcher non-null.
         _ = Task.Run(async () =>
         {
             try
@@ -222,7 +223,7 @@ partial class ChatboxState
             }
             catch (Exception ex)
             {
-                Dispatcher.TryEnqueue(() => Toasts.ShowError(ex.Message, "Command failed"));
+                Dispatcher.RunOrEnqueue(() => Toasts.ShowError(ex.Message, "Command failed"));
             }
         });
     }
@@ -277,6 +278,7 @@ partial class ChatboxState
             var agent = chatParams.Agent;
             Model? model = chatParams.Model;
             
+            // TODO [Medium]: Same fire-and-forget as SendCommandNow — IsBusy reset only inside dispatcher closure, stuck if enqueue fails.
             _ = Task.Run(async () =>
             {
                 try
@@ -294,7 +296,7 @@ partial class ChatboxState
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.TryEnqueue(() =>
+                    Dispatcher.RunOrEnqueue(() =>
                     {
                         Toasts.ShowError(ex.Message, "Shell command failed");
                         // A failed request means no run started (e.g. the server's 409

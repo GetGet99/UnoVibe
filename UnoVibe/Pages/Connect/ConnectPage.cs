@@ -218,6 +218,7 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
     {
         try
         {
+            // TODO [Low]: Lost start directory (was ServerDirectory, now null) — dialog opens at arbitrary path. Restore or document portal current_folder reason.
             var path = await WindowsHelper.PickFolderAsync(Controller.Window, startPath: null);
             if (path is null) return;
             var (ok, password) = ResolveUiFolderPassword();

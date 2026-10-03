@@ -8,7 +8,7 @@ static class ImageIOHelper
 {
 
     /// <summary>Image file extensions accepted by the picker and the clipboard storage-items paste path.</summary>
-    private static string[] ImageExtensions => field ??= [.. ImageClipboardFormats.Select(x => x.Ext).Distinct()];
+    private static string[] ImageExtensions => field ??= [.. ImageClipboardFormats.Select(x => $".{x.Ext}").Distinct()];
 
     /// <summary>
     /// Clipboard format names probed (in order) when pasting raw image bytes. Covers the union
@@ -78,7 +78,12 @@ static class ImageIOHelper
             // format), or RandomAccessStreamReference (Win32 CF_DIB).
             foreach (var (name, mime, ext) in ImageClipboardFormats)
             {
+#if DESKTOP_LINUX
+                // Linux specify most image formats as MIME
+                if (!content.Contains(mime)) continue;
+#else
                 if (!content.Contains(name)) continue;
+#endif
                 var item = await content.GetDataAsync(name);
                 byte[]? bytes = item switch
                 {

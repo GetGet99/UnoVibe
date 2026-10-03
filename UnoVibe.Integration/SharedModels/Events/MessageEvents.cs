@@ -68,6 +68,7 @@ public sealed class UserMessageModel
 
 public sealed class OutputFormat
 {
+    // TODO [Low]: Upstream format is text|json_schema discriminated union; flattened here loses json_schema.schema/retryCount fidelity. Note as known gap.
     public string Type { get; set; } = "text";
     public JsonElement? Schema { get; set; }
     public double? RetryCount { get; set; }
@@ -184,6 +185,7 @@ public sealed class AgentPart : Part
 public sealed class RetryPart : Part
 {
     public double Attempt { get; set; }
+    // TODO [Low]: Upstream RetryPart.error is APIError-only; AssistantError accepts more. Narrow to ApiAssistantError or leave with comment.
     public required AssistantError Error { get; set; }
     public required RetryPartTime Time { get; set; }
 }
@@ -235,6 +237,7 @@ public sealed class ToolStateCompleted : ToolState
 {
     public required string Output { get; set; }
     public required string Title { get; set; }
+    // TODO [Low]: Docs say metadata stays JsonElement but code types ToolMetadata — update agents-doc/integration.md (input/structured/ProviderMetadata stay JsonElement, metadata is typed).
     public ToolMetadata? Metadata { get; set; }
     public required ToolTimeRange Time { get; set; }
     public List<FilePart>? Attachments { get; set; }

@@ -130,6 +130,7 @@ partial class ChatHeader : IQuickMarkupComponent<Grid>
 
     private void CancelTitleEdit() => EditingTitle = false;
 
+    // TODO [Low]: async void (banned form, internally guarded) — prefer async Task + await in markup.
     private async void SaveTitle()
     {
         EditingTitle = false;

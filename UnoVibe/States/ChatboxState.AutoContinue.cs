@@ -18,6 +18,7 @@ partial class ChatboxState
     /// <returns>True if session is no longer idle. False if session is still idle</returns>
     public async Task<bool> TurnStopActionAsync(ChatOutcome outcome, string messageId)
     {
+        // TODO [High]: Drops old echo guards — any finish with reasoning-end retriggers continue up to 50, dedup by SSE-id not message-id. Add last-continued-id.
         if (SessionId is not {} sessId) return false;
         if (outcome is ChatOutcome.Interrupted)
         {
@@ -34,6 +35,7 @@ partial class ChatboxState
 
         var shouldDrain = !canContinue && !canAutoContinue;
         
+        // TODO [High]: Drains queue only when !canContinue && !canAutoContinue — queued prompt behind error/reasoning stop stalls. Drain or surface count even when ShowContinue.
         if (shouldDrain)
         {
             ShowContinue = false;
@@ -81,6 +83,7 @@ partial class ChatboxState
 
     async Task<bool> HasMessageEndedWithReasoningAsync(string messageId)
     {
+        // TODO [Medium]: Server GetMessageAsync per turn-stop (old inspected local parts) — extra latency + failure mode. Prefer local ChatMessagesState parts.
         if (SessionId is not {} sessId) return false;
         try
         {
