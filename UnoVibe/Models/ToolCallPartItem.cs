@@ -8,6 +8,30 @@ namespace UnoVibe.Models;
     public string ToolStatus = "";
     public string ToolTitle = "";
     public string QuestionRequestId = "";
+    // Every other field read in markup must be reactive too: since parts are updated
+    // in place (same instance, see MessageJsonHelper.ApplyToolPart), a plain property
+    // assignment would never re-render the views bound to it (e.g. shell output).
+    public string ToolCommand = "";
+    public string ToolFilePath = "";
+    public string ToolContent = "";
+    public string ToolPattern = "";
+    public string ToolSearchPath = "";
+    public string ToolInclude = "";
+    public string ToolWorkdir = "";
+    public string ToolUrl = "";
+    public string ToolQuery = "";
+    public string ToolSkillName = "";
+    public string ToolSubagentType = "";
+    public string ToolSessionId = "";
+    public string ToolParentSessionId = "";
+    public string ShellOutput = "";
+    public string Diff = "";
+    public string MatchCount = "";
+    public string LoadedFiles = "";
+    public string ToolInput = "";
+    public string ToolOutput = "";
+    public string ToolError = "";
+    public bool Interrupted = false;
     """)]
 partial class ToolCallPartItem : ChatPartItem
 {
@@ -78,31 +102,8 @@ partial class ToolCallPartItem : ChatPartItem
         }
     }
 
-    // Tool-specific input field accessors — read from the typed state's Input JsonElement
-    // or from extracted fields set by MessageJsonHelper.
-    public string ToolCommand { get; set; } = "";
-    public string ToolFilePath { get; set; } = "";
-    public string ToolContent { get; set; } = "";
-    public string ToolPattern { get; set; } = "";
-    public string ToolSearchPath { get; set; } = "";
-    public string ToolInclude { get; set; } = "";
-    public string ToolWorkdir { get; set; } = "";
-    public string ToolUrl { get; set; } = "";
-    public string ToolQuery { get; set; } = "";
-    public string ToolSkillName { get; set; } = "";
-    public string ToolSubagentType { get; set; } = "";
-    public string ToolSessionId { get; set; } = "";
-    public string ToolParentSessionId { get; set; } = "";
-
-    // Metadata-derived fields
-    public string ShellOutput { get; set; } = "";
-    public string Diff { get; set; } = "";
-    public string MatchCount { get; set; } = "";
-    public string LoadedFiles { get; set; } = "";
-    public string ToolInput { get; set; } = "";
-    public string ToolOutput { get; set; } = "";
-    public string ToolError { get; set; } = "";
-    public bool Interrupted { get; set; }
+    // Tool-specific input fields and metadata-derived fields live in the [QuickRefs] block
+    // above (they must be reactive — parts are updated in place). Only non-bound state stays here.
 
     // Attachment URLs extracted from completed state
     public ReactiveList<string> Files { get; } = new();
