@@ -78,13 +78,16 @@ static class ImageIOHelper
             // format), or RandomAccessStreamReference (Win32 CF_DIB).
             foreach (var (name, mime, ext) in ImageClipboardFormats)
             {
+                var format = 
 #if DESKTOP_LINUX
-                // Linux specify most image formats as MIME
-                if (!content.Contains(mime)) continue;
+                    // Linux specify most image formats as MIME
+                    mime
 #else
-                if (!content.Contains(name)) continue;
+                    name
 #endif
-                var item = await content.GetDataAsync(name);
+                    ;
+                if (!content.Contains(format)) continue;
+                var item = await content.GetDataAsync(format);
                 byte[]? bytes = item switch
                 {
                     byte[] raw => raw,
