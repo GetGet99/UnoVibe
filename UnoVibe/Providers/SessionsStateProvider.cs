@@ -304,7 +304,7 @@ partial class SessionsStateProvider
             .Where(s => !s.IsSubagent)
             .OrderByDescending(s => s.Updated).ThenByDescending(s => s.Id.Id, StringComparer.Ordinal)
             .GroupBy(s => s.Directory)
-            .Select(g => new SessionGroupModel(g.Key, GetBranch(g.Key), g.ToList()))
+            .Select(g => new SessionGroupModel(g.Key, GetBranch(g.Key), [.. g]))
         );
 
     public IEnumerable<SessionHead> SubagentsHeadOf(SessionId? sessId) =>
