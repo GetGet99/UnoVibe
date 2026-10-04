@@ -53,5 +53,5 @@ partial class SessionGroup : IQuickMarkupComponent
     /// </summary>
     private string DisplayPath(string fullPath) => PathDisplayHelper.Relative(fullPath, Connection.ServerDirectory);
     /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
-    private const int MaxVisibleSessions = 5;
+    private const int MaxVisibleSessions = 2;
 }
