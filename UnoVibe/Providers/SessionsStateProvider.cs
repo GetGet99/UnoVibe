@@ -28,6 +28,7 @@ partial class SessionsStateProvider
     readonly ReactiveSet<string> directoriesWithoutSession = [];
     readonly ReactiveKeyedSet<SessionId, ChatboxState> chatboxes = new(x => x.SessionId) { RerunReadFromKey = false };
     readonly ReactiveKeyedSet<string, Keyed<string?>> Branches = new(x => x.Directory);
+    readonly HashSet<string> pendingDirectories = new(StringComparer.Ordinal);
 
     public SessionHead? Head(SessionId? sessId) => sessId is null ? null : sessions.TryGetValue(sessId, out var sessHead) ? sessHead : null;
     public ChatboxState? Chatbox(SessionId? sessId) => sessId is null ? null : chatboxes.TryGetValue(sessId, out var chatboxModel) ? chatboxModel : null;
@@ -98,8 +99,32 @@ partial class SessionsStateProvider
             "Failed to initialize sessions",
             "Session Handler"
         );
-    public Task AddDirectoryAsync(string directory) => AddDirectoryPrivateAsync(directory);
+    public Task AddDirectoryAsync(string directory) => AddDirectoryPrivateAsync(NormalizeDirectory(directory));
+    static string NormalizeDirectory(string directory) => Path.TrimEndingDirectorySeparator(directory);
     private async Task AddDirectoryPrivateAsync(string? directory)
+    {
+        if (directory is not null)
+        {
+            directory = NormalizeDirectory(directory);
+            if (!pendingDirectories.Add(directory))
+                return;
+            try
+            {
+                if (IsDirectoryRegistered(directory))
+                    return;
+                await FetchSessionsForDirectoryAsync(directory);
+            }
+            finally
+            {
+                pendingDirectories.Remove(directory);
+            }
+            return;
+        }
+        await FetchSessionsForDirectoryAsync(null);
+    }
+    bool IsDirectoryRegistered(string directory)
+        => directoriesWithoutSession.Contains(directory) || sessions.Any(x => x.Directory == directory);
+    private async Task FetchSessionsForDirectoryAsync(string? directory)
     {
         if (!(await Opencode.ListSessionsAsync(directory: directory)).TryGetValue(out var sessionsResult, out var error))
         {
@@ -120,9 +145,13 @@ partial class SessionsStateProvider
         {
             // add to directory without session
             var finalDir = directory ?? Connection.ServerDirectory;
+            if (finalDir is null)
+                return;
+            finalDir = NormalizeDirectory(finalDir);
             if (!sessions.Any(x => x.Directory == finalDir))
             {
                 directoriesWithoutSession.Add(finalDir);
+                Events.Register(finalDir);
                 AsyncHelper.RunAndReport(RefreshBranchFromServerAsync(finalDir), Toasts, $"Could not fetch branch for {finalDir}", "Branch");
             }
         } else
@@ -137,7 +166,7 @@ partial class SessionsStateProvider
 
     public void PrepareNewSession(string directory)
     {
-        NewSessionDirectory = directory;
+        NewSessionDirectory = NormalizeDirectory(directory);
         ActiveSessionId = null;
     }
 
@@ -273,7 +302,7 @@ partial class SessionsStateProvider
         directoriesWithoutSession.Select(x => new SessionGroupModel(x, GetBranch(x), [])).Concat(
             sessions
             .Where(s => !s.IsSubagent)
-            .OrderByDescending(s => s.Updated).ThenByDescending(s => s.Id)
+            .OrderByDescending(s => s.Updated).ThenByDescending(s => s.Id.Id, StringComparer.Ordinal)
             .GroupBy(s => s.Directory)
             .Select(g => new SessionGroupModel(g.Key, GetBranch(g.Key), g.ToList()))
         );
@@ -282,6 +311,6 @@ partial class SessionsStateProvider
         sessId is null ? [] :
         sessions
         .Where(s => s.ParentId == sessId)
-        .OrderByDescending(s => s.Created).ThenByDescending(s => s.Id);
+        .OrderByDescending(s => s.Created).ThenByDescending(s => s.Id.Id, StringComparer.Ordinal);
 }
 record SessionGroupModel(string Directory, string? Branch, List<SessionHead> Sessions);

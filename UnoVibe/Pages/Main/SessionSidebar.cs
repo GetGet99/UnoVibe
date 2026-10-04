@@ -90,18 +90,19 @@ partial class SessionSidebar : IQuickMarkupComponent
     /// <summary>
     /// Opens a folder picker and starts a new session in the picked folder. The session is
     /// created lazily on the first message send, so no empty server-side session is produced.
+    /// The folder is registered immediately so the sidebar shows its group (with existing
+    /// sessions, or a "No sessions yet" line) right away.
     /// </summary>
     private async Task OpenFolderAndStartSessionAsync()
     {
         try
         {
             var path = await WindowsHelper.PickFolderAsync(HostWindow, Connection.ServerDirectory);
-            if (path is not null)
-            {
-                Sessions.PrepareNewSession(path);
-                // Small-screen view switching: opening a folder lands in its new chat view.
-                IsSidebarView = false;
-            }
+            if (path is null) return;
+            Sessions.PrepareNewSession(path);
+            await Sessions.AddDirectoryAsync(path);
+            // Small-screen view switching: opening a folder lands in its new chat view.
+            IsSidebarView = false;
         }
         catch (Exception ex)
         {
