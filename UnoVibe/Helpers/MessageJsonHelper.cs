@@ -1,4 +1,5 @@
 using System.Text.Json;
+using QuickMarkup.Infra.Collections;
 using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Helpers;
@@ -188,6 +189,21 @@ static class MessageJsonHelper
             ToolName = tool.Tool,
         };
 
+        ApplyToolPart(item, tool);
+        PopulateQuestionForm(item, item.Questions);
+        return item;
+    }
+
+    /// <summary>
+    /// Applies a server tool-part payload onto an existing item, preserving instance identity.
+    /// The single mapping used by both create (<see cref="BuildToolCallPart"/>) and update
+    /// (<c>ChatMessagesState.OnPartUpdated</c>) so the two paths cannot drift apart.
+    /// Live-only state (<c>QuestionRequestId</c>, <c>QuestionForm</c>) is never touched here —
+    /// the payload has no equivalent, and the input-derived <c>Questions</c> refill must not
+    /// rebuild the form (that would wipe in-progress selections).
+    /// </summary>
+    public static void ApplyToolPart(ToolCallPartItem item, ToolPart tool)
+    {
         ToolCallState state = tool.State switch
         {
             ToolStatePending pending => new ToolPendingState
@@ -233,7 +249,7 @@ static class MessageJsonHelper
             if (completedState.Metadata is { } meta)
                 ApplyToolMetadata(item, meta);
             if (completedState.Attachments is { } attachments)
-                item.Files = attachments.Select(a => a.Url).Where(u => u.Length > 0).ToArray();
+                Refill(item.Files, attachments.Select(a => a.Url).Where(u => u.Length > 0));
         }
         if (state is ToolErrorState errorState2)
         {
@@ -243,7 +259,13 @@ static class MessageJsonHelper
         }
 
         ApplyToolInput(item, tool.State.Input);
-        return item;
+    }
+
+    /// <summary>Refills a reactive collection in place (never reassigns) so live views update.</summary>
+    public static void Refill<T>(ReactiveList<T> target, IEnumerable<T> values)
+    {
+        target.Clear();
+        foreach (var v in values) target.Add(v);
     }
 
     public static void ApplyMessageStats(MessageItem item, MessageInfo info)
@@ -323,12 +345,12 @@ static class MessageJsonHelper
         if (input.TryGetProperty("name", out var skillName)) item.ToolSkillName = skillName.GetString() ?? "";
         if (input.TryGetProperty("subagent_type", out var subType)) item.ToolSubagentType = subType.GetString() ?? "";
         if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
-            item.Todos = todos.Deserialize(AppJsonContext.Default.ListTodoInfo) ?? [];
+            Refill(item.Todos, todos.Deserialize(AppJsonContext.Default.ListTodoInfo) ?? []);
         if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
-        {
-            item.Questions = questions.Deserialize(AppJsonContext.Default.ListQuestionInfo) ?? [];
-            PopulateQuestionForm(item, item.Questions);
-        }
+            // Note: deliberately does NOT populate QuestionForm here — that is live-only state
+            // owned by the question attach paths (OnQuestionAsked / SyncPendingQuestionsAsync).
+            // The create path (BuildToolCallPart) populates it separately after ApplyToolPart.
+            Refill(item.Questions, questions.Deserialize(AppJsonContext.Default.ListQuestionInfo) ?? []);
     }
 
     private static void ApplyToolMetadata(ToolCallPartItem item, ToolMetadata meta)
@@ -341,16 +363,16 @@ static class MessageJsonHelper
         if (meta.Loaded is { Count: > 0 } loaded)
             item.LoadedFiles = string.Join("\n", loaded.Where(s => s.Length > 0));
         if (meta.Todos is { Count: > 0 } todos)
-            item.Todos = todos;
+            Refill(item.Todos, todos);
         if (meta.Answers is { Count: > 0 } answers)
-            item.Answers = answers;
+            Refill(item.Answers, answers);
         if (meta.Files is { Count: > 0 } files)
-            item.PatchFiles = files;
+            Refill(item.PatchFiles, files);
         if (meta.SessionId is { Length: > 0 } session) item.ToolSessionId = session;
         if (meta.ParentSessionId is { Length: > 0 } parent) item.ToolParentSessionId = parent;
     }
 
-    public static void PopulateQuestionForm(ToolCallPartItem item, List<Integration.QuestionInfo> questions)
+    public static void PopulateQuestionForm(ToolCallPartItem item, IReadOnlyList<Integration.QuestionInfo> questions)
     {
         item.QuestionForm.Clear();
         foreach (var q in questions)

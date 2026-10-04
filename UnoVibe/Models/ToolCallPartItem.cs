@@ -105,15 +105,17 @@ partial class ToolCallPartItem : ChatPartItem
     public bool Interrupted { get; set; }
 
     // Attachment URLs extracted from completed state
-    public string[] Files { get; set; } = [];
+    public ReactiveList<string> Files { get; } = new();
 
-    // Typed metadata collections (populated from ToolMetadata by MessageJsonHelper)
-    public List<Integration.Events.TodoInfo> Todos { get; set; } = [];
-    public List<List<string>> Answers { get; set; } = [];
-    public List<Integration.Events.ApplyPatchFileMeta> PatchFiles { get; set; } = [];
+    // Typed metadata collections (populated from ToolMetadata by MessageJsonHelper).
+    // ReactiveLists that are never reassigned, only refilled in place, so live views update
+    // without swapping the part instance — see MessageJsonHelper.ApplyToolPart.
+    public ReactiveList<Integration.Events.TodoInfo> Todos { get; } = new();
+    public ReactiveList<List<string>> Answers { get; } = new();
+    public ReactiveList<Integration.Events.ApplyPatchFileMeta> PatchFiles { get; } = new();
 
     // Question support
-    public List<Integration.QuestionInfo> Questions { get; set; } = [];
+    public ReactiveList<Integration.QuestionInfo> Questions { get; } = new();
     public ReactiveList<QuestionFormItem> QuestionForm { get; } = new();
 
     // TODO: Add GetInput<T>() back when typed tool input classes are implemented (Phase 2c)

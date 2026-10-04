@@ -136,7 +136,7 @@ static class ToolViewShared
 
     public static List<QuestionItem> ParseQuestions(ToolCallPartItem p) => ParseQuestions(p.Questions, p.Answers);
 
-    public static List<QuestionItem> ParseQuestions(List<Integration.QuestionInfo> questionsInfo, List<List<string>> answers)
+    public static List<QuestionItem> ParseQuestions(IReadOnlyList<Integration.QuestionInfo> questionsInfo, IReadOnlyList<List<string>> answers)
     {
         var list = new List<QuestionItem>();
         if (questionsInfo.Count == 0) return list;

@@ -237,36 +237,23 @@ partial class ChatMessagesState : IDisposable
             return;
         }
 
+        if (existing is ToolCallPartItem existingTool && part is ToolPart toolPart)
+        {
+            // Same identity, update fields in place: swapping the instance would drop
+            // live-only state (question form, selections) and orphan the mounted views.
+            MessageJsonHelper.ApplyToolPart(existingTool, toolPart);
+            return;
+        }
+
+        // TODO [Medium]: Extend in-place update to the remaining part types (same contract:
+        // create on absent, update fields on present) instead of swapping the instance here.
         var updated = MessageJsonHelper.PartFromPart(part);
         var idx = message.Parts.IndexOf(existing);
-        PreserveQuestionState(existing, updated);
         message.Parts[idx] = updated;
         if (updated is FilePartItem fileUpdated)
             AsyncHelper.RunAndReport(fileUpdated.LoadImageAsync(),
                 Toasts, "", "Load image"
             );
-    }
-
-    /// <summary>
-    /// Carries live-only question state across a part-instance swap. The server payload never
-    /// contains <c>QuestionRequestId</c>, so without this a <c>message.part.updated</c> arriving
-    /// after <c>question.asked</c> detaches the inline form: the replacement renders static text
-    /// even though it may carry input-derived <c>QuestionForm</c> items. Form items are moved
-    /// (not rebuilt) so in-progress selections survive the swap.
-    /// </summary>
-    static void PreserveQuestionState(ChatPartItem existing, ChatPartItem updated)
-    {
-        if (existing is not ToolCallPartItem oldTool || updated is not ToolCallPartItem newTool) return;
-        if (oldTool.QuestionRequestId.Length == 0 || newTool.QuestionRequestId.Length > 0) return;
-        newTool.QuestionRequestId = oldTool.QuestionRequestId;
-        if (oldTool.QuestionForm.Count > 0)
-        {
-            newTool.QuestionForm.Clear();
-            foreach (var q in oldTool.QuestionForm)
-                newTool.QuestionForm.Add(q);
-        }
-        if (newTool.Questions.Count == 0 && oldTool.Questions.Count > 0)
-            newTool.Questions = oldTool.Questions;
     }
 
     void OnPartDelta(string _, MessagePartDeltaEvent e)
@@ -429,14 +416,14 @@ partial class ChatMessagesState : IDisposable
         part.QuestionRequestId = e.Id;
         if (e.Questions is { Count: > 0 })
         {
-            part.Questions = e.Questions.Select(q => new QuestionInfo
+            MessageJsonHelper.Refill(part.Questions, e.Questions.Select(q => new QuestionInfo
             {
                 Question = q.Question,
                 Header = q.Header,
                 Options = q.Options.Select(o => new QuestionOption { Label = o.Label, Description = o.Description }).ToList(),
                 Multiple = q.Multiple ?? false,
                 Custom = q.Custom ?? false,
-            }).ToList();
+            }));
             MessageJsonHelper.PopulateQuestionForm(part, part.Questions);
         }
     }
@@ -493,14 +480,14 @@ partial class ChatMessagesState : IDisposable
                 part.QuestionRequestId = question.Id;
                 if (question.Questions is { Count: > 0 })
                 {
-                    part.Questions = question.Questions.Select(q => new QuestionInfo
+                    MessageJsonHelper.Refill(part.Questions, question.Questions.Select(q => new QuestionInfo
                     {
                         Question = q.Question,
                         Header = q.Header,
                         Options = q.Options.Select(o => new QuestionOption { Label = o.Label, Description = o.Description }).ToList(),
                         Multiple = q.Multiple,
                         Custom = q.Custom,
-                    }).ToList();
+                    }));
                     MessageJsonHelper.PopulateQuestionForm(part, part.Questions);
                 }
             }
