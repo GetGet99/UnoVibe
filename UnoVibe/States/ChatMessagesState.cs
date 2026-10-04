@@ -239,11 +239,34 @@ partial class ChatMessagesState : IDisposable
 
         var updated = MessageJsonHelper.PartFromPart(part);
         var idx = message.Parts.IndexOf(existing);
+        PreserveQuestionState(existing, updated);
         message.Parts[idx] = updated;
         if (updated is FilePartItem fileUpdated)
             AsyncHelper.RunAndReport(fileUpdated.LoadImageAsync(),
                 Toasts, "", "Load image"
             );
+    }
+
+    /// <summary>
+    /// Carries live-only question state across a part-instance swap. The server payload never
+    /// contains <c>QuestionRequestId</c>, so without this a <c>message.part.updated</c> arriving
+    /// after <c>question.asked</c> detaches the inline form: the replacement renders static text
+    /// even though it may carry input-derived <c>QuestionForm</c> items. Form items are moved
+    /// (not rebuilt) so in-progress selections survive the swap.
+    /// </summary>
+    static void PreserveQuestionState(ChatPartItem existing, ChatPartItem updated)
+    {
+        if (existing is not ToolCallPartItem oldTool || updated is not ToolCallPartItem newTool) return;
+        if (oldTool.QuestionRequestId.Length == 0 || newTool.QuestionRequestId.Length > 0) return;
+        newTool.QuestionRequestId = oldTool.QuestionRequestId;
+        if (oldTool.QuestionForm.Count > 0)
+        {
+            newTool.QuestionForm.Clear();
+            foreach (var q in oldTool.QuestionForm)
+                newTool.QuestionForm.Add(q);
+        }
+        if (newTool.Questions.Count == 0 && oldTool.Questions.Count > 0)
+            newTool.Questions = oldTool.Questions;
     }
 
     void OnPartDelta(string _, MessagePartDeltaEvent e)
