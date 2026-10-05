@@ -209,7 +209,7 @@ partial class ChatboxState
             ShowContinue = false;
 
             ChatParameters chatParams = Head.ChatParams;
-            var agent = chatParams.Agent;
+            var agent = Sessions.ResolveAgent(chatParams.Agent);
             Model? model = chatParams.Model;
 
             _ = Task.Run(async () =>

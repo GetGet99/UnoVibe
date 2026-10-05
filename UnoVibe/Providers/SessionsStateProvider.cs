@@ -29,6 +29,7 @@ partial class SessionsStateProvider
     readonly HashSet<string> pendingDirectories = new(StringComparer.Ordinal);
 
     public SessionHead? Head(SessionId? sessId) => sessId is null ? null : sessions.TryGetValue(sessId, out var sessHead) ? sessHead : null;
+    public string ResolveAgent(string? preferred) => preferred ?? Models.AgentOptions.FirstOrDefault() ?? "build";
     public ChatboxState? Chatbox(SessionId? sessId) => sessId is null ? null : chatboxes.TryGetValue(sessId, out var chatboxModel) ? chatboxModel : null;
     public ChatboxState EnsureChatbox(SessionId sessId)
     {

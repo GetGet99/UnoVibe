@@ -4,9 +4,7 @@ namespace UnoVibe.Integration;
 public sealed class SendShellRequest
 {
     public required string Command { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? Agent { get; set; }
+    public required string Agent { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SendPromptModelRequest? Model { get; set; }
