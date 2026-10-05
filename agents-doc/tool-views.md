@@ -44,8 +44,9 @@ Mirrors the TUI's `ApplyPatch` (`routes/session/index.tsx`) and the web client's
 
 `UnoVibe/Controls/AccordionHeader.cs` is the shared collapsible-section header
 (`IQuickMarkupComponent<UIElement>`) used by `MessageReasoningView` and the
-`edit`/`write`/`apply_patch` tool cards. It owns the hover background, the `▸`/`▾`
-chevron, the `ProgressRing` spinner, and the `Expanded` display state; each caller
+`edit`/`write`/`apply_patch` tool cards. It owns the `▸`/`▾`
+chevron, the `ProgressRing` spinner, and the `Expanded` display state; hover and
+pressed visuals come from the native `Button` style. Each caller
 keeps its own `bool Expanded` and flips it via `Toggle=`() => Expanded = !Expanded``.
 
 - Props: `Title` (required), `Expanded`, `Enabled` (default true), `SemiBold`,
