@@ -14,5 +14,7 @@ partial class MessageItem
     public long TokensCacheRead { get; set; }
     public long TokensCacheWrite { get; set; }
     public bool Interrupted { get; set; }
+    public long CreatedMs { get; set; }
+    public long CompletedMs { get; set; }
     public ObservableCollection<ChatPartItem> Parts { get; } = new();
 }

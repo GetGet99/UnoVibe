@@ -20,13 +20,18 @@ namespace UnoVibe.Pages.Chat;
             <MarkdownView Text=`Part.Text` PlainMode=`PlainMode` />
         </Border>
         <StackPanel Orientation=Horizontal Spacing=4 HorizontalAlignment=`Message?.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`>
-            <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
-                    ToolTipService.ToolTip=`PlainMode ? "Show formatted Markdown" : "Show plain text"`
-                    @Click+=`PlainMode = !PlainMode`>
-                <AppSymbolIcon Symbol=`PlainMode ? Symbol.Font : Symbol.Bullets` FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
-            </Button>
             if (`Message?.Role == "user"`)
             {
+                if (`Message?.CreatedMs > 0`)
+                {
+                    <TextBlock Text=`FormatMessageTime(Message?.CreatedMs ?? 0)` ToolTipService.ToolTip=`FormatMessageTimeFull(Message?.CreatedMs ?? 0)`
+                               FontSize=11 Foreground=`theme.TertiaryText` VerticalAlignment=Center IsTextSelectionEnabled=true />
+                }
+                <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
+                        ToolTipService.ToolTip=`PlainMode ? "Show formatted Markdown" : "Show plain text"`
+                        @Click+=`PlainMode = !PlainMode`>
+                    <AppSymbolIcon Symbol=`PlainMode ? Symbol.Font : Symbol.Bullets` FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                </Button>
                 <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
                         ToolTipService.ToolTip="Fork conversation from this message"
                         @Click+=`await ForkFromHereAsync()`>
@@ -46,6 +51,19 @@ namespace UnoVibe.Pages.Chat;
                 </Flyout>>
                     <AppSymbolIcon Symbol=Undo FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                 </Button>
+            }
+            else
+            {
+                <Button Width=26 Height=22 Padding=0 CornerRadius=5 Background=`theme.SubtleFill` BorderThickness=0
+                        ToolTipService.ToolTip=`PlainMode ? "Show formatted Markdown" : "Show plain text"`
+                        @Click+=`PlainMode = !PlainMode`>
+                    <AppSymbolIcon Symbol=`PlainMode ? Symbol.Font : Symbol.Bullets` FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
+                </Button>
+                if (`Message?.CreatedMs > 0`)
+                {
+                    <TextBlock Text=`FormatMessageTime(Message?.CreatedMs ?? 0)` ToolTipService.ToolTip=`FormatMessageTimeFull(Message?.CreatedMs ?? 0)`
+                               FontSize=11 Foreground=`theme.TertiaryText` VerticalAlignment=Center IsTextSelectionEnabled=true />
+                }
             }
         </StackPanel>
     </StackPanel>
@@ -78,5 +96,33 @@ partial class MessageTextPart : IQuickMarkupComponent
     {
         if (Message is null) return;
         if (ForkRequested is { } handler) await handler(Message);
+    }
+
+    private static string FormatMessageTime(long ms)
+    {
+        if (ms <= 0) return "";
+        try
+        {
+            var local = DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime();
+            if (local.Date == DateTimeOffset.Now.Date) return local.ToString("t");
+            return local.ToString("g");
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string FormatMessageTimeFull(long ms)
+    {
+        if (ms <= 0) return "";
+        try
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds(ms).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        }
+        catch
+        {
+            return "";
+        }
     }
 }

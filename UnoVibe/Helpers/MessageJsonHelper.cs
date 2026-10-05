@@ -41,6 +41,7 @@ static class MessageJsonHelper
             Agent = agent,
         };
         ApplyMessageStats(item, info);
+        ApplyMessageTime(item, info);
         if (parts is not null)
         {
             foreach (var part in parts)
@@ -277,6 +278,21 @@ static class MessageJsonHelper
                 item.TokensCacheRead = (long)cache.Read;
                 item.TokensCacheWrite = (long)cache.Write;
             }
+        }
+    }
+
+    public static void ApplyMessageTime(MessageItem item, MessageInfo info)
+    {
+        switch (info)
+        {
+            case UserMessageInfo user:
+                item.CreatedMs = (long)user.Time.Created;
+                item.CompletedMs = 0;
+                break;
+            case AssistantMessageInfo assistant:
+                item.CreatedMs = (long)assistant.Time.Created;
+                item.CompletedMs = assistant.Time.Completed.HasValue ? (long)assistant.Time.Completed.Value : 0;
+                break;
         }
     }
 

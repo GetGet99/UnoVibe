@@ -142,6 +142,7 @@ partial class ChatMessagesState : IDisposable
             };
             if (role.Length > 0) message.Role = role;
             MessageJsonHelper.ApplyMessageStats(message, info);
+            MessageJsonHelper.ApplyMessageTime(message, info);
             if (info is AssistantMessageInfo assist)
             {
                 if (MessageJsonHelper.IsAbortedError(assist) && !message.Parts.Any(p => p.Type == "aborted"))
@@ -175,6 +176,7 @@ partial class ChatMessagesState : IDisposable
             },
         };
         MessageJsonHelper.ApplyMessageStats(message, info);
+        MessageJsonHelper.ApplyMessageTime(message, info);
         if (info is AssistantMessageInfo assist2)
         {
             if (MessageJsonHelper.IsAbortedError(assist2))
