@@ -25,6 +25,23 @@ omits per-file metadata.
 Mirrors the TUI's `ApplyPatch` (`routes/session/index.tsx`) and the web client's `patch` renderer
 (`session-ui/src/components/message-part.tsx` + `apply-patch-file.ts`).
 
+## Accordion headers
+
+`UnoVibe/Controls/AccordionHeader.cs` is the shared collapsible-section header
+(`IQuickMarkupComponent<UIElement>`) used by `MessageReasoningView` and the
+`edit`/`write`/`apply_patch` tool cards. It owns the hover background, the `▸`/`▾`
+chevron, the `ProgressRing` spinner, and the `Expanded` display state; each caller
+keeps its own `bool Expanded` and flips it via `Toggle=`() => Expanded = !Expanded``.
+
+- Props: `Title` (required), `Expanded`, `Enabled` (default true), `SemiBold`,
+  `ShowSpinner` + `SpinnerForeground`, `TitleForeground`, `Toggle` (`Action?`).
+- When `Enabled` is false the header renders as a plain `StackPanel` row with no
+  background, no border, no chevron, and no click target — never a greyed-out
+  disabled `Button`. `MessageReasoningView` passes `Enabled` from the summary body
+  length so empty reasoning renders as plain text.
+- Tool cards pass `ShowSpinner=`Part.IsBusy`` with the pending/running neutral/caution
+  foreground, matching what `ToolBusyIndicator` rendered inside the old headers.
+
 ## Tool diff / code views
 
 `UnoVibe/Controls/DiffView.cs` and `UnoVibe/Controls/CodeView.cs` are self-contained QuickMarkup

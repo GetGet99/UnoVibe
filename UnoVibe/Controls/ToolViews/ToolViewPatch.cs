@@ -8,22 +8,15 @@ namespace UnoVibe.Controls.ToolViews;
 /// server omits the per-file metadata (older servers only surface <c>state.metadata.diff</c>).
 /// </summary>
 [QuickMarkup("""
-    using UnoVibe.Controls.ToolViews;
+    using UnoVibe.Controls;
     using QuickMarkup.WinUI;
     required ToolCallPartItem Part;
     bool Expanded = false;
-    bool Hovering = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <Button Background=`Hovering ? theme.SystemNeutralBackground : theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Expanded = !Expanded` PointerEntered+=`(s, e) => Hovering = true` PointerExited+=`(s, e) => Hovering = false`>
-            <StackPanel Orientation=Horizontal Spacing=8>
-                <ToolBusyIndicator Part=`Part` />
-                <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 Foreground=`Hovering ? theme.PrimaryText : theme.SecondaryText` VerticalAlignment=Center />
-                <TextBlock Text=`Part.DisplayName` FontSize=12 Foreground=`theme.PrimaryText` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
-            </StackPanel>
-        </Button>
+        <AccordionHeader Title=`Part.DisplayName` Expanded=`Expanded` ShowSpinner=`Part.IsBusy` SpinnerForeground=`Part.ToolStatus == "pending" ? theme.SystemNeutral : theme.SystemCaution` TitleForeground=`theme.PrimaryText` Toggle=`() => Expanded = !Expanded` />
         if (`Expanded`)
         {
             foreach (var f in `Part.PatchFiles`)

@@ -317,7 +317,9 @@ the user is talking to this opencode session **through the running UnoVibe app**
   controls `MessageView`, `MessageTextPart`, `ModelPicker`, `SendMessageButton`.
   The chat page coordinates sends and provides the shared composer text (`Input`).
   See `agents-doc/session-state.md`, `agents-doc/tool-views.md`, `agents-doc/markdown-rendering.md`.
-- `UnoVibe/Controls/` — reusable UI used across pages: `AppSymbolIcon`, `CodeHighlighter`
+- `UnoVibe/Controls/` — reusable UI used across pages: `AccordionHeader`
+  (shared collapsible-section header for reasoning + tool cards), `AppSymbolIcon`,
+  `CodeHighlighter`
   (ColorCode-based syntax highlighting for fenced code blocks), `CodeView`/`DiffView`
   (line-numbered syntax-highlighted code and colored unified-diff views for tool cards),
   `FolderActions`, `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
