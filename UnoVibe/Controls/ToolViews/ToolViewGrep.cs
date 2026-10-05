@@ -8,7 +8,7 @@ namespace UnoVibe.Controls.ToolViews;
     </setup>
     <StackPanel Spacing=4>
         <ToolViewTitle Part=`Part` Text=`Part.DisplayName` />
-        if (`Part.ToolError.Length > 0`)
+        if (`Part.ToolError is not null`)
             <TextBlock Text=`Part.ToolError` FontSize=11 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
     </StackPanel>
     """)]

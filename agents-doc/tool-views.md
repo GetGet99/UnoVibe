@@ -2,7 +2,22 @@
 
 Reference for how opencode tool calls render in the chat.
 **Read this file when** editing `UnoVibe/Controls/ToolViews/*`, `DiffView`, `CodeView`,
-`CodeHighlighter`, or the tool-call parsing in `EventsProvider.ApplyToolState`.
+`CodeHighlighter`, or the tool-call mapping in `Helpers/MessageJsonHelper.cs`
+(`ApplyToolPart`).
+
+## Null-means-absent convention
+
+Reactive tool-call state follows one rule: `null` means absent or invalid, and any
+non-null string is meaningful content. Never store `""` or whitespace-only strings in
+`ToolCallPartItem`'s reactive fields.
+
+The rule is enforced at a single choke point — the OpenCode boundary.
+`MessageJsonHelper` (`ApplyToolPart`/`ApplyToolInput`/`ApplyToolMetadata`) normalizes
+every mapped string through `NullIfBlank`
+(`string.IsNullOrWhiteSpace(value) ? null : value`). Readers therefore use a plain
+`is not null` check in markup, and `is { Length: > 0 }` in C# only when they also need
+the value bound to a variable. The friendly tool-name labels live in exactly one place:
+`ToolCallPartItem.ToolDisplayName`/`TitleOrDisplay` (`ToolViewShared` delegates to them).
 
 ## apply_patch rendering
 

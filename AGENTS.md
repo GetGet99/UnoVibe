@@ -86,9 +86,9 @@ that code, and keep it up to date alongside AGENTS.md (see "Contribution guideli
   streaming reconcile, PlainMode, HTML/table handling, ColorCode highlighting, inline code.
   _Read before_ editing `MarkdownView`, `MessageTextPart`, `CodeHighlighter`, or `AccentPalette`.
 - **`agents-doc/tool-views.md`** — tool-call rendering: `ToolView*` cards, `DiffView`/`CodeView`,
-  and the `apply_patch` metadata → `PatchJson` flow.
-  _Read before_ editing `UnoVibe/Controls/ToolViews/*`, `DiffView`, `CodeView`, or apply_patch
-  parsing.
+  the `apply_patch` metadata → `PatchJson` flow, and the null-means-absent mapping convention.
+  _Read before_ editing `UnoVibe/Controls/ToolViews/*`, `DiffView`, `CodeView`, apply_patch
+  parsing, or `MessageJsonHelper` tool mapping.
 - **`agents-doc/suggest-box.md`** — `SuggestBox`/`SuggestionBoxController`: trigger parsing,
   providers (commands/skills/files), the legacy vs `/api/*` route skew, focus management.
   _Read before_ editing `SuggestBox`, `SuggestionProviders`, or the suggestion fetch helpers.
@@ -403,6 +403,13 @@ Only one place should hold the source of truth for a piece of data, unless absol
 Multiple sources of truth lead to someone forgetting to update one and introducing inconsistencies.
 For optimization, caches may be necessary, but introducing a new source of truth should be a
 consciously agreed-upon decision before it is used everywhere.
+
+### Null means absent
+
+Reactive model fields use `string?` with `null` for absent or invalid — never store `""`
+or whitespace-only strings. Normalize at the mapping boundary where OpenCode DTOs become
+model state (e.g. `MessageJsonHelper.NullIfBlank`), so readers can rely on a plain
+`is not null` check. See `agents-doc/tool-views.md` for the convention detail.
 
 ### State isolation on directory/session change
 

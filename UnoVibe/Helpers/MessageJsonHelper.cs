@@ -240,12 +240,12 @@ static class MessageJsonHelper
         item.State = state;
         item.ToolStatus = state.Status;
 
-        if (state is ToolRunningState runningState && runningState.Title is { Length: > 0 } title)
-            item.ToolTitle = title;
+        if (state is ToolRunningState runningState && !string.IsNullOrWhiteSpace(runningState.Title))
+            item.ToolTitle = runningState.Title;
         if (state is ToolCompletedState completedState)
         {
-            item.ToolTitle = completedState.Title;
-            item.ToolOutput = completedState.Output;
+            item.ToolTitle = NullIfBlank(completedState.Title);
+            item.ToolOutput = NullIfBlank(completedState.Output);
             if (completedState.Metadata is { } meta)
                 ApplyToolMetadata(item, meta);
             if (completedState.Attachments is { } attachments)
@@ -253,7 +253,7 @@ static class MessageJsonHelper
         }
         if (state is ToolErrorState errorState2)
         {
-            item.ToolError = errorState2.Error;
+            item.ToolError = NullIfBlank(errorState2.Error);
             if (errorState2.Metadata is { } meta)
                 ApplyToolMetadata(item, meta);
         }
@@ -267,6 +267,9 @@ static class MessageJsonHelper
         target.Clear();
         foreach (var v in values) target.Add(v);
     }
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     public static void ApplyMessageStats(MessageItem item, MessageInfo info)
     {
@@ -333,17 +336,17 @@ static class MessageJsonHelper
         if (input.ValueKind != JsonValueKind.Object) return;
         var serialized = JsonSerializer.Serialize(input, AppJsonContext.Default.JsonElement);
         if (serialized != "{}") item.ToolInput = serialized;
-        if (input.TryGetProperty("command", out var command)) item.ToolCommand = command.GetString() ?? "";
-        if (input.TryGetProperty("filePath", out var filePath)) item.ToolFilePath = filePath.GetString() ?? "";
-        if (input.TryGetProperty("content", out var content)) item.ToolContent = content.GetString() ?? "";
-        if (input.TryGetProperty("pattern", out var pattern)) item.ToolPattern = pattern.GetString() ?? "";
-        if (input.TryGetProperty("path", out var searchPath)) item.ToolSearchPath = searchPath.GetString() ?? "";
-        if (input.TryGetProperty("include", out var include)) item.ToolInclude = include.GetString() ?? "";
-        if (input.TryGetProperty("workdir", out var workdir)) item.ToolWorkdir = workdir.GetString() ?? "";
-        if (input.TryGetProperty("url", out var url)) item.ToolUrl = url.GetString() ?? "";
-        if (input.TryGetProperty("query", out var query)) item.ToolQuery = query.GetString() ?? "";
-        if (input.TryGetProperty("name", out var skillName)) item.ToolSkillName = skillName.GetString() ?? "";
-        if (input.TryGetProperty("subagent_type", out var subType)) item.ToolSubagentType = subType.GetString() ?? "";
+        if (input.TryGetProperty("command", out var command)) item.ToolCommand = NullIfBlank(command.GetString());
+        if (input.TryGetProperty("filePath", out var filePath)) item.ToolFilePath = NullIfBlank(filePath.GetString());
+        if (input.TryGetProperty("content", out var content)) item.ToolContent = NullIfBlank(content.GetString());
+        if (input.TryGetProperty("pattern", out var pattern)) item.ToolPattern = NullIfBlank(pattern.GetString());
+        if (input.TryGetProperty("path", out var searchPath)) item.ToolSearchPath = NullIfBlank(searchPath.GetString());
+        if (input.TryGetProperty("include", out var include)) item.ToolInclude = NullIfBlank(include.GetString());
+        if (input.TryGetProperty("workdir", out var workdir)) item.ToolWorkdir = NullIfBlank(workdir.GetString());
+        if (input.TryGetProperty("url", out var url)) item.ToolUrl = NullIfBlank(url.GetString());
+        if (input.TryGetProperty("query", out var query)) item.ToolQuery = NullIfBlank(query.GetString());
+        if (input.TryGetProperty("name", out var skillName)) item.ToolSkillName = NullIfBlank(skillName.GetString());
+        if (input.TryGetProperty("subagent_type", out var subType)) item.ToolSubagentType = NullIfBlank(subType.GetString());
         if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
             Refill(item.Todos, todos.Deserialize(AppJsonContext.Default.ListTodoInfo) ?? []);
         if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
@@ -356,20 +359,23 @@ static class MessageJsonHelper
     private static void ApplyToolMetadata(ToolCallPartItem item, ToolMetadata meta)
     {
         if (meta.Interrupted == true) item.Interrupted = true;
-        if (meta.Output is { Length: > 0 } shellOutput) item.ShellOutput = shellOutput;
-        if (meta.Diff is { Length: > 0 } diff) item.Diff = diff;
+        if (!string.IsNullOrWhiteSpace(meta.Output)) item.ShellOutput = meta.Output;
+        if (!string.IsNullOrWhiteSpace(meta.Diff)) item.Diff = meta.Diff;
         if (meta.Count is { } count) item.MatchCount = count.ToString();
         if (meta.Matches is { } matches) item.MatchCount = matches.ToString();
         if (meta.Loaded is { Count: > 0 } loaded)
-            item.LoadedFiles = string.Join("\n", loaded.Where(s => s.Length > 0));
+        {
+            var joined = string.Join("\n", loaded.Where(s => !string.IsNullOrWhiteSpace(s)));
+            item.LoadedFiles = joined.Length > 0 ? joined : null;
+        }
         if (meta.Todos is { Count: > 0 } todos)
             Refill(item.Todos, todos);
         if (meta.Answers is { Count: > 0 } answers)
             Refill(item.Answers, answers);
         if (meta.Files is { Count: > 0 } files)
             Refill(item.PatchFiles, files);
-        if (meta.SessionId is { Length: > 0 } session) item.ToolSessionId = session;
-        if (meta.ParentSessionId is { Length: > 0 } parent) item.ToolParentSessionId = parent;
+        if (!string.IsNullOrWhiteSpace(meta.SessionId)) item.ToolSessionId = meta.SessionId;
+        if (!string.IsNullOrWhiteSpace(meta.ParentSessionId)) item.ToolParentSessionId = meta.ParentSessionId;
     }
 
     public static void PopulateQuestionForm(ToolCallPartItem item, IReadOnlyList<Integration.QuestionInfo> questions)

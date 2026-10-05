@@ -29,10 +29,10 @@ namespace UnoVibe.Controls.ToolViews;
                             <DiffView Diff=`f.Patch` />
                     </StackPanel>
                 </Border>
-            if (`Part.Diff.Length > 0 && Part.PatchFiles.Count == 0`)
+            if (`Part.Diff is not null && Part.PatchFiles.Count == 0`)
                 <DiffView Diff=`Part.Diff` />
         }
-        if (`Part.ToolError.Length > 0`)
+        if (`Part.ToolError is not null`)
             <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`Part.ToolError` FontSize=11 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>

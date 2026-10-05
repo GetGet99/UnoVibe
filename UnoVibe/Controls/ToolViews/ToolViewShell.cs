@@ -15,10 +15,10 @@ namespace UnoVibe.Controls.ToolViews;
                 if (`WorkdirLabel().Length > 0`)
                     <TextBlock Text=`"Running in " + WorkdirLabel()` FontSize=11 Foreground=`theme.TertiaryText`
                                 TextWrapping=Wrap IsTextSelectionEnabled=true />
-                <ToolViewTitle Part=`Part` Text=`Part.DisplayName` SemiBold=true Emphasized=true CodeFont=`Part.ToolCommand.Length > 0` />
+                <ToolViewTitle Part=`Part` Text=`Part.DisplayName` SemiBold=true Emphasized=true CodeFont=`Part.ToolCommand is not null` />
             </StackPanel>
         </Border>
-        if (`Part.ShellOutput.Length > 0`)
+        if (`Part.ShellOutput is not null`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`Expanded ? Part.ShellOutput : ToolViewShared.ShellCollapsed(Part)` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true />
@@ -28,7 +28,7 @@ namespace UnoVibe.Controls.ToolViews;
                     <TextBlock Text=`Expanded ? "Show less ▴" : "Show more ▾"` FontSize=11 Foreground=`theme.TertiaryText` />
                 </Button>
         }
-        if (`Part.ToolError.Length > 0`)
+        if (`Part.ToolError is not null`)
             <Border Background=`theme.SystemCriticalBackground` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`Part.ToolError` FontSize=12 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>

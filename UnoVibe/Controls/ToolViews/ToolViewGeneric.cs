@@ -10,7 +10,7 @@ namespace UnoVibe.Controls.ToolViews;
     </setup>
     <StackPanel Spacing=4>
         <ToolViewTitle Part=`Part` Text=`Part.DisplayName` />
-        if (`Part.ToolInput.Length > 0`)
+        if (`Part.ToolInput is not null`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`InputExpanded ? Part.ToolInput : ToolViewShared.GenericInputCollapsed(Part)` FontSize=12 FontFamily=`CodeFontsHelper.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
@@ -20,7 +20,7 @@ namespace UnoVibe.Controls.ToolViews;
                     <TextBlock Text=`InputExpanded ? "Show less ▴" : "Show more ▾"` FontSize=11 Foreground=`theme.TertiaryText` />
                 </Button>
         }
-        if (`Part.ToolOutput.Length > 0`)
+        if (`Part.ToolOutput is not null`)
         {
             <Border Background=`theme.LayerFill` CornerRadius=4 Padding=`new Thickness(8, 6, 8, 6)`>
                 <TextBlock Text=`OutputExpanded ? Part.ToolOutput : ToolViewShared.GenericOutputCollapsed(Part)` FontSize=12 FontFamily=`CodeFontsHelper.Current` TextWrapping=Wrap IsTextSelectionEnabled=true />
@@ -30,7 +30,7 @@ namespace UnoVibe.Controls.ToolViews;
                     <TextBlock Text=`OutputExpanded ? "Show less ▴" : "Show more ▾"` FontSize=11 Foreground=`theme.TertiaryText` />
                 </Button>
         }
-        if (`Part.ToolError.Length > 0`)
+        if (`Part.ToolError is not null`)
             <TextBlock Text=`Part.ToolError` FontSize=11 Foreground=`theme.SystemCritical` TextWrapping=Wrap IsTextSelectionEnabled=true />
     </StackPanel>
     """)]

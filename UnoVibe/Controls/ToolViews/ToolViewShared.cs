@@ -5,35 +5,6 @@ namespace UnoVibe.Controls.ToolViews;
 
 static class ToolViewShared
 {
-    private static readonly IReadOnlyDictionary<string, string> ToolDisplayNames =
-        new Dictionary<string, string>
-        {
-            ["bash"] = "Running command...",
-            ["shell"] = "Running command...",
-            ["glob"] = "Globbing...",
-            ["grep"] = "Grepping...",
-            ["webfetch"] = "Fetching",
-            ["skill"] = "Reading skill",
-            ["read"] = "Reading",
-            ["edit"] = "Editing",
-            ["write"] = "Writing",
-            ["apply_patch"] = "Preparing patch...",
-            ["todowrite"] = "Writing todos...",
-            ["question"] = "Asking question...",
-            ["task"] = "Delegating...",
-        };
-
-    /// <summary>
-    /// Maps a raw tool name to its friendly display label (the same text each view's
-    /// last-resort fallback uses), so a title-less running tool shows "Editing" instead
-    /// of leaking the raw "edit". Unknown names pass through unchanged.
-    /// </summary>
-    public static string? ToolDisplayName(string? toolName)
-    {
-        if (string.IsNullOrEmpty(toolName)) return null;
-        return ToolDisplayNames.TryGetValue(toolName, out var label) ? label : toolName;
-    }
-
     public static string FormatDuration(long ms)
     {
         if (ms <= 0) return "";
@@ -63,9 +34,9 @@ static class ToolViewShared
     public static bool Busy(ToolCallPartItem p) => p.IsBusy;
 
     public static string Shell(ToolCallPartItem p) =>
-        p.ToolCommand.Length > 0
-            ? "$ " + p.ToolCommand
-            : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running command...";
+        p.ToolCommand is { Length: > 0 } command
+            ? "$ " + command
+            : p.TitleOrDisplay("Running command...");
 
     /// <summary>
     /// Workdir label for a shell tool card: the working directory relative to the session's
@@ -74,10 +45,10 @@ static class ToolViewShared
     /// the session directory fall back to the raw workdir. Mirrors the TUI's
     /// <c>workdirDisplay</c> (relative-to-location, hidden when it resolves to ".").
     /// </summary>
-    public static string ShellWorkdir(ToolCallPartItem p, string referenceDir)
+    public static string ShellWorkdir(ToolCallPartItem p, string? referenceDir)
     {
         var workdir = p.ToolWorkdir;
-        if (workdir.Length == 0 || referenceDir.Length == 0) return workdir;
+        if (string.IsNullOrEmpty(workdir) || string.IsNullOrEmpty(referenceDir)) return workdir ?? "";
         try
         {
             var full = Path.IsPathRooted(workdir)
@@ -94,22 +65,22 @@ static class ToolViewShared
 
     public static string Glob(ToolCallPartItem p)
     {
-        var name = p.ToolPattern.Length > 0 ? "Glob \"" + p.ToolPattern + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Globbing...";
-        var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
+        var name = p.ToolPattern is { Length: > 0 } pattern ? "Glob \"" + pattern + "\"" : p.TitleOrDisplay("Globbing...");
+        var count = p.MatchCount is { Length: > 0 } matchCount ? " (" + matchCount + " match" + (matchCount == "1" ? "" : "es") + ")" : "";
         return "✱ " + name + count;
     }
 
     public static string Grep(ToolCallPartItem p)
     {
-        var name = p.ToolPattern.Length > 0 ? "Grep \"" + p.ToolPattern + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Grepping...";
-        if (p.ToolSearchPath.Length > 0) name += " in " + p.ToolSearchPath;
-        if (p.ToolInclude.Length > 0) name += " (" + p.ToolInclude + ")";
-        var count = p.MatchCount.Length > 0 ? " (" + p.MatchCount + " match" + (p.MatchCount == "1" ? "" : "es") + ")" : "";
+        var name = p.ToolPattern is { Length: > 0 } pattern ? "Grep \"" + pattern + "\"" : p.TitleOrDisplay("Grepping...");
+        if (p.ToolSearchPath is { Length: > 0 } searchPath) name += " in " + searchPath;
+        if (p.ToolInclude is { Length: > 0 } include) name += " (" + include + ")";
+        var count = p.MatchCount is { Length: > 0 } matchCount ? " (" + matchCount + " match" + (matchCount == "1" ? "" : "es") + ")" : "";
         return "✱ " + name + count;
     }
 
     public static string TodoTitle(ToolCallPartItem p) =>
-        p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Writing todos...";
+        p.TitleOrDisplay("Writing todos...");
 
     public static string TodoLine(TodoInfo todo)
     {
@@ -123,12 +94,13 @@ static class ToolViewShared
     }
 
     public static string QuestionTitle(ToolCallPartItem p) =>
-        p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Asking question...";
+        p.TitleOrDisplay("Asking question...");
 
     /// <summary>Friendly line for a question tool that ended in an error (e.g. the user dismissed it).</summary>
     public static string QuestionError(ToolCallPartItem p)
     {
         var error = p.ToolError;
+        if (string.IsNullOrEmpty(error)) return "Question dismissed";
         if (error.StartsWith("Tool execution failed: ", StringComparison.Ordinal))
             error = error.Substring("Tool execution failed: ".Length);
         return error.Length > 0 ? error : "Question dismissed";
@@ -160,25 +132,25 @@ static class ToolViewShared
     }
 
     public static string WebFetch(ToolCallPartItem p) =>
-        "% " + (p.ToolUrl.Length > 0 ? "WebFetch " + p.ToolUrl : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Fetching");
+        "% " + (p.ToolUrl is { Length: > 0 } url ? "WebFetch " + url : p.TitleOrDisplay("Fetching"));
 
     public static string Skill(ToolCallPartItem p) =>
-        "→ " + (p.ToolSkillName.Length > 0 ? "Skill \"" + p.ToolSkillName + "\"" : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Reading skill");
+        "→ " + (p.ToolSkillName is { Length: > 0 } skillName ? "Skill \"" + skillName + "\"" : p.TitleOrDisplay("Reading skill"));
 
     public static string Read(ToolCallPartItem p) =>
-        "→ " + (p.ToolFilePath.Length > 0 ? "Read " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Reading");
+        "→ " + (p.ToolFilePath is { Length: > 0 } path ? "Read " + path : p.TitleOrDisplay("Reading"));
 
     public static string Loaded(ToolCallPartItem p)
     {
-        if (p.LoadedFiles.Length == 0) return "";
+        if (string.IsNullOrEmpty(p.LoadedFiles)) return "";
         return string.Join("\n", p.LoadedFiles.Split('\n').Select(l => "↳ Loaded " + l));
     }
 
     public static string Edit(ToolCallPartItem p) =>
-        "← " + (p.ToolFilePath.Length > 0 ? "Edit " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Editing");
+        "← " + (p.ToolFilePath is { Length: > 0 } path ? "Edit " + path : p.TitleOrDisplay("Editing"));
 
     public static string Write(ToolCallPartItem p) =>
-        "← " + (p.ToolFilePath.Length > 0 ? "Write " + p.ToolFilePath : p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Writing");
+        "← " + (p.ToolFilePath is { Length: > 0 } path ? "Write " + path : p.TitleOrDisplay("Writing"));
 
     /// <summary>
     /// Edit title with an added/changed line count derived from the unified diff
@@ -192,8 +164,9 @@ static class ToolViewShared
         return $"{Edit(p)}  ({added}+ {removed}-)";
     }
 
-    public static (int Added, int Removed) DiffStats(string diff)
+    public static (int Added, int Removed) DiffStats(string? diff)
     {
+        if (string.IsNullOrEmpty(diff)) return (0, 0);
         int added = 0, removed = 0;
         foreach (var line in diff.Split('\n'))
         {
@@ -210,7 +183,8 @@ static class ToolViewShared
         var title = Write(p);
         // The written file's content lives in input.content (ToolContent); fall back to the
         // input/output JSON when an older server only surfaces those.
-        var lineCount = CountLines(p.ToolContent.Length > 0 ? p.ToolContent : p.ToolOutput.Length > 0 ? p.ToolOutput : p.ToolInput);
+        var source = p.ToolContent is { Length: > 0 } content ? content : p.ToolOutput is { Length: > 0 } output ? output : p.ToolInput;
+        var lineCount = CountLines(source);
         return lineCount > 0 ? $"{title}  ({lineCount} lines)" : title;
     }
 
@@ -226,7 +200,7 @@ static class ToolViewShared
         if (Busy(p)) return "Preparing patch...";
         // Server without per-file metadata: fall back to the first line of the tool title
         // (the "Success. Updated the following files:..." summary).
-        var title = (p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Patch").Split('\n')[0].Trim();
+        var title = p.TitleOrDisplay("Patch").Split('\n')[0].Trim();
         return title.Length > 0 ? title : "Patch";
     }
 
@@ -246,9 +220,9 @@ static class ToolViewShared
         return text;
     }
 
-    public static int CountLines(string value)
+    public static int CountLines(string? value)
     {
-        if (value.Length == 0) return 0;
+        if (string.IsNullOrEmpty(value)) return 0;
         var count = 1;
         foreach (var c in value)
             if (c == '\n') count++;
@@ -256,31 +230,32 @@ static class ToolViewShared
     }
 
     public static string Generic(ToolCallPartItem p) =>
-        "⚙ " + (p.ToolTitle ?? ToolDisplayName(p.ToolName) ?? "Running tool...");
+        "⚙ " + p.TitleOrDisplay("Running tool...");
 
     /// <summary>Title for a subagent-spawning <c>task</c> tool call. The state.title is the model's short description.</summary>
     public static string Task(ToolCallPartItem p)
     {
-        var name = p.ToolTitle?.Length > 0 ? p.ToolTitle : ToolDisplayName(p.ToolName) ?? "Delegating...";
+        var name = p.TitleOrDisplay("Delegating...");
         return "✳ " + name;
     }
 
     /// <summary>Status line for a <c>task</c> tool card: agent type + live state + open hint.</summary>
     public static string TaskStatus(ToolCallPartItem p)
     {
-        var type = p.ToolSubagentType.Length > 0 ? p.ToolSubagentType : "subagent";
+        var type = p.ToolSubagentType is { Length: > 0 } subagentType ? subagentType : "subagent";
         return p.ToolStatus switch
         {
             "pending" => $"Starting {type} agent…",
             "running" => $"Running {type} agent…",
-            "completed" => p.ToolSessionId.Length > 0 ? "Done — click to open the session" : "Done",
-            "error" => p.ToolError.Length > 0 ? $"Failed: {p.ToolError}" : "Failed",
+            "completed" => p.ToolSessionId is { Length: > 0 } ? "Done — click to open the session" : "Done",
+            "error" => p.ToolError is { Length: > 0 } toolError ? $"Failed: {toolError}" : "Failed",
             _ => "Click to open the session",
         };
     }
 
-    public static string Truncate(string value, int max)
+    public static string Truncate(string? value, int max)
     {
+        if (string.IsNullOrEmpty(value)) return "";
         if (value.Length <= max) return value;
         return value.Substring(0, max) + "\n… (truncated, " + (value.Length - max) + " more chars)";
     }
@@ -294,8 +269,8 @@ static class ToolViewShared
 
     private static (string Output, bool Overflow) CollapseShellOutput(ToolCallPartItem p)
     {
-        var output = p.ShellOutput.Length > 0 ? p.ShellOutput : p.ToolOutput;
-        if (output.Length == 0) return (output, false);
+        var output = p.ShellOutput is { Length: > 0 } shellOutput ? shellOutput : p.ToolOutput;
+        if (string.IsNullOrEmpty(output)) return ("", false);
         return CollapseLines(output, ShellMaxLines, ShellMaxChars);
     }
 
@@ -307,9 +282,9 @@ static class ToolViewShared
 
     public static string GenericOutputCollapsed(ToolCallPartItem p) => GenericCollapse(p.ToolOutput).Output;
 
-    private static (string Output, bool Overflow) GenericCollapse(string value)
+    private static (string Output, bool Overflow) GenericCollapse(string? value)
     {
-        if (value.Length == 0) return (value, false);
+        if (string.IsNullOrEmpty(value)) return ("", false);
         return CollapseLines(value, ShellMaxLines, ShellMaxChars);
     }
 

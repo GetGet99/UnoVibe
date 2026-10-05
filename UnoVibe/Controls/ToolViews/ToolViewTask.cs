@@ -16,9 +16,9 @@ namespace UnoVibe.Controls.ToolViews;
     </setup>
     <Button CornerRadius=8
             Padding=`new Thickness(10,  8, 10,  8)` HorizontalAlignment=Left MaxWidth=680 Margin=`new Thickness(0, 2, 0, 2)`
-            IsEnabled=`Part.ToolSessionId.Length > 0`
-            ToolTipService.ToolTip=`Part.ToolSessionId.Length > 0 ? "Open the subagent session" : "Waiting for the subagent session…"`
-            @Click+=`Sessions.ActiveSessionId = new(Part.ToolSessionId)`>
+            IsEnabled=`Part.ToolSessionId is not null`
+            ToolTipService.ToolTip=`Part.ToolSessionId is not null ? "Open the subagent session" : "Waiting for the subagent session…"`
+            @Click+=`Sessions.ActiveSessionId = new(Part.ToolSessionId ?? "")`>
         <Grid ColumnSpacing=8 ColumnDefinitions=<>
             <ColumnDefinition Width=Auto />
             <ColumnDefinition />
@@ -36,7 +36,7 @@ namespace UnoVibe.Controls.ToolViews;
                 <StackPanel Orientation=Horizontal Spacing=8>
                     <TextBlock Text=`Part.DisplayName` FontSize=12 FontWeight=`FontWeights.SemiBold`
                                Foreground=`theme.SecondaryText` TextWrapping=Wrap VerticalAlignment=Center />
-                    if (`Part.ToolSubagentType.Length > 0`)
+                    if (`Part.ToolSubagentType is not null`)
                         <Border Background=`theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(6, 1, 6, 2)` VerticalAlignment=Center>
                             <TextBlock Text=`Part.ToolSubagentType` FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                         </Border>

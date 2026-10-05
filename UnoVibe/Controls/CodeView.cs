@@ -23,8 +23,8 @@ namespace UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Microsoft.UI.Xaml.Documents;
     using Microsoft.UI.Text;
-    string Text = "";
-    string FilePath = "";
+    string? Text;
+    string? FilePath;
     bool ShowAll = false;
     <root>
         host = <StackPanel Spacing=2 />

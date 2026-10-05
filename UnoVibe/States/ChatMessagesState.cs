@@ -448,7 +448,7 @@ partial class ChatMessagesState : IDisposable
             {
                 if (part is ToolCallPartItem tool && tool.QuestionRequestId == requestId)
                 {
-                    tool.QuestionRequestId = "";
+                    tool.QuestionRequestId = null;
                     tool.QuestionForm.Clear();
                 }
             }
@@ -475,7 +475,7 @@ partial class ChatMessagesState : IDisposable
                 if (!_messagesById.TryGetValue(messageId, out var message)) continue;
 
                 var part = message.Parts.OfType<ToolCallPartItem>().FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
-                if (part is null || part.QuestionRequestId.Length > 0) continue;
+                if (part is null || part.QuestionRequestId is { Length: > 0 }) continue;
 
                 part.QuestionRequestId = question.Id;
                 if (question.Questions is { Count: > 0 })

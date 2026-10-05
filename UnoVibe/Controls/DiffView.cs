@@ -26,7 +26,7 @@ namespace UnoVibe.Controls;
     using Microsoft.UI.Xaml.Documents;
     using Microsoft.UI.Text;
     using Windows.UI;
-    string Diff = "";
+    string? Diff;
     bool ShowAll = false;
     <root>
         host = <StackPanel Spacing=2 />

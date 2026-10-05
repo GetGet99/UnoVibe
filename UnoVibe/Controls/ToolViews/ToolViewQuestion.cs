@@ -22,7 +22,7 @@ namespace UnoVibe.Controls.ToolViews;
                 </StackPanel>
             }
         }
-        else if (`Part.QuestionRequestId.Length > 0 && Part.QuestionForm.Count > 0 && Part.IsBusy`)
+        else if (`Part.QuestionRequestId is not null && Part.QuestionForm.Count > 0 && Part.IsBusy`)
         {
             foreach (var q in `Part.QuestionForm`)
                 <ToolViewQuestionItem Q=`q` />
@@ -39,7 +39,7 @@ namespace UnoVibe.Controls.ToolViews;
                     <TextBlock Text=`q.Question` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true />
                 </StackPanel>
             }
-            if (`Part.ToolStatus == "error" && Part.ToolError.Length > 0`)
+            if (`Part.ToolStatus == "error" && Part.ToolError is not null`)
                 <TextBlock Text=`Part.ErrorText` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
         }
     </StackPanel>
@@ -61,14 +61,14 @@ partial class ToolViewQuestion : IQuickMarkupComponent
             answers.Add(selected);
         }
 
-        if (Part.QuestionRequestId.Length == 0 || answers.Count == 0) return;
+        if (string.IsNullOrEmpty(Part.QuestionRequestId) || answers.Count == 0) return;
         if (ChatState is not null)
             await ChatState.ReplyQuestionAsync(Part.QuestionRequestId, answers);
     }
 
     private async Task RejectAsync()
     {
-        if (Part.QuestionRequestId.Length == 0) return;
+        if (string.IsNullOrEmpty(Part.QuestionRequestId)) return;
         if (ChatState is not null)
             await ChatState.RejectQuestionAsync(Part.QuestionRequestId);
     }
