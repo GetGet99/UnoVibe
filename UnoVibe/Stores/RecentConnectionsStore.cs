@@ -2,14 +2,6 @@ using System.Text.Json;
 
 namespace UnoVibe.Stores;
 
-/// <summary>
-/// Persists the ConnectPage "Recent" list (folders launched via `opencode serve`
-/// and server URLs connected to) plus the global folder-security settings to a
-/// small JSON file under the app's local-data directory. The folder-security
-/// settings (`UseGeneratedPassword`/`CustomPassword`) are the single source of
-/// truth for opening folders — both from history and from the Open Folder button.
-/// Call <see cref="Load"/> once at startup; every mutation saves back automatically.
-/// </summary>
 static class RecentConnectionsStore
 {
     private const int MaxEntries = 20;
@@ -18,19 +10,12 @@ static class RecentConnectionsStore
     private static readonly string FilePath = Path.Combine(Dir, "recent.json");
     private static readonly object Gate = new();
 
-    /// <summary>The recent connections, most recent first. Reactive in the markup.</summary>
     public static ObservableCollection<RecentConnection> Items { get; } = new();
 
-    /// <summary>Global folder security: generate a strong password vs use <see cref="CustomPassword"/>.</summary>
     public static bool UseGeneratedPassword { get; set; } = true;
 
-    /// <summary>
-    /// Whether the custom folder password is persisted (opt-in, with a plain-text-risk warning in the UI).
-    /// When false, <see cref="CustomPassword"/> is never written to disk.
-    /// </summary>
     public static bool SaveFolderPassword { get; set; } = false;
 
-    /// <summary>Global folder security: the custom password, only persisted when <see cref="SaveFolderPassword"/> is true.</summary>
     public static string CustomPassword { get; set; } = "";
 
     public static void Load()
@@ -56,16 +41,12 @@ static class RecentConnectionsStore
                 }
                 catch (JsonException)
                 {
-                    // Legacy bare-array format — migrate on next save.
                     try { list = JsonSerializer.Deserialize(json, AppJsonContext.Default.ListRecentConnection); }
                     catch (JsonException) { list = null; }
                 }
 
                 if (list is null) return;
 
-                // Legacy migration: recent.json files written before server passwords stopped
-                // being persisted carried a raw `serverPassword` per server entry. Detect those
-                // and mark the entries RequiresPassword so reopening prompts for the password.
                 var legacyPasswordKeys = CollectLegacyPasswordKeys(json);
 
                 Items.Clear();
@@ -80,12 +61,9 @@ static class RecentConnectionsStore
         }
         catch
         {
-            // Best effort: a corrupt/missing file just yields an empty history.
         }
     }
 
-    /// <summary>Persists the global folder-security settings (the ConnectPage source of truth).
-    /// The raw <paramref name="customPassword"/> is only written when <paramref name="savePassword"/> is true.</summary>
     public static void SaveSecurity(bool useGenerated, bool savePassword, string customPassword)
     {
         UseGeneratedPassword = useGenerated;
@@ -94,7 +72,6 @@ static class RecentConnectionsStore
         Save();
     }
 
-    /// <summary>Records a successful local-folder launch (or refreshes an existing entry).</summary>
     public static void UpsertFolder(string folder)
     {
         var key = NormalizeFolder(folder);
@@ -119,9 +96,6 @@ static class RecentConnectionsStore
         TrimAndSave();
     }
 
-    /// <summary>Records a successful server connection (or refreshes an existing entry).
-    /// The password itself is never persisted — only the fact that the server needs one,
-    /// so a later click can prompt for it instead of connecting without auth.</summary>
     public static void UpsertServer(string url, bool requiresPassword)
     {
         var key = NormalizeUrl(url);
@@ -147,7 +121,6 @@ static class RecentConnectionsStore
         TrimAndSave();
     }
 
-    /// <summary>Removes one entry (by its normalized <see cref="RecentConnection.Key"/>).</summary>
     public static void Remove(string key)
     {
         var item = Items.FirstOrDefault(x => x.Key == key);
@@ -186,7 +159,6 @@ static class RecentConnectionsStore
         }
         catch
         {
-            // Best effort: history persistence must never break the connect flow.
         }
     }
 
@@ -199,10 +171,6 @@ static class RecentConnectionsStore
 
     private static string NormalizeUrl(string url) => url.Trim().TrimEnd('/');
 
-    /// <summary>
-    /// Scans a persisted <c>recent.json</c> for server entries that stored a raw
-    /// <c>serverPassword</c> (the pre-flag format) and returns their normalized keys.
-    /// </summary>
     private static HashSet<string> CollectLegacyPasswordKeys(string json)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -211,7 +179,6 @@ static class RecentConnectionsStore
             var root = JsonSerializer.Deserialize(json, AppJsonContext.Default.JsonElement);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                // Legacy bare-array format — every element is a connection.
                 foreach (var el in root.EnumerateArray()) ScanLegacyPassword(el, keys);
             }
             else if (root.ValueKind == JsonValueKind.Object
@@ -223,8 +190,6 @@ static class RecentConnectionsStore
         }
         catch
         {
-            // Best effort; the typed deserialize above already succeeded, so this is only
-            // a fallback for the old `serverPassword` key.
         }
         return keys;
     }
@@ -246,7 +211,6 @@ static class RecentConnectionsStore
         return slash >= 0 && slash < trimmed.Length - 1 ? trimmed[(slash + 1)..] : trimmed;
     }
 
-    /// <summary>On-disk shape: the recent list plus the global folder-security settings.</summary>
     internal sealed class FileModel
     {
         public bool UseGeneratedPassword { get; set; } = true;

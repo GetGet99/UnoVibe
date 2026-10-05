@@ -4,26 +4,15 @@ namespace UnoVibe.States;
 partial class ChatboxState
 {
 
-    // Auto-continue ("turn.autocontinue" setting) bookkeeping. When a turn stops with the chat
-    // ending on a Thinking (reasoning) part, a "continue" prompt is sent automatically instead of
-    // surfacing the end-of-chat Continue button, and the router suppresses the completion toast +
-    // sidebar unread/outcome indicators for that stop (the turn is already restarting).
     private const int MaxAutoContinues = 50;
 
-    /// <summary>Consecutive automatic continues fired without an intervening manual send or a
-    /// stop that didn't qualify — bounds runaway loops against a provider that keeps stopping
-    /// mid-thinking; past the cap the manual Continue button returns.</summary>
     private int autoContinueStreak;
 
-    /// <returns>True if session is no longer idle. False if session is still idle</returns>
     public async Task<bool> TurnStopActionAsync(ChatOutcome outcome, string messageId)
     {
-        // TODO [High]: Drops old echo guards — any finish with reasoning-end retriggers continue up to 50, dedup by SSE-id not message-id. Add last-continued-id.
         if (SessionId is not {} sessId) return false;
         if (outcome is ChatOutcome.Interrupted)
         {
-            // interrupt means intentional stop by user
-            // so don't do anything else
             return false;
         }
         Lazy<Task<bool>> endedWithReasoning = new(() => HasMessageEndedWithReasoningAsync(messageId));
@@ -34,8 +23,7 @@ partial class ChatboxState
             && await endedWithReasoning.Value;
 
         var shouldDrain = !canContinue && !canAutoContinue;
-        
-        // TODO [High]: Drains queue only when !canContinue && !canAutoContinue — queued prompt behind error/reasoning stop stalls. Drain or surface count even when ShowContinue.
+
         if (shouldDrain)
         {
             ShowContinue = false;
@@ -44,7 +32,6 @@ partial class ChatboxState
             try
             {
                 await SendPromptNowAsync(text);
-                // remove from queue
                 _pendingPrompts.Dequeue();
                 PendingPromptsCount = _pendingPrompts.Count;
                 return true;
@@ -83,7 +70,6 @@ partial class ChatboxState
 
     async Task<bool> HasMessageEndedWithReasoningAsync(string messageId)
     {
-        // TODO [Medium]: Server GetMessageAsync per turn-stop (old inspected local parts) — extra latency + failure mode. Prefer local ChatMessagesState parts.
         if (SessionId is not {} sessId) return false;
         try
         {
@@ -96,7 +82,6 @@ partial class ChatboxState
         }
         catch
         {
-            // Best-effort: return false
         }
         return false;
     }

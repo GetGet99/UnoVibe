@@ -14,7 +14,6 @@ partial class SessionIndicator : IQuickMarkupComponent<Grid>
     private static Symbol GetSymbol(SessionState s) => s switch
     {
         SessionState.None => Symbol.Message,
-        // SessionState.Working => should not be here,
         SessionState.Success => Symbol.Accept,
         SessionState.Interrupted => Symbol.Stop,
         SessionState.Error => Symbol.Cancel,
@@ -26,11 +25,9 @@ partial class SessionIndicator : IQuickMarkupComponent<Grid>
     private static Brush? GetBrush(SessionState s) => s switch
     {
         SessionState.Success => ThemeBrushes.Global.SystemSuccess,
-        // SessionState.Working => should not be here,
         SessionState.Interrupted => ThemeBrushes.Global.SystemCaution,
         SessionState.Error => ThemeBrushes.Global.SystemCritical,
         SessionState.PendingPermission or SessionState.PendingQuestion => ThemeBrushes.Global.SystemAttention,
-        // we really sure about this?
         _ => ThemeBrushes.Global.PrimaryText,
     };
 }

@@ -14,88 +14,49 @@ Reference for the per-session, client-side state and behaviors that drive the ch
 
 ## Interrupt / send-while-busy
 
-`ChatboxState.InterruptAsync()` calls `POST /session/:id/abort` (the server cancels the runner +
-in-flight tools and marks aborted tool parts with `state.metadata.interrupted=true` and the assistant
-message `error.name === "MessageAbortedError"`).
+Interrupting calls `POST /session/:id/abort` (the server cancels the runner + in-flight tools
+and marks the assistant message aborted).
 
-## Send while busy
-
-The **send-mode setting** (`SettingsStore.SendMode`, "Send message default" in Settings) decides what
+The **send-mode setting** (`send.mode`, "Send message default" in Settings) decides what
 a send does while a turn is running:
-- **On next tool call** (default): fire `prompt_async` immediately — the server serializes it itself.
-  `createUserMessage` stores the prompt at once; the running session loop picks it up at the
-  **next agent step** (after the in-flight tool call), not at full idle. Matches the TUI
-  (`stream.transport.ts` `runPromptTurn` calls `promptAsync` regardless of busy; its `state.wait`
-  gate only prevents a second concurrent UI submit).
-- **Queue**: `ChatboxState.SendAsync` holds the prompt in the client-side queue
-  (`EnqueuePrompt`/`DrainPendingPromptsAsync`, surfaced as the `⏳ N queued` badge) and flushes it
-  one at a time when the session goes idle (`OnTurnCompleted` / `ApplySessionStatus`). The queue is
-  per-`ChatboxState` (so per cached session) and survives session switches; queued prompts drain in
-  the background when that session idles.
-- **Send immediately**: `ChatboxState.SendAsync` interrupts the running turn first
-  (`InterruptAsync` → `POST /session/:id/abort`) then fires `prompt_async`, so the new message
-  becomes the active request instead of waiting for the next agent step. The abort POST returns once
-  the runner is idle, so the following prompt starts a fresh turn. When idle it sends like
-  "On next tool call". (Verified sound against the server: `prompt` → `createUserMessage` then
-  `loop` → `Runner.ensureRunning`, which starts a fresh run from `Idle`; the TUI/web have no
-  interrupt+send flow — this is UnoVibe-only.)
+- **On next tool call** (default): send immediately — the server serializes it itself and the
+  running loop picks it up at the next agent step. Matches the TUI.
+- **Queue**: hold the prompt in a client-side per-session queue (surfaced as the `⏳ N queued`
+  badge) and flush one at a time when the session goes idle. The queue survives session
+  switches; queued prompts drain in the background when that session idles.
+- **Send immediately**: interrupt the running turn first, then send — the new prompt becomes
+  the active request. When idle it sends like "On next tool call". (UnoVibe-only; the TUI/web
+  have no interrupt+send flow.)
 
-**Busy-state send button:** while a turn runs, the composer's send button becomes a `SplitButton`
-(`Controls/SendMessageButton.cs`) — the primary click sends with the configured `SendMode`, and the
-chevron opens a `MenuFlyout` of the three modes as **one-time overrides** (they never change the
-`send.mode` setting; the primary stays the configured default). The menu checkmark + the button
-tooltip track the setting live: `ChatPage` keeps the reactive `SendMode` ref synced via
-`SettingsStore.Changed` (bounced to the UI thread) and passes it as the component's `Mode` prop;
-the component reads `SettingsStore.SendMode` fresh for the primary click. When idle the send button
-is a plain button that sends immediately.
+**Busy-state send button:** while a turn runs, the composer's send button becomes a split button —
+the primary click sends with the configured mode, and the chevron opens the three modes as
+**one-time overrides** (they never change the setting).
 
 ## Shell mode ("!" prefix)
 
-Typing `!` as the entire composer input flips `ChatComposer` into **shell mode** (`ChatComposer.ShellMode`
-reactive ref): the trigger character is stripped (never enters the buffer), the input gets an accent
-border + shell placeholder, an accent "! ✕" cancel button appears by the send cluster, and the
-mode/model/variant row is replaced by a hint line. Detection watches text changes rather than keys,
-so any layout path that produces a lone `!` triggers it. Emptying the input stays in shell mode
-(Uno may deliver the programmatic clear's TextChanged asynchronously, so exit-on-empty would fire
-immediately after entry anyway); Esc, the cancel button, or submitting leaves the mode. While active,
-`/`+`@` suggestion prefixes are disabled (`SetSuggestionPrefixes`, controller rebuilt via a Providers
-re-set) so slash tokens in commands don't pop the flyout, image attach is disabled, and `SetChatText`
-(revert/fork restore) force-exits so a restored prompt can't run as a command.
+Typing `!` as the entire composer input flips the composer into **shell mode**: the trigger
+character is stripped, the input gets an accent border + shell placeholder, and the mode/model row
+is replaced by a hint line. Detection watches text changes rather than keys. Esc, the cancel
+button, or submitting leaves the mode. While active, `/`+`@` suggestion prefixes and image attach
+are disabled, and revert/fork restores force-exit the mode.
 
-Submit raises `ChatComposer.ShellCommandRequested` → `ChatPage.SendShellCommandAsync` →
-`ChatboxState.SendShellAsync`: ensure session, reject while busy (status-line message — the server
-409s concurrent runs anyway), optimistic `IsBusy`, then fire POST `/session/{id}/shell` detached on a
-dedicated no-timeout client (`OpencodeClient.SendShellAsync`, mirroring `SendCommandNow`) with
-`{ agent: Mode, model: {providerID, modelID}, command }`. The endpoint blocks until the command exits;
-all progress arrives over SSE — the server records the synthetic user message ("The following tool was
-executed by the user", auto-hidden by the existing synthetic-part logic in `ApplyPartUpdated`) plus an
-assistant message whose running `bash` tool part streams output via `state.metadata.output`, rendered
-by the existing `ToolViewShell`. The session goes busy for the duration, so Stop aborts the command
-(server appends a `<metadata>User aborted…</metadata>` block to the output).
-
-TUI ref: `packages/tui/src/component/prompt/index.tsx` — `!` binding at offset 0 → `store.mode = "shell"`,
-esc/backspace-at-0 bindings exit, submit calls `sdk.client.session.shell`; server:
-`session/prompt.ts` `shellImpl`.
+Submit fires `POST /session/{id}/shell` detached on a dedicated no-timeout client; the endpoint
+blocks until the command exits and all progress arrives over SSE (the server records a synthetic
+user message, auto-hidden by the existing synthetic-part logic, plus an assistant message whose
+running `bash` tool part streams output). The session goes busy for the duration, so Stop aborts
+the command.
 
 ## Turn-stop handling: Continue button + auto-continue
 
-When a turn stops, `ChatboxState` decides between showing the end-of-chat **⟳ Continue** button
-(`ShowContinue`, rendered by `ChatMessageList`; clicking it sends the literal prompt `continue`)
-and, when **Auto-continue on thinking stop** (`turn.autocontinue`,
-[`settings.md`](settings.md)) is enabled and the chat ends on an unfinished Thinking (reasoning)
-part, firing that same continue automatically (`HandleStoppedTurn`). Stop signals —
-`session.status idle` and/or the final `message.updated` carrying finish — arrive in either order,
-are handled uniformly (`HandleStoppedTurn` from both sites), and echoes of an already-auto-continued
-stop are ignored until the server confirms the restarted turn with its first non-idle status event.
-The auto-fired continue is silent: no completion toast and no sidebar indicator
-(`SessionsStateProvider.ApplySessionStatus` asks `store.WillAutoContinue()` before applying an idle event and
-skips both). A streak cap of 10 consecutive auto-continues — reset by any manual send or a
-non-qualifying stop — hands control back to the manual Continue button as a runaway-loop guard.
-Aborted turns never qualify (a user Stop must not be answered with a continue). Because
-`session.status idle` can be processed before the final `message.updated` lands the abort error,
-`ChatboxState` also keeps a client-side `interruptRequested` flag — set by `InterruptAsync`,
-cleared on the next confirmed running turn or session reset — that suppresses auto-continue (and,
-via `MarkInterrupted`, hides a stale Continue button) even when the aborted marker hasn't arrived.
+When a turn stops, the client decides between showing the end-of-chat **⟳ Continue** button
+(clicking it sends the literal prompt `continue`) and, when **Auto-continue on thinking stop**
+is enabled and the chat ends on an unfinished Thinking part, firing that same continue
+automatically. Stop signals (`session.status idle` and/or the final `message.updated`) arrive in
+either order and are handled uniformly; echoes of an already-auto-continued stop are ignored until
+the server confirms the restarted turn. The auto-fired continue is silent (no toast, no sidebar
+indicator). A streak cap of 10 consecutive auto-continues hands control back to the manual button
+as a runaway-loop guard. Aborted turns never qualify. A client-side interrupt flag suppresses
+auto-continue even when the aborted marker hasn't arrived yet.
 
 ## Revert / undo
 
@@ -103,52 +64,29 @@ via `MarkInterrupted`, hides a stale Continue button) even when the aborted mark
 - `POST /session/:id/revert` with `{"messageID":"msg_..."}` (409 when busy — abort first).
 - `POST /session/:id/unrevert` with `{}` (400 when no revert).
 
-`revert.messageID` = the user message the conversation is rewound to; the server **keeps** reverted
-messages until the next prompt, when `SessionRevert.cleanup` removes messages with
-`id >= revert.messageID` (emitting `message.removed`, handled by `EventsProvider.ApplyMessageRemoved`)
-and clears the marker (a `session.updated` whose info omits `revert`, synced in
-`ApplySessionUpsert`).
+`revert.messageID` = the user message the conversation is rewound to; the server **keeps**
+reverted messages until the next prompt, when cleanup removes messages with
+`id >= revert.messageID` (emitting `message.removed`) and clears the marker.
 
-`ChatboxState` holds the reactive `RevertMessageId`/`RevertCountLabel` (+ plain `RevertPromptText`)
-and `RevertToMessageAsync(MessageItem)` (abort-if-busy → revert → `ApplyRevertMarker`; restores the
-undone prompt (text + re-staged image attachments) into the composer via `RevertPromptText`/
-`PendingImages`) plus `UndoLastMessageAsync()`/`RedoLastMessageAsync()` mirroring the TUI.
-The `/undo` and `/redo` built-in commands (see
-[`suggest-box.md`](suggest-box.md)) are their UI callers, routed through
-`ChatPage.UndoLastAsync()`/`RedoLastAsync()` (which also restore the composer prompt + scroll);
-the per-message ↶ revert flyout goes to `RevertToMessageAsync` directly.
+Reverting restores the undone prompt (text + re-staged image attachments) into the composer.
+The `/undo` and `/redo` built-in commands (see [`suggest-box.md`](suggest-box.md)) are the UI
+callers, plus the per-message ↶ revert flyout, which rewinds to that exact user message.
 
 **Per-message revert to a specific message:**
-every user message renders a small always-visible **↶ revert icon** in an action row under its text
-bubble (`MessageTextPart` (per-text-part bubble + action row) → its `RevertRequested` →
-`MessageView.OnPartRevertRequested` re-raises `MessageView.RevertRequested` →
-`ChatPage.OnMessageRevertRequested` → `ChatboxState.RevertToMessageAsync`), which rewinds the conversation
-to that exact user message (web-client per-message revert / TUI dialog-message parity).
-
-Clicking the ↶ opens a **confirmation flyout** (`Button.Flyout` auto-opens on click — Uno calls
-`OpenAssociatedFlyout()` in `Button.OnClick`, and `Click` also fires, so the outer button has NO
-`@Click` handler; the flyout's "Undo" button performs the real revert and hides the flyout).
-The flyout is `Placement=BottomEdgeAlignedRight` (opening it downward avoids covering the message
-above being removed) with **no Cancel button** — it's light-dismissed (`ShowMode=Auto`), with an
-italic "Click outside to cancel" hint.
+every user message renders a small always-visible **↶ revert icon** in an action row under its
+text bubble. Clicking it opens a **confirmation flyout** (light-dismissed, no Cancel button).
 The action row is deliberately **not hover-revealed** — toggled Visibility would reflow the message
 and fight the stick-to-bottom autoscroll; future actions (fork etc.) go in the same row.
 
 **No message refetch after undo/redo** (the TUI/web don't do one either):
-the server keeps reverted messages until the next prompt, so the local `Messages` list is already
+the server keeps reverted messages until the next prompt, so the local list is already
 authoritative and the revert point is just toggled.
-The chat page hides messages with `id >= RevertMessageId` (a per-item conditional in the message
-`foreach`, reactive on `RevertMessageId` — NOT a physical removal, so Redo can restore from the
-still-cached list) and renders a "N message(s) reverted" card with a Redo button (Redo = revert
-forward to the next user message, or `unrevert` when none).
-The message `foreach` is **keyed by `m.Id`** so QuickMarkup reuses MessageView blocks across
-collection resets instead of recreating every element.
-Message ids (`msg_...`) are lexicographically sortable — compare with
-`StringComparer.Ordinal.Compare`, never parse.
-
-TUI ref: `packages/tui/src/routes/session/index.tsx` undo/redo + revert-card Match blocks;
-web ref: `use-session-commands.tsx` + `pages/session/timeline/model.ts`
-(`selectVisibleUserMessages` keeps `id < revertMessageID`).
+The chat page hides messages at/after the revert point (a per-item conditional — NOT a physical
+removal, so Redo can restore from the still-cached list) and renders a "N message(s) reverted"
+card with a Redo button (Redo = revert forward to the next user message, or `unrevert` when none).
+The message list is keyed by message id so elements are reused across collection resets.
+Message ids (`msg_...`) are lexicographically sortable — compare with ordinal string comparison,
+never parse.
 
 ## Image attachments
 
@@ -157,13 +95,10 @@ Linux; `FileTypeFilter` `.png/.jpg/.jpeg/.gif/.webp/.bmp`) and stages `ImageAtta
 `ChatboxMessage.Images`, shown as a thumbnail strip (Row 3) with ✕ remove buttons;
 `PendingImageCount` drives strip visibility.
 
-On send, `OpencodeClient.SendPromptAsync` builds prompt parts from the text (omitted if
-whitespace-only) plus one `{type:"file", mime, filename, url:"data:<mime>;base64,..."}` per pending
-image, then clears the strip.
-Sent/echoed image parts render as a thumbnail bubble in `MessageView` via
-`PartItem.IsImage`/`Image` (`LoadImageAsync` decodes the data URL fire-and-forget; non-image `file`
-parts keep the old `file: <name>` line).
-Deliberately **no** model `capabilities.attachment` check at attach time (mirrors TUI/web);
+On send, the client builds prompt parts from the text (omitted if whitespace-only) plus one
+file part per pending image (data-URL), then clears the strip.
+Sent/echoed image parts render as a thumbnail bubble. Deliberately **no** model
+`capabilities.attachment` check at attach time (mirrors TUI/web);
 guarding image-incapable models is a known follow-up.
 
 ## Fork conversation
@@ -172,60 +107,39 @@ guarding image-incapable models is a known follow-up.
 - `POST /session/:id/fork` with body `{}` (full-session fork) or
   `{"messageID":"msg_..."}` (fork at a message) returns the new session's `Session.Info`.
 - The server copies every message with `id < messageID` (the forked-at message itself is
-  **excluded**; message ids are re-mapped, compaction `tail_start_id`s rewritten) into a new session
-  titled `"<original title> (fork #N)"` (`Session.fork` in `session.ts`; fork input
-  `{ sessionID, messageID? }`).
+  **excluded**; message ids are re-mapped) into a new session
+  titled `"<original title> (fork #N)"`.
 - Forked sessions get **no `parentID`** (only `task` subagents do), so they appear as normal root
-  sessions in the sidebar with no back button; `session.created` is emitted so
-  `ApplySessionUpsert` adds it to `Sessions`.
+  sessions in the sidebar with no back button; `session.created` is emitted so the sidebar picks
+  it up.
 
 **UnoVibe UI:**
-every user message renders a **⇆ fork icon** (WinUI `Symbol.Switch` glyph) in the action row next
-to the ↶ revert icon (`MessageTextPart` → its `ForkRequested` → `MessageView.OnPartForkRequested`
-re-raises `MessageView.ForkRequested` → `ChatPage.OnMessageForkRequested` →
-`ChatboxState.ForkFromMessageAsync`).
+every user message renders a **⇆ fork icon** in the action row next to the ↶ revert icon.
 Unlike revert there's **no confirmation flyout** (fork is non-destructive — it creates a new session).
+Forking switches to the new session, then restores the forked-at message's prompt into the
+composer (plus re-staged attachments) — the user edits/continues from there, matching the
+TUI/web fork-navigate-with-prompt flow.
 
-`ChatboxState.ForkFromMessageAsync(MessageItem)` calls `ForkSessionAsync(_sessionId, message.Id)`, then
-`SwitchSessionAsync(forked.Id)` (loads the copied history, resets IsRead), then restores the
-forked-at message's prompt into the composer via the plain `ForkPromptText` field (set from
-`PromptTextFromMessage`) + `StageImagesFromMessage` for re-staged attachments — the user
-edits/continues from there, matching the TUI/web fork-navigate-with-prompt flow.
-`ForkPromptText` is reset in `ResetRevertState()` (connect/new/switch/delete).
+**Full-session fork** (no message id) is available from a **⇆ button in the chat header row**
+(tooltip "Fork full session", disabled until a session exists) — same flow but with no composer
+restore (the whole conversation is copied, nothing to re-inject).
 
-**Full-session fork** (no message id) is available from a **⇆ button in the ChatPage header row**
-(right side, next to the stats button; `Symbol.Switch` glyph, tooltip "Fork full session", disabled
-until a session exists) wired to `ChatboxState.ForkFullSessionAsync()` — same
-`ForkSessionAsync(_sessionId)` → `SwitchSessionAsync(forked.Id)` flow but with no composer restore
-(the whole conversation is copied, nothing to re-inject).
-
-`OpencodeClient.ForkSessionAsync` uses the **legacy** `/session/:id/fork` route — the newer
-`/api/session/:id/fork` HttpApi route is absent on the current dev server (1.18.0).
 Note: the fork-point message itself is excluded from the new session, so the composer prompt is what
-re-injects it; `SwitchSessionAsync` falls back to `GetSessionAsync` when the fork isn't yet in the
+re-injects it. The client falls back to `GET /session/:id` when the fork isn't yet in the
 sidebar list (race with `session.created`).
 
 ## Chat autoscroll (stick-to-bottom)
 
-`ChatPage` tracks `_stickToBottom`, updated by `scrollHost.ViewChanged` (every event, incl.
-intermediate drag/inertia frames): within 40px of the bottom ⇒ pinned, anything above ⇒ unpinned.
+The page tracks a stick-to-bottom flag, updated on every scroll-view change: near the bottom ⇒
+pinned, anything above ⇒ unpinned.
 
-Follow-the-stream scrolling is driven **only** by `messagePanel.SizeChanged` (the scroll content —
-fires **after** the frame's layout pass, so `ScrollableHeight` is never stale and the viewport
-never jumps to the top on session select). `SizeChanged` is the single trigger: it covers new
-messages (collection changes resize the panel), in-place streaming deltas, and toggling a collapsed
-Thinking header (which resizes the panel) — so an expanded reasoning block follows while the agent
-is thinking without a redundant per-delta scroll.
-(A previous `PartContentChanged` event fired on every `ApplyPartDelta`/`ApplyPartUpdated`;
-it was removed because each scroll instantly re-pinned via `ChangeView`, killing the user's
-in-progress wheel-scroll animation — the collapse/expand case proved it.)
+Follow-the-stream scrolling is driven **only** by scroll-content size changes (fires **after** the
+frame's layout pass, so the viewport never jumps). It covers new messages, in-place streaming
+deltas, and toggling a collapsed Thinking header.
 
 All scroll triggers only run while pinned:
 - A manual scroll-up disables autoscroll.
 - Scrolling back down to the bottom re-enables it — never before the bottom is hit.
-- Explicit app actions (send, continue, undo/redo, permission card) call `ForceScrollToBottom()`
+- Explicit app actions (send, continue, undo/redo, permission card) force-scroll to bottom
   to re-pin regardless of position.
-- A `Reset` on `Messages` (session switch/new session) also re-pins.
-
-Programmatic scrolls use `ChangeView(..., disableAnimation: true)` so they raise exactly one
-non-intermediate `ViewChanged` and never falsely unpin.
+- A session switch/new session also re-pins.

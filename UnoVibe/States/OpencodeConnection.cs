@@ -2,8 +2,6 @@ using UnoVibe.Integration;
 using UnoVibe.Services;
 
 namespace UnoVibe.States;
-// TODO [Medium]: Lives in States/ but is a singleton connection/client lifecycle — move to Providers/ to match lifetime.
-// TODO [Medium]: ConnectPage compares ConnectionStatus == "Connected" — expose bool IsConnected instead of string compare.
 partial class OpencodeConnection : IDisposable
 {
     private Reference<string> ConnectionStatusProp = new("Connecting...");
@@ -49,12 +47,10 @@ partial class OpencodeConnection : IDisposable
                 ConnectionStatus = "Connected";
                 if (ServeProcess is not null)
                 {
-                    // Folder launch: use the folder we started serve in.
                     ServerDirectory = ServeProcess.WorkingDirectory;
                 }
                 else
                 {
-                    // URL connection: fetch the server's default directory.
                     var path = (await Client.GetPathAsync(ct)).GetOrThrow();
                     if (path.Directory is { Length: > 0 } dir)
                     {

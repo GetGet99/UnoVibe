@@ -10,36 +10,15 @@ using Style = ColorCode.Styling.Style;
 
 namespace UnoVibe.Controls;
 
-/// <summary>
-/// ColorCode-based syntax highlighting for a plain <see cref="TextBlock"/>.
-///
-/// Uno has no RichTextBlock, so this mirrors ColorCode's WinUI <c>RichTextBlockFormatter</c>
-/// but emits styled <see cref="Run"/>s into a TextBlock's <see cref="TextBlock.Inlines"/>
-/// (the same approach <see cref="MarkdownView"/> uses for inline markdown). Parsing stays in
-/// ColorCode.Core (regex-combination per language, cached); only the output target (Inlines
-/// instead of RichTextBlock.Blocks) and the niche (markdown fenced-code blocks) are new.
-///
-/// Each call creates a fresh formatter: ColorCode's language regexes are compiled once and
-/// cached internally, so warm parses run in ~0.1 ms — fine for MarkdownView's per-delta
-/// re-render. The style dictionary is picked from the target element's resolved
-/// <see cref="FrameworkElement.ActualTheme"/> (falling back to the system background-color
-/// poll <see cref="AccentPaletteHelper"/> uses when no element is given), so callers can re-colorize
-/// on <c>ActualThemeChanged</c> to keep already-rendered blocks readable across theme flips.
-/// </summary>
 static class CodeHighlighter
 {
     private static readonly UISettings Ui = new();
 
-    // StyleDictionary.DefaultDark/DefaultLight build a fresh dictionary on every access, so
-    // cache one instance each instead of re-allocating ~50 Style objects on every highlight.
     private static readonly StyleDictionary DarkStyles = StyleDictionary.DefaultDark;
     private static readonly StyleDictionary LightStyles = StyleDictionary.DefaultLight;
 
     private static readonly Dictionary<string, SolidColorBrush> BrushCache = new();
 
-    /// <summary>Resolves a fenced-code info string (e.g. "ts", "csharp", "json") to a ColorCode
-    /// language via id + alias matching. Returns null when the info is empty or unknown —
-    /// the caller then falls back to plain text.</summary>
     public static ILanguage? ResolveLanguage(string? info)
     {
         if (string.IsNullOrWhiteSpace(info)) return null;
@@ -47,8 +26,6 @@ static class CodeHighlighter
         return trimmed.Length > 0 ? Languages.FindById(trimmed) : null;
     }
 
-    // Extension (lowercase, leading dot) -> ColorCode language id/alias for file paths.
-    // Mirrors the TUI's util/filetype.ts LANGUAGE_EXTENSIONS for the subset ColorCode supports.
     private static readonly Dictionary<string, string> ExtensionLanguages = new()
     {
         [".c"] = "cpp",
@@ -89,11 +66,6 @@ static class CodeHighlighter
         [".axml"] = "xml",
     };
 
-    /// <summary>
-    /// Resolves a file/directory path's extension to a ColorCode language (e.g. "src/App.cs" →
-    /// "c#"), mirroring the TUI's <c>util/filetype.ts</c>. Returns null for unknown extensions,
-    /// "\d+.png" image thumbnails, or paths with no extension — the caller falls back to plain.
-    /// </summary>
     public static ILanguage? ResolveLanguageFromPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
@@ -104,11 +76,6 @@ static class CodeHighlighter
         return ExtensionLanguages.TryGetValue(ext, out var id) ? Languages.FindById(id) : null;
     }
 
-    /// <summary>
-    /// Colorizes <paramref name="source"/> and appends styled runs to <paramref name="target"/>'s
-    /// Inlines. Returns true when a language was resolved; false when <paramref name="language"/>
-    /// is null/unknown or the source is empty (caller keeps / builds plain text instead).
-    /// </summary>
     public static bool Colorize(TextBlock target, string source, string? language)
     {
         var runs = ColorizeRuns(source, language, target);
@@ -123,13 +90,6 @@ static class CodeHighlighter
         return true;
     }
 
-    /// <summary>
-    /// Colorizes <paramref name="source"/> into a flat list of styled text fragments (null when the
-    /// language can't be resolved or the source is empty). Lets a caller build custom Inlines —
-    /// e.g. <see cref="CodeView"/> interleaves per-line line numbers with the highlighted runs.
-    /// The dark/light palette is chosen from <paramref name="themeSource"/>'s resolved theme when
-    /// given (call again from its ActualThemeChanged to re-colorize), else the system theme.
-    /// </summary>
     public static IReadOnlyList<StyledRun>? ColorizeRuns(string source, string? language, FrameworkElement? themeSource = null)
     {
         var lang = ResolveLanguage(language);
@@ -140,12 +100,6 @@ static class CodeHighlighter
         return formatter.FormatRuns(source, lang);
     }
 
-    /// <summary>
-    /// The plain-text brush of the palette <paramref name="themeSource"/> currently resolves to.
-    /// Used as the fallback for unstyled fragments: a Run with an unset Foreground defaults to
-    /// hardcoded black in Uno (TextElement.ForegroundProperty), which is unreadable on dark.
-    /// Re-resolve per render — callers rebuild on ActualThemeChanged, so it tracks the theme.
-    /// </summary>
     public static Brush PlainTextBrush(FrameworkElement? themeSource)
     {
         bool isDark = IsDarkTheme(themeSource);
@@ -155,11 +109,6 @@ static class CodeHighlighter
         return new SolidColorBrush(isDark ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 0, 0, 0));
     }
 
-    /// <summary>
-    /// Builds a <see cref="Run"/> from a styled fragment (version of the formatter's Emit).
-    /// Fragments without a style/foreground get <paramref name="fallback"/> (see
-    /// <see cref="PlainTextBrush"/>) instead of Uno's hardcoded-black unset-Run default.
-    /// </summary>
     public static Run ToRun(string text, Style? style, Brush? fallback = null) => new()
     {
         Text = text,
@@ -174,11 +123,6 @@ static class CodeHighlighter
         return !string.IsNullOrWhiteSpace(style.Foreground) ? BrushFromHex(style.Foreground) : null;
     }
 
-    /// <summary>
-    /// Dark/light detection for palette picking: the element's resolved ActualTheme when available
-    /// (honors any app-level RequestedTheme override), else the WinUI system background color —
-    /// the same heuristic <see cref="AccentPaletteHelper"/> uses.
-    /// </summary>
     public static bool IsDarkTheme(FrameworkElement? themeSource)
     {
         var theme = themeSource?.ActualTheme;
@@ -207,15 +151,8 @@ static class CodeHighlighter
     private static byte ParseHex(string h, int offset) =>
         byte.TryParse(h.AsSpan(offset, 2), System.Globalization.NumberStyles.HexNumber, null, out var b) ? b : (byte)0;
 
-    /// <summary>Colorized single scope fragment: text + the resolved style for the scope name.</summary>
     public readonly record struct StyledRun(string Text, Style? Style);
 
-    /// <summary>
-    /// A <see cref="CodeColorizerBase"/> that writes parsed fragments as styled <see cref="Run"/>s
-    /// into a TextBlock's InlineCollection. Nested scopes (e.g. escape sequences inside a string)
-    /// are tracked with a stack so the innermost scope that defines a style wins — the original
-    /// WinUI formatter uses a single "previous scope" and drops a parent's color after a child ends.
-    /// </summary>
     private sealed class TextBlockFormatter : CodeColorizerBase
     {
         private readonly List<StyledRun> _runs = new();
@@ -239,8 +176,6 @@ static class CodeHighlighter
                 return;
             }
 
-            // Flatten the scope tree into (index, isStart, scope) markers, then walk the chunk
-            // applying the innermost styled scope on the stack to each text run.
             var events = new List<(int Index, bool IsStart, Scope Scope)>();
             foreach (var scope in scopes) Flatten(scope, events);
             events.SortStable((a, b) => a.Index.CompareTo(b.Index));
@@ -267,7 +202,6 @@ static class CodeHighlighter
             events.Add((scope.Index + scope.Length, false, scope));
         }
 
-        /// <summary>The innermost active scope that has a style entry (ColorCode's "previous scope").</summary>
         private Style? EffectiveStyle(List<Scope> stack)
         {
             for (int i = stack.Count - 1; i >= 0; i--)

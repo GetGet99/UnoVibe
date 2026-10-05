@@ -11,8 +11,6 @@ namespace UnoVibe.Pages.Main;
         var transparent = new SolidColorBrush(Colors.Transparent);
     </setup>
     <StackPanel Margin=`new Thickness(0, 12, 0, 0)`>
-        // TODO [Medium]: Group.Sessions is List<SessionHead> with plain Count/Take — works only if provider rebuilds groups on every change. Document contract or switch to ReactiveList.
-        // TODO [Low]: ShowMore is per-component state and resets on keyed rebuild — "Show more" collapses on every sidebar refresh.
         <Grid ColumnDefinitions=<>
             <ColumnDefinition />
             <ColumnDefinition Width=Auto />
@@ -24,7 +22,6 @@ namespace UnoVibe.Pages.Main;
                     <TextBlock Text=`$"⎇ {Group.Branch}"` FontSize=10 Foreground=`theme.TertiaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
                 }
             </StackPanel>
-            // TODO: When attached property support falling back to element properly, do that instead of wrapping in Grid.
             <Grid Grid.Column=1 VerticalAlignment=Center>
                 <FolderActions Directory=`Group.Directory` />
             </Grid>
@@ -48,10 +45,6 @@ namespace UnoVibe.Pages.Main;
 partial class SessionGroup : IQuickMarkupComponent
 {
 
-    /// <summary>
-    /// Path relative to the connected server's directory via <see cref="PathDisplayHelper.Relative"/>.
-    /// </summary>
     private string DisplayPath(string fullPath) => PathDisplayHelper.Relative(fullPath, Connection.ServerDirectory);
-    /// <summary>Number of sessions shown per directory group before the "Show more" toggle appears.</summary>
     private const int MaxVisibleSessions = 2;
 }

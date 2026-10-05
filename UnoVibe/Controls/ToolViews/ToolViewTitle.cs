@@ -1,9 +1,5 @@
 namespace UnoVibe.Controls.ToolViews;
 
-/// <summary>
-/// Tool header row: shows a spinning ring while the tool is running, followed by
-/// the title text. Mirrors the TUI's per-tool spinner while a call is in flight.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     required ToolCallPartItem Part;

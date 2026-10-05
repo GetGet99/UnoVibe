@@ -2,11 +2,6 @@ using System.Collections.Specialized;
 
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Chat page message list: the scrollable message panel (revert card, auto-retry card,
-/// continue button, and the pending-permission card appended at the end), the empty-state
-/// hint, and all stick-to-bottom autoscroll logic.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using UnoVibe.Helpers;
@@ -21,8 +16,6 @@ namespace UnoVibe.Pages.Chat;
     ChatboxState Chatbox => `Sessions.ActiveChatbox`;
     string PermissionStage = "choose";
     string RejectText = "";
-    // Mirrors the turn.autocontinue setting for the inline switch shown next to the Continue
-    // button (two-way bound below; kept in sync with SettingsStore from code-behind).
     public bool AutoContinueOn = `SettingsStore.AutoContinueOnThinking`;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -35,14 +28,8 @@ namespace UnoVibe.Pages.Chat;
                         <Border Background=`theme.CardBackground` CornerRadius=6 Padding=`new Thickness(10,  8, 10,  8)` Margin=`new Thickness(0, 0, 0, 8)`>
                             <TextBlock Text=`$"History truncated: {ChatState?.TruncatedMessagesCount} earlier message(s) removed for performance."` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap />
                         </Border>
-                    // Keyed by message id so QuickMarkup reuses MessageView blocks across
-                    // collection resets (session switches/rebuilds) instead of recreating
-                    // every element; the revert filter below then only toggles visibility.
-                    // TODO [Low]: Null ChatState renders nothing but null enumerable in keyed foreach is fragile — use ?? Enumerable.Empty<MessageItem>() or guard.
                     foreach (var m in `ChatState?.Messages`; `m.Id`)
                     {
-                        // Undo: the server keeps reverted messages until the next prompt, so
-                        // hide everything at/after the revert point (the card replaces them).
                         if (`(ChatState?.RevertMessageId ?? "").Length == 0 || StringComparer.Ordinal.Compare(m.Id, ChatState?.RevertMessageId ?? "") < 0`)
                             <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`OnMessageForkRequested` />
                     }
@@ -126,13 +113,8 @@ namespace UnoVibe.Pages.Chat;
 partial class ChatMessageList : IQuickMarkupComponent<Grid>
 {
 
-    /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
     private DispatcherQueue? dispatcher;
 
-    /// <summary>
-    /// The ChatMessagesState whose Messages collection this component is currently hooked to.
-    /// Re-hooked whenever ChatState changes (session switch).
-    /// </summary>
     private ChatMessagesState? _hookedChatState;
 
     [QuickMarkupConstructor]
@@ -141,18 +123,10 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
         Init();
         UIs.ScrollChatToBottomRequested += scrollHost.ForceScrollToBottom;
 
-        // Scrolling keyed off the message panel's laid-out size: SizeChanged fires after the
-        // frame's layout pass, so ScrollableHeight reflects the freshly-rendered content
-        // (new session messages, streaming parts). Scrolling earlier — right when a message is
-        // added to the collection — targets a stale ScrollableHeight of 0 and leaves the
-        // viewport at the top.
         messagePanel.SizeChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
-        // Messages live on ChatState, which swaps on every session switch.
-        // Re-hook the CollectionChanged handler and part hooks whenever ChatState changes.
         ChatStateProp.Watch(HookChatState);
         HookChatState(ChatState);
 
-        // Watch permission changes on ChatState — reset the UI state and scroll to the card.
         ChatStateProp.Watch(newChat =>
         {
             newChat?.ActivePermissionProp.Watch(newReq =>
@@ -164,11 +138,6 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
             });
         });
 
-        // The inline auto-continue switch next to the Continue button mirrors the
-        // turn.autocontinue setting two-way: toggling persists immediately (live-apply, like the
-        // settings page), and a change from anywhere else (settings overlay / another process)
-        // updates the switch. The Changed event may fire off-thread (cross-process file watcher),
-        // so bounce to the UI thread.
         dispatcher = DispatcherQueue.GetForCurrentThread();
         AutoContinueOnProp.Watch(on => SettingsStore.SetValue(SettingsStore.AutoContinueKey, on ? "true" : "false"));
         SettingsStore.Changed += OnSettingsChanged;
@@ -195,7 +164,6 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
         });
     }
 
-    /// <summary>Scrolls to the permission card once it has been added to the message list.</summary>
     private async Task ScrollToPermissionAsync()
     {
         await Task.Yield();
@@ -204,8 +172,6 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
 
     private void OnMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // A full list rebuild (session switch / new session / configure) restarts pinned to
-        // the bottom; the freshly-loaded messages then autoscroll into view.
         if (e.Action == NotifyCollectionChangedAction.Reset)
             scrollHost.ForceScrollToBottom();
         if (e.NewItems is not null)
@@ -216,18 +182,12 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
     private void HookParts(MessageItem message) =>
         message.Parts.CollectionChanged += (_, _) => scrollHost.ScrollToBottomIfStick();
 
-    /// <summary>
-    /// Resumes a turn that stopped with an error. Sends a "continue" user message — the agent
-    /// is instructed (prompt/beast.txt) to pick up from the last incomplete step in its todo
-    /// list. Matches the TUI, which has no separate continue API: it's just a user message.
-    /// </summary>
     private async Task ContinueAsync()
     {
         await Chatbox.SendManualContinueAsync();
         scrollHost.ForceScrollToBottom();
     }
 
-    /// <summary>Restore reverted messages (redo the undo), then scroll to the end.</summary>
     private async Task RedoLastMessageAsync()
     {
         if (ChatState is not null)
@@ -235,10 +195,6 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
         scrollHost.ForceScrollToBottom();
     }
 
-    /// <summary>
-    /// Revert to a specific user message (web/TUI parity): rewind the conversation to that
-    /// message, restore its prompt into the composer, then scroll to the end.
-    /// </summary>
     private async Task OnMessageRevertRequested(MessageItem message)
     {
         if (ChatState is not null)

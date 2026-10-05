@@ -2,22 +2,6 @@ using Microsoft.UI;
 
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Searchable model picker for the chat toolbar. A <see cref="DropDownButton"/> that keeps the
-/// closed-state look of the Mode/Variant combos next to it (same chevron glyph, height, padding)
-/// but, instead of a plain dropdown, opens a flyout with a filter box above the model list —
-/// because <c>ComboBox.IsTextSearchEnabled</c> is not implemented on Uno.
-///
-/// UX:
-///   - Closed: a combo-like button showing the selected model's name (ellipsis-trimmed).
-///   - Open: the search box is focused (caret at end, query preserved across opens); the list is
-///     filtered as you type on name/id/provider; the currently-selected model is pre-highlighted
-///     and scrolled into view; arrow keys move the highlight, Enter picks it, Escape dismisses.
-///   - Rows show the model name + provider; the active model gets an accent tint + a check glyph.
-///
-/// API: bind <see cref="Models.ModelOptions"/> (the full model list) and <see cref="SelectedModel"/>
-/// (one-way display/state), then handle <see cref="OnModelSelected"/> to apply the pick.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.Infra.Collections;
@@ -29,7 +13,7 @@ namespace UnoVibe.Pages.Chat;
         ? "Select model"
         : (Models.ModelOptions.TryGetValue(model, out var modelOption)
             ? modelOption.Name
-            : model.Formatted // fallback non friendly name as we can't find it
+            : model.Formatted
         )`;
     public double FontSize = 12;
     inject SessionsStateProvider Sessions;
@@ -39,10 +23,7 @@ namespace UnoVibe.Pages.Chat;
     inject bool IsCompact;
     string Query = "";
     int HighlightIndex = -1;
-    // Filtered model list — reactive to both the source collection and the query string.
-    // TODO [High]: Models.ModelOptions is ReactiveKeyedSet — confirm Count/enumeration invalidates on Add/Clear or list won't refresh after RefreshModelsAsync.
     `IEnumerable<ModelOption>` FilteredModels => `FilterModels(Models.ModelOptions, Query)`;
-    // Hint shown when there is nothing to pick ("No models available" / "No models match ...").
     string EmptyHint => `Models.ModelOptions.Count == 0 ? "No models available" : (Query.Trim().Length > 0 && !FilteredModels.Any() ? $"No models match \"{Query.Trim()}\"" : "")`;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -117,23 +98,18 @@ namespace UnoVibe.Pages.Chat;
     """)]
 partial class ModelPicker : IQuickMarkupComponent<Grid>
 {
-    /// <summary>Fixed row height in the model list; the scroll-to-selected math relies on it.</summary>
     private const double RowHeight = 34;
-
 
     void OnModelSelected(ModelOption model)
     {
         var charparams = Sessions.ActiveChatParams;
-        
+
         if (model == Sessions.Head(Sessions.ActiveSessionId)?.ChatParams.Model) return;
         charparams.Model = Model.From(model);
         if (!model.Variants.Contains(charparams.Variant))
             charparams.Variant = null;
     }
 
-    // Uno workaround state (same issue as SuggestBox): a handled Up/Down in the search TextBox still
-    // moves the caret via Uno's unconditional OnPostKeyDown processing; cancelling the stray move in
-    // SelectionChanging keeps the caret put while the list highlight moves.
     private bool _suppressArrowSelection;
 
     [QuickMarkupConstructor]
@@ -158,8 +134,6 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
         searchBox.SelectionChanging += OnSelectionChanging;
     }
 
-    // ── Filtering ────────────────────────────────────────────────────────────────
-
     private static IEnumerable<ModelOption> FilterModels(IEnumerable<ModelOption> source, string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return source;
@@ -170,26 +144,18 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
             m.ProviderId.Contains(q, StringComparison.OrdinalIgnoreCase));
     }
 
-    // ── Selection / visual state ─────────────────────────────────────────────────
-
     private void SelectModel(ModelOption m)
     {
         if (modelFlyout is { IsOpen: true }) modelFlyout.Hide();
         OnModelSelected(m);
     }
 
-    /// <summary>Hides the flyout (buttons inside a Flyout don't auto-dismiss) and opens the connect dialog.</summary>
     private void ConnectProvider()
     {
         if (modelFlyout is { IsOpen: true }) modelFlyout.Hide();
         _ = OpenProviderDialogAsync();
     }
 
-    /// <summary>
-    /// Opens the "Connect a provider" dialog (a mirror of the TUI's <c>/connect</c> flow) hosted
-    /// in a <see cref="ContentDialog"/> — not another flyout, since this flyout is still open.
-    /// The dialog is itself a QuickMarkup component whose root is the ContentDialog.
-    /// </summary>
     private async Task OpenProviderDialogAsync()
     {
         var xamlRoot = MarkupNode.XamlRoot;
@@ -204,15 +170,11 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
             ? SelectedRowBackground
             : index == HighlightIndex ? ThemeBrushes.Global.SubtleFill : new SolidColorBrush(Colors.Transparent);
 
-    /// <summary>Low-alpha accent tint marking the currently-selected model row.</summary>
     private static Brush? SelectedRowBackground =>
         ThemeBrushes.Global.Accent is SolidColorBrush accent
             ? new SolidColorBrush(accent.Color) { Opacity = 0.18 }
             : ThemeBrushes.Global.CardBackground;
 
-    // ── Flyout lifecycle ─────────────────────────────────────────────────────────
-
-    /// <summary>Opens the picker programmatically (the /models built-in command).</summary>
     public void Open()
     {
         if (modelFlyout is { IsOpen: false } && triggerButton is not null)
@@ -221,9 +183,6 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
 
     private void OnFlyoutOpened(object? sender, object e)
     {
-        // Focus the search box with the caret at the end (preserves the query across opens),
-        // pre-highlight the currently selected model so arrow keys start from it, then scroll it
-        // into view once the flyout's popup has laid out.
         _ = FocusSearchAsync();
         HighlightIndex = IndexOfSelected();
         _ = listScroll?.DispatcherQueue?.TryEnqueue(ScrollHighlightIntoView);
@@ -241,8 +200,6 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
 
     private int IndexOfSelected()
     {
-        // technically concept of index is incorrect if it is operation on Set
-        // but well it works as of now
         if (SelectedModel is not { } sel) return -1;
         var idx = 0;
         foreach (var m in FilteredModels)
@@ -252,8 +209,6 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
         }
         return -1;
     }
-
-    // ── Keyboard navigation ──────────────────────────────────────────────────────
 
     private void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -282,10 +237,6 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
         }
     }
 
-    /// <summary>
-    /// Uno bug workaround (see field docs): cancels the stray caret move a handled Up/Down still
-    /// triggers in the single-line search box.
-    /// </summary>
     private void OnSelectionChanging(TextBox sender, TextBoxSelectionChangingEventArgs e)
     {
         if (_suppressArrowSelection)
@@ -322,8 +273,6 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
             0, Math.Max(0, listScroll.ScrollableHeight));
         listScroll.ChangeView(null, target, null, true);
     }
-
-    // ── Search box helpers ───────────────────────────────────────────────────────
 
     private void OnQueryChanged(object sender, TextChangedEventArgs e)
     {

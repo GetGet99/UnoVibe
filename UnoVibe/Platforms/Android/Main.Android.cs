@@ -25,11 +25,10 @@ public class Application : Microsoft.UI.Xaml.NativeApplication
     {
         App.InitializeLogging();
     }
-    
+
     public Application(IntPtr javaReference, JniHandleOwnership transfer)
         : base(() => new App(), javaReference, transfer)
     {
     }
 
 }
-

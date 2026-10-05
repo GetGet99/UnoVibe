@@ -76,20 +76,14 @@ partial class McpStatusView : IQuickMarkupComponent
             McpService = new(Opencode, Events, Toasts, dispatcher, directory);
         }, immediete: true);
         Init();
-        // The /mcps built-in command (fired from the chat composer) reveals this section.
         UIs.McpSectionRequested += () => _ = RevealMcpSectionAsync();
     }
 
-    /// <summary>
-    /// Reveals the MCP section for the /mcps built-in command: on compact windows the sidebar
-    /// itself is hidden, so switch to the sidebar view first; then expand the section (starting
-    /// its status poll) and put keyboard focus on the toggle.
-    /// </summary>
     private async Task RevealMcpSectionAsync()
     {
         if (IsCompact) IsSidebarView = true;
         if (!McpExpanded) OnToggleMcpExpanded();
-        await Task.Delay(16); // let the reactive tree materialize before focusing
+        await Task.Delay(16);
         mcpToggle?.Focus(FocusState.Programmatic);
     }
 
@@ -99,11 +93,6 @@ partial class McpStatusView : IQuickMarkupComponent
         _ = McpService.ToggleMcpAsync(name);
     }
 
-    /// <summary>
-    /// Expands/collapses the MCP section. Expansion starts the background status poll and
-    /// refreshes immediately; collapsing stops the poll (the store's one-shot refresh on
-    /// connect/session-switch/toggle still applies).
-    /// </summary>
     private void OnToggleMcpExpanded()
     {
         McpExpanded = !McpExpanded;
@@ -111,7 +100,6 @@ partial class McpStatusView : IQuickMarkupComponent
         if (McpExpanded) _ = McpService.RefreshMcpStatusAsync();
     }
 
-    /// <summary>Sidebar status-dot color for an MCP server.</summary>
     private static Brush? McpDot(McpServerItem m) => m.Status switch
     {
         "connected" => ThemeBrushes.Global.SystemSuccess,
@@ -121,7 +109,6 @@ partial class McpStatusView : IQuickMarkupComponent
         _ => ThemeBrushes.Global.TertiaryText,
     };
 
-    /// <summary>Detail line under an MCP server name: status label, plus the error when present.</summary>
     private static string McpStatusDetail(McpServerItem m) =>
         m.Status == "failed" || m.Status == "needs_client_registration"
             ? $"{m.StatusLabel}: {m.Error}"

@@ -1,11 +1,5 @@
 namespace UnoVibe.Pages.Connect;
 
-/// <summary>
-/// The "Recent" connections card on the left of the connect page: the recently-opened folder
-/// and server entries with open/remove actions, plus the empty state and "Clear all". Buttons
-/// disable while a connection is in progress; opening/removing an entry is delegated back to
-/// the page via <see cref="OpenRecentRequested"/> / <see cref="RemoveRecentRequested"/>.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -66,13 +60,10 @@ namespace UnoVibe.Pages.Connect;
     """)]
 partial class RecentListPanel : IQuickMarkupComponent<Border>
 {
-    /// <summary>Handler for <see cref="OpenRecentRequested"/>.</summary>
     public delegate Task OpenRecentHandler(RecentConnection item);
 
-    /// <summary>Raised when the user clicks a recent entry; the page runs the connect/serve flow.</summary>
     public event OpenRecentHandler? OpenRecentRequested;
 
-    /// <summary>Raised with the entry key when the user removes a recent entry.</summary>
     public event Action<string>? RemoveRecentRequested;
 
     [QuickMarkupConstructor]

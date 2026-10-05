@@ -7,27 +7,18 @@
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
     <TargetFrameworks>net10.0-desktop</TargetFrameworks>
     <PublishAot>true</PublishAot>
-    <!-- net10.0-android;net10.0-ios;net10.0-browserwasm; -->
   </PropertyGroup>
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UnoSingleProject>true</UnoSingleProject>
 
-    <!-- Display name -->
     <ApplicationTitle>UnoVibe</ApplicationTitle>
-    <!-- App Identifier -->
     <ApplicationId>com.companyname.unovibe</ApplicationId>
 
-    <!-- Package Publisher -->
     <ApplicationPublisher>UnoVibe</ApplicationPublisher>
-    <!-- Package Description -->
     <Description>UnoVibe powered by Uno Platform.</Description>
     <UnoIconForegroundFile>Assets/Icons/UnoVibe.png</UnoIconForegroundFile>
 
-    <!--
-      UnoFeatures are used to quickly add and manage features enabled for your app.
-      https://aka.platform.uno/singleproject-features
-    -->
     <UnoFeatures>
       SkiaRenderer;
       SpellChecking
@@ -35,18 +26,6 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!--
-      Per-OS compile-time constants.
-
-      WASDK: the net10.0-windows (WinAppSDK) target only.
-      WINDOWS: any Windows-targeted build (a net10.0-desktop build with a win RID or on a
-      Windows host, plus the net10.0-windows TFM where the .NET SDK also auto-defines it).
-      DESKTOP_WINDOWS / DESKTOP_LINUX / DESKTOP_MACOS: the OS of a net10.0-desktop (Skia)
-      build. NOT defined on the net10.0-windows TFM.
-
-      An explicit -r (cross-publish) identifies the target OS; otherwise the build host
-      IS the run host (F5 / dotnet run), so fall back to IsOSPlatform.
-    -->
     <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('windows10'))">$(DefineConstants);WASDK;WINDOWS</DefineConstants>
 
     <DefineConstants Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and '$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('win'))">$(DefineConstants);DESKTOP_WINDOWS;WINDOWS</DefineConstants>
@@ -72,9 +51,6 @@
   <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('windows10'))">
     <PackageReference Include="QuickMarkup.WinUI" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />
-    <!-- SystemFonts (Services) enumerates installed fonts on WinUI via Win2D's DirectWrite
-         wrapper (CanvasTextFormat.GetSystemFontFamilies); the desktop targets use SkiaSharp,
-         which Uno's Skia host already ships. -->
     <PackageReference Include="Microsoft.Graphics.Win2D" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" />
   </ItemGroup>
@@ -82,12 +58,6 @@
     <PackageReference Include="QuickMarkup.Uno" />
   </ItemGroup>
 
-  <!--
-    Linux polyfills (UnoVibe/Polyfills/Linux) talk to the session D-Bus: the FolderPicker goes
-    to the XDG desktop portal and Notifications to the org.freedesktop.Notifications daemon, so
-    they need Tmds.DBus (the same library Uno's own X11 picker uses). Only DESKTOP_LINUX builds
-    reference it — other OSes get no D-Bus dependency (see AGENTS.md Polyfills).
-    -->
   <ItemGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and (('$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('linux'))) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))))">
     <PackageReference Include="Tmds.DBus.Protocol" />
     <PackageReference Include="Tmds.DBus.Generator" />
@@ -96,18 +66,11 @@
     <AdditionalFiles Include="Polyfills/Linux/dbus-interfaces/org.freedesktop.Notifications.xml" Namespace="UnoVibe.Polyfills.Linux.DBus" GenerateDBusTypes="true" />
   </ItemGroup>
 
-  <!--
-    The macOS FolderPicker polyfill (UnoVibe/Polyfills/MacOS) drives NSOpenPanel through
-    objc_msgSend via [LibraryImport] stubs in a partial class; the interop source generator emits
-    "unsafe" blocks, so macOS desktop builds must opt in (Uno.Sdk only enables AllowUnsafeBlocks
-    for the WinAppSDK target). Matches the DESKTOP_MACOS constants above.
-    -->
   <PropertyGroup Condition="'$(TargetFramework)' != '' and $(TargetFramework.Contains('desktop')) and (('$(RuntimeIdentifier)' != '' and ($(RuntimeIdentifier.StartsWith('osx')) or $(RuntimeIdentifier.StartsWith('mac')))) or ('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('OSX'))))">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- Automatically emit generated files for every project build -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 

@@ -17,7 +17,7 @@ public sealed class OpencodeEvent
     public required JsonElement Properties { get; set; }
 
     [JsonIgnore]
-    public string? Directory {get; set; } // client owned
+    public string? Directory {get; set; }
 }
 
 partial class OpencodeClient
@@ -57,7 +57,6 @@ partial class OpencodeClient
             }
             catch (JsonException)
             {
-                // Skip malformed events.
             }
         }
     }

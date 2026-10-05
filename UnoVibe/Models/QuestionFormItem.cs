@@ -1,6 +1,5 @@
 namespace UnoVibe.Models;
 
-/// <summary>Reactive state for one question in an inline question-tool form.</summary>
 [QuickRefs("""
     public string Question = "";
     public string Header = "";

@@ -135,7 +135,6 @@ static class MessageJsonHelper
                 Id = part.Id,
                 MessageId = part.MessageId,
                 Attempt = retry.Attempt,
-                // TODO [Medium]: Missing OutputLengthError arm (vs ApplyMessageError) — ErrorMessage becomes "". Share helper with ApplyMessageError.
                 ErrorMessage = retry.Error switch
                 {
                     ProviderAuthError auth => auth.Data.Message,
@@ -194,14 +193,6 @@ static class MessageJsonHelper
         return item;
     }
 
-    /// <summary>
-    /// Applies a server tool-part payload onto an existing item, preserving instance identity.
-    /// The single mapping used by both create (<see cref="BuildToolCallPart"/>) and update
-    /// (<c>ChatMessagesState.OnPartUpdated</c>) so the two paths cannot drift apart.
-    /// Live-only state (<c>QuestionRequestId</c>, <c>QuestionForm</c>) is never touched here —
-    /// the payload has no equivalent, and the input-derived <c>Questions</c> refill must not
-    /// rebuild the form (that would wipe in-progress selections).
-    /// </summary>
     public static void ApplyToolPart(ToolCallPartItem item, ToolPart tool)
     {
         ToolCallState state = tool.State switch
@@ -261,7 +252,6 @@ static class MessageJsonHelper
         ApplyToolInput(item, tool.State.Input);
     }
 
-    /// <summary>Refills a reactive collection in place (never reassigns) so live views update.</summary>
     public static void Refill<T>(ReactiveList<T> target, IEnumerable<T> values)
     {
         target.Clear();
@@ -305,7 +295,6 @@ static class MessageJsonHelper
         if (error is AbortedError) return;
         if (message.Parts.Any(p => p.Type == "error")) return;
 
-        // TODO [Medium]: Drops OutputLength/StructuredOutput/ContextOverflow/ContentFilter -> "". Add arms (share helper with retry switch).
         string errorMessage = error switch
         {
             ProviderAuthError auth => auth.Data.Message,
@@ -350,9 +339,6 @@ static class MessageJsonHelper
         if (input.TryGetProperty("todos", out var todos) && todos.ValueKind == JsonValueKind.Array)
             Refill(item.Todos, todos.Deserialize(AppJsonContext.Default.ListTodoInfo) ?? []);
         if (input.TryGetProperty("questions", out var questions) && questions.ValueKind == JsonValueKind.Array)
-            // Note: deliberately does NOT populate QuestionForm here — that is live-only state
-            // owned by the question attach paths (OnQuestionAsked / SyncPendingQuestionsAsync).
-            // The create path (BuildToolCallPart) populates it separately after ApplyToolPart.
             Refill(item.Questions, questions.Deserialize(AppJsonContext.Default.ListQuestionInfo) ?? []);
     }
 
@@ -408,7 +394,6 @@ static class MessageJsonHelper
     {
         foreach (var part in item.Parts)
         {
-            // TODO [Medium]: Fire-and-forget _ = LoadImageAsync() breaks AGENTS.md rule — unobserved exceptions vanish. Await or AsyncHelper.RunAndReport.
             if (part is FilePartItem file) _ = file.LoadImageAsync();
         }
     }

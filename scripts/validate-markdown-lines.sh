@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Validate that markdown files under the project keep lines under 150
-# characters. Enforces the AGENTS.md rule across AGENTS.md and agents-doc/*.md.
-# Run before finishing any change that touched those files:
-#   scripts/validate-markdown-lines.sh
-# Without arguments the whole doc set is checked; file/folder arguments (repo
-# root relative) restrict the check. Exit code 0 = all clean, 1 = violations.
 set -u
 
 MAX_LEN=150
@@ -12,7 +6,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECKED=0
 VIOLATIONS=0
 
-# Reports over-long lines as "LINENO:LENGTH" via awk; prints each violation.
 check_file() {
   local file="$1" rel line len
   rel="${file#"$ROOT"/}"

@@ -59,14 +59,9 @@ namespace UnoVibe.Pages.Main;
 partial class ConnectionFlyout : IQuickMarkupComponent<Flyout>
 {
 
-    /// <summary>
-    /// Renders the connection password while hidden: a fixed-width bullet mask, or "None"
-    /// when the server has no password. The real value is never shown by default.
-    /// </summary>
     private static string MaskPassword(string? password) =>
         string.IsNullOrEmpty(password) ? "None" : "••••••••";
 
-    /// <summary>Copies a connection value to the system clipboard and confirms with a toast.</summary>
     private void CopyToClipboard(string label, string text)
     {
         var data = new DataPackage();

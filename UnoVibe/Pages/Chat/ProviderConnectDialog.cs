@@ -1,20 +1,6 @@
 using UnoVibe.Integration;
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// A ContentDialog for connecting a provider directly from the app — a mirror of the TUI's
-/// <c>/connect</c> dialog (<c>packages/tui/src/component/dialog-provider.tsx</c>). Walks:
-/// provider list → auth method → (prompt inputs + API key) or OAuth (browser + code / auto)
-/// → credential stored via the server, then refreshes the model options.
-///
-/// The TUI stores *credentials only* (<c>PUT /auth/{providerID}</c> / the oauth callback) —
-/// provider *definitions* still live in opencode.json, so a custom ("Other") provider id saves
-/// its key the same way and a toast tells the user to configure it in the config to use it.
-///
-/// API: set <see cref="OpencodeClient"/>, await <see cref="LoadAsync"/>, then set <c>MarkupNode.XamlRoot</c>
-/// and <c>ShowAsync()</c> — the component's root <em>is</em> the <see cref="ContentDialog"/>.
-/// Close it from <see cref="Completed"/>.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Integration;
     using UnoVibe.Controls;
@@ -24,7 +10,7 @@ namespace UnoVibe.Pages.Chat;
     using Microsoft.UI.Xaml.Controls;
     bool Loading = true;
     string? LoadError;
-    int Page = 0;                                // 0=provider list, 1=auth methods, 2=key/prompt form, 3=oauth
+    int Page = 0;
     int MethodIndex = 0;
     string ProviderId = "";
     string ProviderName = "";
@@ -229,25 +215,18 @@ namespace UnoVibe.Pages.Chat;
     """)]
 partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
 {
-    /// <summary>Raised after a credential is stored (and the model options refreshed) — hide and close the dialog.</summary>
     public event Action? Completed;
 
     OpencodeClient Client { get; set; } = null!;
     ToastsProvider Toasts { get; set; } = null!;
     ModelsProvider Models { get; set; } = null!;
 
-    // Current method's prompt definition and the collected answers.
     private AuthPrompt[] _prompts = Array.Empty<AuthPrompt>();
     private string _currentMethodType = "";
     private readonly Dictionary<string, string> _inputs = new();
     private readonly List<TextBox> _textBoxes = new();
     private string _oauthUrl = "";
 
-    /// <summary>
-    /// Loads and shows the connect-provider dialog in <paramref name="xamlRoot"/> (shared entry
-    /// point: the model picker's "Connect a provider…" row and the composer's /connect built-in).
-    /// No-op when not connected to a server.
-    /// </summary>
     public static async Task ShowAsync(OpencodeClient client, ToastsProvider toastService, ModelsProvider models, XamlRoot xamlRoot)
     {
         var dialog = new ProviderConnectDialog { Client = client, Toasts = toastService, Models = models };
@@ -258,7 +237,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
         await dialog.MarkupNode.ShowAsync();
     }
 
-    /// <summary>Fetches the provider catalog + auth methods into the list (call once before showing).</summary>
     public async Task LoadAsync()
     {
         Loading = true;
@@ -290,8 +268,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
             Loading = false;
         }
     }
-
-    // ── Navigation ──────────────────────────────────────────────────────────────
 
     private void GoBack()
     {
@@ -386,13 +362,10 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
         Page = 2;
     }
 
-    // ── Prompt inputs (text/select, honoring AuthWhen gating) ──────────────────
-
     private void RebuildPromptPanel()
     {
         if (formPromptHost is null) return;
 
-        // Preserve anything already typed so a select-driven rebuild doesn't lose it.
         foreach (var textBox in _textBoxes)
         {
             var key = (string?)textBox.Tag;
@@ -463,7 +436,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
         },
     };
 
-    /// <summary>Collects every answered prompt into a dictionary, ready for metadata/inputs.</summary>
     private Dictionary<string, string> CollectInputs()
     {
         foreach (var textBox in _textBoxes)
@@ -473,8 +445,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
         }
         return new Dictionary<string, string>(_inputs);
     }
-
-    // ── Actions ─────────────────────────────────────────────────────────────────
 
     private async Task SubmitAsync()
     {
@@ -514,7 +484,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
                 return;
             }
 
-            // OAuth: authorize returns the URL + whether a code is needed; the callback completes it on page 3.
             if (!(await Client.AuthorizeOAuthAsync(ProviderId, new() { Method = MethodIndex, Inputs = inputs.Count > 0 ? inputs : null })).TryGetValue(out var result, out var error))
             {
                 Status = $"Authorization failed. Try again.\n{error.DisplayMessage}";
@@ -582,14 +551,13 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
 
     private static bool IsValidCustomProviderId(string id) => CustomProviderIdRegex.IsMatch(id);
 
-    /// <summary>Refreshes the model/option lists, surfaces a toast, and tells the host to close.</summary>
     private async Task FinishAsync()
     {
         try
         {
             await Models.RefreshModelsAsync();
         }
-        catch { /* The connect already succeeded; a failed refresh shouldn't undo it. */ }
+        catch {   }
         Toasts.Show(new ToastItem
         {
             Message = $"Connected to {ProviderName}",
@@ -598,8 +566,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
         });
         Completed?.Invoke();
     }
-
-    // ── Filtering ────────────────────────────────────────────────────────────────
 
     private static IEnumerable<ProviderRow> FilterProviders(ObservableCollection<ProviderRow> source, string query)
     {
@@ -613,7 +579,6 @@ partial class ProviderConnectDialog : IQuickMarkupComponent<ContentDialog>
     private Dictionary<string, Integration.ProviderAuthMethod[]> _methodsResult = new();
 }
 
-/// <summary>A row in the provider list: id, display name, and whether a credential is stored.</summary>
 sealed class ProviderRow
 {
     public ProviderRow(string id, string name, bool isConnected)

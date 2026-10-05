@@ -1,14 +1,4 @@
 <?xml version="1.0"?>
-<!--
-    Minimal subset of the org.freedesktop.Notifications D-Bus interface
-    (https://specifications.freedesktop.org/notification-spec/latest/) consumed by the
-    Linux notifications polyfill (UnoVibe/Polyfills/Linux). This is the interface notify-send
-    talks to; any desktop environment with a notification daemon (GNOME, KDE, XFCE, ...) hosts it
-    on the session bus at /org/freedesktop/Notifications.
-
-    Declares Notify (send a toast), CloseNotification (dismiss by id) and
-    GetServerInformation (availability probe). Tmds.DBus.Generator needs just these.
--->
 <node name="/">
   <interface name="org.freedesktop.Notifications">
     <method name="Notify">

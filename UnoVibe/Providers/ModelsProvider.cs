@@ -14,14 +14,9 @@ class ModelsProvider
     {
         Opencode = opencode;
         Toasts = toasts;
-        // TODO [Medium]: Fire-and-forget in ctor races ResolveContextLimit (ContextLimit=0 until refresh). Expose InitAsync awaited by caller or AsyncHelper.RunAndReport.
         _ = RefreshModelsAsync();
     }
 
-    /// <summary>
-    /// Refreshes the shared mode/model option lists and re-applies the active session's
-    /// selections (used as defaults for a new draft chat).
-    /// </summary>
     public async Task RefreshModelsAsync(CancellationToken ct = default)
     {
         try
@@ -39,7 +34,6 @@ class ModelsProvider
                 var name = agent.Name;
                 if (name.Length > 0 && !AgentOptions.Contains(name)) AgentOptions.Add(name);
             }
-            // if (Active.Mode.Length == 0 || !AgentOptions.Contains(Active.Mode)) Active.Mode = "build";
 
             if (!(await Opencode.GetProvidersAsync(ct)).TryGetValue(out var providers, out var error1))
             {
@@ -47,7 +41,7 @@ class ModelsProvider
                 return;
             }
             ModelOptions.Clear();
-            
+
             if (providers.Connected is null)
             {
                 Toasts.ShowError("Could not load models: Connected provider information is not avaliable");

@@ -10,12 +10,6 @@ public struct ReasoningTime
     public long DurationMs => End > 0 && End >= Start ? End - Start : 0;
 }
 
-/// <summary>
-/// A reactive model for a message part. <c>Text</c> is a QuickMarkup reference so
-/// streaming deltas can append without replacing the item in the collection.
-/// <c>Image</c> holds the decoded bitmap for image file parts so message thumbnails
-/// update once the async decode completes.
-/// </summary>
 [QuickRefs("""
     using Microsoft.UI.Xaml.Media.Imaging;
     public string Text = "";
@@ -44,9 +38,6 @@ public struct ReasoningTime
     public string AnswerJson = "";
     public string PatchJson = "";
     public string QuestionRequestId = "";
-    // Subagent (task tool) link: the child session spawned by a task tool call, its parent
-    // session, and the subagent type (e.g. "explore"). Used by ToolViewTask to open the
-    // subagent session on click and to label the card.
     public string ToolSessionId = "";
     public string ToolParentSessionId = "";
     public string ToolSubagentType = "";
@@ -69,11 +60,6 @@ partial class PartItem
     public string[] Files { get; set; } = Array.Empty<string>();
     public ReactiveList<QuestionFormItem> QuestionForm { get; } = new();
 
-    /// <summary>
-    /// Decodes the part's base64 data-URL image into the reactive <see cref="Image"/>
-    /// reference. No-op for non-image parts or parts without a data URL; the part keeps
-    /// its file fallback rendering if the bytes can't be decoded.
-    /// </summary>
     public async Task LoadImageAsync()
     {
         if (Image is not null || !IsImage || !Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return;
@@ -86,7 +72,6 @@ partial class PartItem
         }
         catch
         {
-            // Leave Image null; the UI renders the file fallback.
         }
     }
 }

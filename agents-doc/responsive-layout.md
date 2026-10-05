@@ -8,29 +8,18 @@ views switch on narrow windows. (ConnectPage has its own compact mode — see
 On small windows the sidebar and chat can't both fit, so they become **two full-width views**
 switched by a flag; wide windows keep the side-by-side layout and ignore the flag.
 The single source of truth is `MainPage` (the root page, so it sees the whole window width):
-- `MainPage` declares `provide bool IsCompact = false;` and `provide bool IsSidebarView = false;`.
-  `OnRootSizeChanged` (a `SizeChanged` handler attached from its `[QuickMarkupConstructor]` Ctor)
-  sets `IsCompact` when the width crosses `CompactBreakpoint = 820`, and **resets `IsSidebarView`
-  to false** whenever it enters/leaves compact, so a resize starts from the chat view.
-- Layout: computed `SidebarColumnWidth`/`ChatColumnWidth` (GridLength) + `SidebarVisibility`/
-  `ChatVisibility`. Wide → sidebar 280 + chat star, both visible. Compact → `IsSidebarView` true:
-  sidebar full-width star + chat Collapsed/0; false: chat full-width star + sidebar Collapsed/0.
+- `MainPage` provides `IsCompact` and `IsSidebarView` flags. A size-changed handler sets
+  `IsCompact` at the compact breakpoint, and **resets the view to chat** whenever compact is
+  entered/left, so a resize starts from the chat view.
+- Layout: computed column widths + visibilities. Wide → sidebar fixed + chat star, both visible.
+  Compact → one full-width panel at a time, the other collapsed.
   Both panels stay **mounted** (just Collapsed), so chat scroll/input state survives view switches.
-- **Switching views** (all via the shared injected `Reference<bool>`):
-  - `ChatHeader` shows a hamburger (`Symbol.GlobalNavButton`, glyph 0xE700, added in
-    `SymbolExtemsion.cs`) when compact → `IsSidebarView = true`.
-  - `SessionSidebar` shows a "Back to chat" button when compact → `IsSidebarView = false`;
-    tapping a session also returns to chat after `SwitchSessionAsync`.
-  - `FolderActions.OnNewSession` (group "+") and `SessionSidebar.OpenFolderAndStartSessionAsync`
-    return to chat after creating a session.
-- The chat sub-components `inject? bool IsCompact;` (optional — defaults to false/desktop when the
-  provider is absent) and get the **same** `Reference<bool>` via the provide/inject context chain
-  (ChatPage → MainPage), so one resize reflows the whole window:
-  - `ChatHeader`: on compact the inline cost/tokens/ctx summary moves to a second header line
-    (costs/context stay visible) instead of hiding; shrinks the horizontal padding/spacing.
-    The title row is a Grid whose title star-column truncates with an ellipsis
-    (`TextTrimming.CharacterEllipsis`) while the pencil/edit button keeps its Auto column.
-  - `ChatComposer`: hides the Mode/Model/Variant labels, narrows the mode/variant combos
-    (MinWidth 90 → 76) and the `ModelPicker` (MinWidth 200 → 120), and tightens paddings/spacing.
-    The picker row stays a horizontal `StackPanel` (Uno's `WrapPanel` here has no `Spacing`/`Padding`).
-  - `ChatStatusArea`: shrinks the horizontal padding to match the header/composer.
+- **Switching views** (all via the shared injected flag):
+  - The chat header shows a hamburger when compact → sidebar view.
+  - The sidebar shows a "Back to chat" button when compact → chat view;
+    tapping a session also returns to chat after switching.
+  - Creating a session (group "+", Open Folder) returns to chat.
+- The chat sub-components optionally inject `IsCompact` and share the **same** reference via the
+  provide/inject context chain, so one resize reflows the whole window: the header moves its
+  summary to a second line instead of hiding it, and the composer hides labels and narrows
+  combos (the picker row stays horizontal — Uno's `WrapPanel` has no spacing there).

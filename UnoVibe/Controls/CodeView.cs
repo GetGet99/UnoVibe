@@ -3,22 +3,6 @@ using UnoVibe.Controls.ToolViews;
 
 namespace UnoVibe.Controls;
 
-/// <summary>
-/// Renders a code file's content (write tool result) as a line-numbered, syntax-highlighted
-/// block. The source is colorized as a whole via <see cref="CodeHighlighter.ColorizeRuns"/>
-/// (so multi-line strings/comments span lines correctly) and the resulting runs are split at
-/// line boundaries to interleave a muted line-number run per line + LineBreak in one TextBlock
-/// (no RichTextBlock on Uno — same single-block approach as MarkdownView, so text stays
-/// selectable across lines).
-///
-/// The language comes from the file path via <see cref="CodeHighlighter.ResolveLanguageFromPath"/>
-/// (mirrors the TUI's <c>filetype.ts</c>); files whose extension ColorCode doesn't know fall
-/// back to plain text with line numbers.
-///
-/// Long content collapses to <see cref="CodeMaxLines"/> preview lines with a "Show more ▾"
-/// toggle (mirrors ToolViewShell). Self-contained: <c>Text=</c> + <c>FilePath=</c> bind
-/// reactively and it re-renders on every change.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     using Microsoft.UI.Xaml.Documents;
@@ -71,14 +55,10 @@ partial class CodeView : IQuickMarkupComponent<UIElement>
         {
             FontFamily = CodeFontsHelper.Current,
             FontSize = 12,
-            // No explicit Foreground: unscoped tokens inherit this brush (baking one froze them
-            // to the build-time theme); left unset, Uno's theme walk keeps it current.
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
         };
         FillInlines(text, visible, lineCount, overflow);
-        // Runs bake their brushes at build time; rebuild them when the resolved theme flips
-        // so already-rendered blocks don't keep stale (e.g. black-on-dark) palette colors.
         text.ActualThemeChanged += (_, _) => FillInlines(text, visible, lineCount, overflow);
         box.Child = text;
         host.Children.Add(box);
@@ -102,7 +82,6 @@ partial class CodeView : IQuickMarkupComponent<UIElement>
     private (string Preview, bool Overflow, int LineCount) Collapse(string content)
     {
         var (preview, overflow) = ToolViewShared.CollapsePreview(content, CodeMaxLines, CodeMaxChars);
-        // The preview may be truncated inside a line; lineCount lets the gutter keep numbering.
         var lineCount = preview.Split('\n').Length - (preview.Length > 0 && preview[^1] == '\n' ? 1 : 0);
         return (preview, overflow, lineCount);
     }
@@ -113,12 +92,6 @@ partial class CodeView : IQuickMarkupComponent<UIElement>
         BuildBlock(text, visible, lineCount, overflow);
     }
 
-    /// <summary>
-    /// Colorizes the source whole-then-line-splits the runs, emitting a line-number run at each
-    /// line start and a LineBreak between lines. Falls back to a single plain run when the file
-    /// path's language can't be resolved. A trailing muted "…" marks a collapsed preview (never
-    /// numbered).
-    /// </summary>
     private void BuildBlock(TextBlock text, string source, int previewLineCount, bool overflow)
     {
         var inlines = text.Inlines;

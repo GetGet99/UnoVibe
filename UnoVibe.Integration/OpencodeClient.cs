@@ -27,8 +27,6 @@ public sealed partial class OpencodeClient : IDisposable
     string BaseUrl { get; }
     HttpClient Http { get; }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
-
     /// <summary>Appends the ?directory= query used by instance-scoped routes.</summary>
     internal static string DirectoryUrl(string path, string? directory) =>
         string.IsNullOrEmpty(directory)
@@ -43,8 +41,6 @@ public sealed partial class OpencodeClient : IDisposable
         string.IsNullOrEmpty(directory)
             ? path
             : $"{path}?location%5Bdirectory%5D={Uri.EscapeDataString(directory)}";
-
-    // ── Result helpers (non-throwing) ─────────────────────────────────────────
 
     private async Task<Result<T>> GetResultAsync<T>(string url, JsonTypeInfo<T> typeInfo, CancellationToken ct)
     {
@@ -84,8 +80,6 @@ public sealed partial class OpencodeClient : IDisposable
             return Result<TOut>.Failure(ApiError.Other(ex.Message));
         }
     }
-
-    // ── Throwing helpers ─────────────────────────────────────────────────────
 
     private async Task<T> GetAsync<T>(string url, JsonTypeInfo<T> typeInfo, CancellationToken ct)
     {

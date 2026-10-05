@@ -3,11 +3,6 @@ using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Models;
 
-/// <summary>
-/// A reactive model for a pending permission request (<c>permission.asked</c>).
-/// Carries a human-readable <see cref="Title"/> / <see cref="Body"/> derived from the
-/// tool metadata so the UI can render an allow/reject prompt without knowing tool internals.
-/// </summary>
 [QuickRefs("""
     public string Id = "";
     public string SessionId = "";
@@ -24,7 +19,6 @@ partial class PermissionRequestItem
     public string ToolMessageId { get; set; } = "";
     public string ToolCallId { get; set; } = "";
 
-    /// <summary>Creates from a typed <c>GET /permission</c> response DTO.</summary>
     public static PermissionRequestItem From(Integration.PermissionRequestDto theirs)
     {
         var item = new PermissionRequestItem
@@ -49,7 +43,6 @@ partial class PermissionRequestItem
         return item;
     }
 
-    /// <summary>Creates from a typed <c>permission.asked</c> SSE event.</summary>
     public static PermissionRequestItem From(PermissionAskedEvent e)
     {
         var item = new PermissionRequestItem
@@ -90,7 +83,6 @@ partial class PermissionRequestItem
     static string S(string key, Dictionary<string, string> meta) =>
         meta.TryGetValue(key, out var v) ? v : "";
 
-    /// <summary>Builds a compact "Title" + "Body" description from the tool metadata.</summary>
     static (string Title, string Body) Describe(string permission, Dictionary<string, string> meta, string[] patterns)
     {
         string first() => patterns.FirstOrDefault(p => p.Length > 0) ?? "";

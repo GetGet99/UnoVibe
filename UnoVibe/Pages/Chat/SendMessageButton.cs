@@ -1,18 +1,5 @@
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// The composer's send button. When the session is idle (<see cref="IsBusy"/> false) it is a plain
-/// send button that sends immediately. While a turn runs (<see cref="IsBusy"/> true) it becomes a
-/// <see cref="SplitButton"/> whose primary click sends with the configured default send mode
-/// (<see cref="SettingsStore.SendMode"/>) and whose chevron opens a menu of one-shot alternative
-/// send modes — so the composer keeps working mid-turn without silently losing the message.
-///
-/// The button keeps the plain send-icon look in both states; a tooltip states the active default
-/// mode. Menu picks (<see cref="PickMode"/>) are <b>one-time overrides</b> — they send with the
-/// chosen mode but never change <see cref="SettingsStore.SendMode"/>, so the primary stays the
-/// configured default. <see cref="Mode"/> (the configured default, kept fresh by the consumer via
-/// <see cref="SettingsStore.Changed"/>) drives the tooltip.
-/// </summary>
 [QuickMarkup("""
     using Microsoft.UI.Xaml;
     using Microsoft.UI.Xaml.Controls;
@@ -38,13 +25,8 @@ namespace UnoVibe.Pages.Chat;
     """)]
 partial class SendMessageButton : IQuickMarkupComponent<ContentControl>
 {
-    /// <summary>Handler for <see cref="SendRequested"/>.</summary>
     public delegate Task SendModeHandler(SendPromptMode mode);
 
-    /// <summary>
-    /// Raised with the mode to use for this send: the configured default for a primary/plain click
-    /// (<see cref="SettingsStore.SendMode"/>), or the chosen menu item for a one-time override.
-    /// </summary>
     public event SendModeHandler? SendRequested;
 
     [QuickMarkupConstructor]
@@ -63,7 +45,6 @@ partial class SendMessageButton : IQuickMarkupComponent<ContentControl>
         _ = SendRequested?.Invoke(mode);
     }
 
-    /// <summary>Tooltip on the button; the mode is read fresh so it always reflects the setting.</summary>
     private string SendTooltip => $"Send ({ModeLabel(Mode)})";
 
     private static string ModeLabel(string mode) => mode switch

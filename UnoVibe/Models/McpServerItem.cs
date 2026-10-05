@@ -1,17 +1,9 @@
 namespace UnoVibe.Models;
 
-/// <summary>
-/// An MCP server's runtime status as reported by <c>GET /mcp</c>. Status is per
-/// workspace directory (instance), not per session: all sessions in a directory
-/// share the same MCP servers. Reactive display fields are QuickMarkup references.
-/// </summary>
 [QuickRefs("""
-    public string Name = ""; // filled by constructor
-    // One of "connected" | "disabled" | "failed" | "needs_auth" | "needs_client_registration".
+    public string Name = "";
     public string Status = "disabled";
-    // Error message carried by the "failed"/"needs_client_registration" statuses.
-    public string Error = ""; // filled by constructor
-    // True while a connect/disconnect/auth request for this server is in flight.
+    public string Error = "";
     public bool Connecting;
     public bool IsConnected => `Status == "connected"`;
     public bool NeedsAuth => `Status == "needs_auth"`;

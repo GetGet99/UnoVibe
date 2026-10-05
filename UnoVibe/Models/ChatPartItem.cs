@@ -4,10 +4,6 @@ using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Models;
 
-/// <summary>
-/// Base class for all chat message parts. Each part type is a properly typed subclass
-/// instead of the old monolithic PartItem "bag of fields".
-/// </summary>
 public abstract class ChatPartItem
 {
     public string Id { get; set; } = "";
@@ -114,7 +110,6 @@ partial class FilePartItem : ChatPartItem
         }
         catch
         {
-            // Leave Image null; the UI renders the file fallback.
         }
     }
 }

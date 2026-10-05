@@ -3,20 +3,6 @@ using UnoVibe.Models;
 
 namespace UnoVibe.Services;
 
-/// <summary>
-/// Reactive store for ONE chat session. Owns the session's messages, usage stats, revert
-/// marker, retry/continue state, composer attachments and per-session mode/model/variant —
-/// everything the chat page shows for the currently-active session.
-///
-/// Stores are created lazily by <see cref="ChatStoreToBeRemoved"/> the first time a session is opened
-/// and cached (keyed by session id) so switching sessions never recreates or resets them:
-/// switching re-points the router's <see cref="ChatStoreToBeRemoved.Active"/> reference and the cached
-/// store (messages included) is reused. Sessions that exist on the sidebar but were never
-/// opened have no store — only the router's per-session sidebar maps track them.
-///
-/// The mutable display fields are QuickMarkup reactive references (declared in the markup
-/// header) so the chat page binds to them directly via <c>Store.Active.X</c>.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.Infra.Collections;
     public int TruncatedMessagesCount;
@@ -31,44 +17,27 @@ namespace UnoVibe.Services;
     public long UsageTokensCacheRead;
     public long UsageTokensCacheWrite;
     public long ContextLimit;
-    // Human-readable session status banner (busy/retry messages); empty means idle.
     public string StatusMessage = "";
-    // Auto-retry state for the active turn (session.status type "retry"); drives the
-    // end-of-chat retry card. RetryNextMs is the absolute unix-ms time of the next attempt.
     public bool IsRetrying;
     public string RetryMessage = "";
     public int RetryAttempt;
     public long RetryNextMs;
-    // Live countdown text recomputed each second by the chat page timer ("Attempt #2 · retrying in 3s").
     public string RetryCountdown = "";
-    // True when the stopped turn warrants the end-of-chat "Continue" button: the last assistant
-    // message carried a non-interrupt error, or the chat ends on a Thinking (reasoning) part.
-    // Never set when the stop was handled by an automatic "continue" (turn.autocontinue setting).
     public bool ShowContinue;
     public string Mode = "build";
     public string ModelId = "";
     public string ProviderId = "";
     public string? Variant;
     public bool HasVariants;
-    // The ModelOption currently selected by the model combo. A computed derived from the
-    // ModelId/ProviderId refs + the router's model list, so it re-resolves automatically
-    // when the options are (re)populated (refresh rebuilds the option instances).
     public ModelOption? SelectedModelOption => `Router.ModelOptions.Reactive.FirstOrDefault(m => m.Id == ModelId && m.ProviderId == ProviderId)`;
-    // Undo marker for this session: the id of the user message the conversation is
-    // reverted to (the server's session "revert" field). Empty = not reverted. Drives the
-    // revert card + message filter (messages with id >= RevertMessageId are hidden).
     public string RevertMessageId = "";
-    // Card label for the revert banner, e.g. "1 message reverted". Computed whenever the
-    // revert point changes (recounts the reverted user messages from the message list).
     public string RevertCountLabel = "";
     """)]
 [Obsolete("This class will be removed", error: true)]
 public sealed partial class SessionStoreToBeRemoved
 {
-    /// <summary>Maximum number of messages kept in the UI; older ones are dropped to keep rendering smooth.</summary>
     public const int MaxVisibleMessages = 200;
 
-    /// <summary>The router that owns this store (client, sidebar, settings options).</summary>
     public ChatStoreToBeRemoved Router { get; set; } = null!;
 
     public ObservableCollection<MessageItem> Messages { get; } = new();
@@ -85,12 +54,6 @@ public sealed partial class SessionStoreToBeRemoved
         }
     }
 
-    /// <summary>
-    /// Full (awaited) load of this session's messages + settings. Called by the router the
-    /// first time the session is opened. <paramref name="known"/> is the sidebar session
-    /// when it's in the list (title/parent/model already known); a null it falls back to
-    /// <c>GET /session/:id</c> (e.g. a subagent whose session.created raced the click).
-    /// </summary>
     public async Task LoadAsync(SessionInfoToRemove? known)
     {
         if (known is not null)
@@ -105,11 +68,6 @@ public sealed partial class SessionStoreToBeRemoved
         await Router.SyncPendingQuestionsAsync();
     }
 
-    /// <summary>
-    /// Background refresh of a cached store's messages (stale-while-revalidate) so a revisit
-    /// shows fresh content. Skips the swap while the session is busy, so an in-flight turn's
-    /// streaming deltas are never clobbered by a snapshot taken mid-stream.
-    /// </summary>
     public async Task RefreshAsync()
     {
         if (Router.IsSessionBusy(Head.Id)) return;
@@ -117,7 +75,6 @@ public sealed partial class SessionStoreToBeRemoved
         await Router.SyncPendingQuestionsAsync();
     }
 
-    /// <summary>Fetches and replaces this store's message list from GET /session/:id.</summary>
     private async Task LoadMessagesAsync()
     {
         Messages.Clear();
@@ -138,15 +95,6 @@ public sealed partial class SessionStoreToBeRemoved
         UpdateSessionStats();
     }
 
-    /// <summary>
-    /// Undoes the agent's reply to the last user message. Mirrors the TUI's <c>session.undo</c>
-    /// command: aborts if the session is busy (the server 409s a revert while busy), targets the
-    /// last user message before the current revert point (so a second undo walks further back),
-    /// calls POST /session/{id}/revert, and restores the undone user prompt (text + staged
-    /// images) into the composer. No message refetch is needed — the server keeps reverted
-    /// messages until the next prompt, and the chat page hides messages at/after the revert
-    /// point via <see cref="RevertMessageId"/>.
-    /// </summary>
     public async Task UndoLastMessageAsync()
     {
         if (Head.Id.Length == 0) return;
@@ -155,13 +103,6 @@ public sealed partial class SessionStoreToBeRemoved
         await RevertToMessageAsync(target);
     }
 
-    /// <summary>
-    /// Reverts the conversation to a specific user message ("undo to here"), mirroring the web
-    /// client's per-message revert action and the TUI's message dialog "Revert". Aborts if the
-    /// session is busy, calls POST /session/{id}/revert for the target message, and restores
-    /// that message's prompt (text + staged images) into the composer. Messages at/after the
-    /// target are hidden via <see cref="RevertMessageId"/> (the target itself included).
-    /// </summary>
     public async Task RevertToMessageAsync(MessageItem message)
     {
         if (Head.Id.Length == 0 || message is null) return;
@@ -180,11 +121,6 @@ public sealed partial class SessionStoreToBeRemoved
         }
     }
 
-    /// <summary>
-    /// Restores reverted messages. If a user message exists beyond the revert point, reverts
-    /// forward to it; otherwise clears the revert entirely (unrevert). Mirrors the TUI's
-    /// <c>session.redo</c> command.
-    /// </summary>
     public async Task RedoLastMessageAsync()
     {
         if (Head.Id.Length == 0 || RevertMessageId.Length == 0) return;
@@ -210,11 +146,6 @@ public sealed partial class SessionStoreToBeRemoved
         }
     }
 
-    /// <summary>
-    /// The next undo target: the last user message strictly before the current revert point
-    /// (a second undo walks further back), or the last user message overall when nothing is
-    /// reverted yet. Null when there is nothing left to undo.
-    /// </summary>
     private MessageItem? FindUndoTargetMessage()
     {
         for (var i = Messages.Count - 1; i >= 0; i--)
@@ -227,18 +158,12 @@ public sealed partial class SessionStoreToBeRemoved
         return null;
     }
 
-    /// <summary>Sets the revert point and recomputes the card label.</summary>
     private void ApplyRevertMarker(string messageId)
     {
         RevertMessageId = messageId;
         RevertCountLabel = ComputeRevertCountLabel(messageId);
     }
 
-    /// <summary>
-    /// "N message(s) reverted" — counts the reverted user messages (id &gt;= the revert
-    /// point, both user and assistant messages are hidden from view but only user messages
-    /// are counted, matching the TUI's reverted-count).
-    /// </summary>
     private string ComputeRevertCountLabel(string messageId)
     {
         if (messageId.Length == 0) return "";
@@ -259,10 +184,6 @@ public sealed partial class SessionStoreToBeRemoved
             ApplyMessageStats(message, info);
             if (MarkInterrupted(message, info)) ShowContinue = false;
             ApplyMessageError(message, info);
-            // The server emits session.status idle and this final message.updated (carrying
-            // finish/error) in either order; both are turn-stop signals handled uniformly
-            // (auto-continue or the Continue button). While an auto-continue is awaiting its
-            // restarted turn, a trailing finish echo must not clobber the fresh busy state.
             if (!AwaitingAutoContinueRun && info.TryGetProperty("finish", out _)) OnTurnCompleted();
             if (!Head.IsBusy) HandleStoppedTurn();
             UpdateSessionStats();
@@ -285,12 +206,6 @@ public sealed partial class SessionStoreToBeRemoved
         UpdateSessionStats();
     }
 
-    /// <summary>
-    /// Appends a reactive "aborted" marker part when the message carries an abort error.
-    /// Returns true when this call transitioned the message to interrupted (the marker was
-    /// newly added) — the caller uses it to drop a Continue state that was decided before the
-    /// abort error arrived (the idle/finish stop signals can precede it).
-    /// </summary>
     private static bool MarkInterrupted(MessageItem message, JsonElement info)
     {
         if (!IsAbortedError(info)) return false;
@@ -305,11 +220,6 @@ public sealed partial class SessionStoreToBeRemoved
         return true;
     }
 
-    /// <summary>
-    /// True when this session's most recent assistant message carries a non-interrupt
-    /// error part (i.e. the last turn stopped with an error). Interrupts are MessageAbortedError
-    /// → aborted part, not an error part, so they never qualify.
-    /// </summary>
     private bool LastAssistantMessageErrored()
     {
         for (var i = Messages.Count - 1; i >= 0; i--)
@@ -321,13 +231,6 @@ public sealed partial class SessionStoreToBeRemoved
         return false;
     }
 
-    /// <summary>
-    /// True when this session's most recent assistant message ends on a "reasoning" (thinking)
-    /// part — the visible chat ends on a Thinking block. A turn that stops while the model is
-    /// still thinking (stream failure mid-reasoning, or a reasoning-only finish) often leaves
-    /// no error part to latch onto, so this catches the case <see cref="LastAssistantMessageErrored"/>
-    /// misses.
-    /// </summary>
     private bool LastAssistantMessageEndsOnThinking()
     {
         for (var i = Messages.Count - 1; i >= 0; i--)
@@ -340,20 +243,9 @@ public sealed partial class SessionStoreToBeRemoved
         return false;
     }
 
-    /// <summary>
-    /// True when the stopped turn warrants the end-of-chat "Continue" button: the last assistant
-    /// message carries an error part, or the chat ends on a Thinking (reasoning) part. Aborted
-    /// turns never qualify (interrupt → "aborted" part, not an error part or a trailing Thinking).
-    /// </summary>
     private bool ShouldShowContinue() =>
         LastAssistantMessageErrored() || LastAssistantMessageEndsOnThinking();
 
-    /// <summary>
-    /// True when this session's most recent assistant message was interrupted by the user
-    /// (abort). Guards the auto-continue against a stop signal racing the aborted part: a user
-    /// Stop must never be answered with an automatic "continue". <see cref="interruptRequested"/>
-    /// covers the ordering where session.status idle is handled before the aborted marker lands.
-    /// </summary>
     private bool LastAssistantMessageInterrupted()
     {
         for (var i = Messages.Count - 1; i >= 0; i--)
@@ -365,18 +257,12 @@ public sealed partial class SessionStoreToBeRemoved
         return false;
     }
 
-    /// <summary>Runs when the active turn ends (message finished or session idle).</summary>
     private void OnTurnCompleted()
     {
         Head.IsBusy = false;
         _ = ChatboxSource[Head.Id]?.DrainPendingAsync();
     }
 
-    /// <summary>
-    /// Recomputes the live countdown for the end-of-chat retry card. The chat page ticks this
-    /// once per second while a turn is auto-retrying (<see cref="RetryNextMs"/> is the absolute
-    /// unix-ms time the server will fire the next attempt at).
-    /// </summary>
     public void UpdateRetryCountdown()
     {
         if (!IsRetrying)
@@ -441,12 +327,6 @@ public sealed partial class SessionStoreToBeRemoved
         if (part is not null) message.Parts.Remove(part);
     }
 
-    /// <summary>
-    /// Drops a message from the UI. The server emits this when a reverted session's messages
-    /// are cleaned up at the start of the next prompt (SessionRevert.cleanup), and for other
-    /// message removals. The message is scoped to this session (the router dispatches by
-    /// sessionID), so only this store's list is touched.
-    /// </summary>
     internal void ApplyMessageRemoved(JsonElement properties)
     {
         var id = properties.GetStringProperty("messageID");
@@ -458,11 +338,6 @@ public sealed partial class SessionStoreToBeRemoved
         UpdateSessionStats();
     }
 
-    /// <summary>
-    /// Applies a <c>session.status</c> event for THIS session only (the router forwards it).
-    /// Handles the active banner (busy/retry) and the Continue button; sidebar maps are owned
-    /// by the router.
-    /// </summary>
     internal void ApplySessionStatus(JsonElement properties)
     {
         if (!properties.TryGetProperty("status", out var status)) return;
@@ -498,22 +373,12 @@ public sealed partial class SessionStoreToBeRemoved
             RetryNextMs = 0;
             RetryCountdown = "";
 
-            // The turn finished. If it stopped because of a non-interrupt error, or with the
-            // chat left ending on a Thinking part, surface the "Continue" button — or, when the
-            // auto-continue-on-thinking-stop setting is on and the stop qualifies, send the
-            // "continue" prompt instead (HandleStoppedTurn). (Interrupts are MessageAbortedError
-            // → aborted part instead.)
             if (type == "idle") HandleStoppedTurn();
         }
 
         if (!Head.IsBusy) _ = DrainPendingPromptsAsync();
     }
 
-    /// <summary>
-    /// Re-syncs the pending-question request IDs for this session's tool parts after a reload
-    /// (requestIDs only exist in the live question.asked event and the server's in-memory
-    /// pending map, not in the persisted message parts).
-    /// </summary>
     internal void AttachQuestionRequest(Integration.PendingQuestion question)
     {
         if (question.Tool is null) return;
@@ -528,7 +393,6 @@ public sealed partial class SessionStoreToBeRemoved
         AttachQuestion(part, question.Id, question);
     }
 
-    /// <summary>Applies a live <c>question.asked</c> event to this session's tool part.</summary>
     internal void ApplyQuestionAsked(JsonElement properties)
     {
         var requestId = properties.GetStringProperty("id");
@@ -566,11 +430,6 @@ public sealed partial class SessionStoreToBeRemoved
         }
     }
 
-    /// <summary>
-    /// Applies a <c>session.updated</c>/<c>session.created</c> event's info to this store:
-    /// keeps the title, parent id and model settings current, and syncs the revert marker
-    /// (the server omits "revert" entirely on unrevert).
-    /// </summary>
     internal void ApplySessionInfo(SessionInfoToRemove session, JsonElement info)
     {
         if (session.ModelId.Length > 0)
@@ -680,10 +539,6 @@ public sealed partial class SessionStoreToBeRemoved
         }
     }
 
-    // ---------------------------------------------------------------------
-    // Mode / model / variant (per-session agent settings).
-    // ---------------------------------------------------------------------
-
     private void ApplySessionSettings(SessionInfoToRemove session)
     {
         if (session.Agent.Length > 0) Mode = session.Agent;
@@ -697,8 +552,6 @@ public sealed partial class SessionStoreToBeRemoved
         ReapplyComboSelections();
     }
 
-    // Reference.Value only fires when the value changes; the SelectedItem bindings ran once
-    // against empty options, so nudge the refs to make the bindings re-apply the selection.
     internal void ReapplyComboSelections()
     {
         var mode = Mode; Mode = ""; Mode = mode;
@@ -717,13 +570,6 @@ public sealed partial class SessionStoreToBeRemoved
         if (Variant != "default" && !Router.VariantOptions.Contains(Variant)) Variant = null;
     }
 
-    /// <summary>
-    /// Re-syncs pending questions from the server: rebuilds the per-session pending-question
-    /// counts (drives the sidebar attention indicator) and re-attaches requestIDs to each
-    /// cached session store's tool parts after a reload (requestIDs only exist in the live
-    /// question.asked event and the server's in-memory pending map, not in the persisted
-    /// message parts).
-    /// </summary>
     public async Task SyncPendingQuestionsAsync()
     {
         try

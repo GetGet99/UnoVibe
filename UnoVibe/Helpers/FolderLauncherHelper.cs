@@ -3,15 +3,8 @@ using System.Diagnostics;
 
 namespace UnoVibe.Helpers;
 
-/// <summary>
-/// Launches external programs against a local folder: the default file manager
-/// (Explorer on Windows, the platform's <c>xdg-open</c>/<c>open</c> equivalent elsewhere),
-/// the default terminal, and the configured editor/IDE (the "Default IDE/Editor" setting,
-/// default VS Code's <c>code</c> CLI). Returns an error message on failure, or null on success.
-/// </summary>
 static class FolderLauncherHelper
 {
-    /// <summary>Opens <paramref name="folder"/> in the OS file manager. Returns an error message or null.</summary>
     public static string? OpenInFileManager(string folder)
     {
         if (!Directory.Exists(folder)) return $"Folder not found locally: {folder}";
@@ -44,11 +37,6 @@ static class FolderLauncherHelper
         }
     }
 
-    /// <summary>
-    /// Opens <paramref name="folder"/> in the configured editor/IDE — the "Default IDE/Editor"
-    /// setting (<see cref="SettingsStore.EditorCommand"/>), run as <c>&lt;command&gt; &lt;folder&gt;</c>.
-    /// An empty/cleared setting falls back to VS Code's <c>code</c> CLI. Returns an error message or null.
-    /// </summary>
     public static string? OpenInEditor(string folder)
     {
         if (!Directory.Exists(folder)) return $"Folder not found locally: {folder}";
@@ -61,7 +49,6 @@ static class FolderLauncherHelper
         if (!IsCommandAvailable(command)) return $"Editor command \"{command}\" not found on PATH.";
         try
         {
-            // On Windows the command may resolve via the shell (e.g. code.cmd); on Unix it execs the wrapper script.
             var psi = new ProcessStartInfo(command)
             {
 #if WINDOWS
@@ -80,7 +67,6 @@ static class FolderLauncherHelper
         }
     }
 
-    /// <summary>Opens <paramref name="url"/> in the default browser. Returns an error message or null.</summary>
     public static string? OpenUrl(string url)
     {
         try
@@ -111,7 +97,6 @@ static class FolderLauncherHelper
         }
     }
 
-    /// <summary>Opens the best available terminal at <paramref name="folder"/>. Returns an error message or null.</summary>
     public static string? OpenInTerminal(string folder)
     {
         if (!Directory.Exists(folder)) return $"Folder not found locally: {folder}";
@@ -131,11 +116,6 @@ static class FolderLauncherHelper
         }
     }
 
-    /// <summary>
-    /// Opens a terminal on Windows, preferring Windows Terminal (which honors the user's own
-    /// default profile via <c>-d</c>), then PowerShell, then cmd. For the shells the working
-    /// directory comes from the process itself, so no <c>cd</c> command is ever issued.
-    /// </summary>
     private static string? OpenWindowsTerminal(string folder)
     {
         if (IsCommandAvailable("wt.exe"))
@@ -151,7 +131,6 @@ static class FolderLauncherHelper
         return null;
     }
 
-    /// <summary>Opens macOS's default terminal (Terminal.app) at <paramref name="folder"/>.</summary>
     private static string? OpenMacTerminal(string folder)
     {
         var psi = new ProcessStartInfo("open") { UseShellExecute = false };
@@ -162,11 +141,6 @@ static class FolderLauncherHelper
         return null;
     }
 
-    /// <summary>
-    /// Opens the first available Linux terminal emulator at <paramref name="folder"/>. Linux has
-    /// no standard "default terminal" command, so common emulators are probed in order. xterm is
-    /// the last resort (its <c>-e</c> launches bash with the folder as the inherited cwd).
-    /// </summary>
     private static string? OpenLinuxTerminal(string folder)
     {
         var terminals = new[]
@@ -188,7 +162,6 @@ static class FolderLauncherHelper
         return "No supported terminal emulator found.";
     }
 
-    /// <summary>Starts <paramref name="fileName"/> with the given working directory and arguments.</summary>
     private static void StartProcess(string fileName, string workingDirectory, params string[] arguments)
     {
         var psi = new ProcessStartInfo
@@ -204,7 +177,6 @@ static class FolderLauncherHelper
         Process.Start(psi);
     }
 
-    /// <summary>Checks whether <paramref name="command"/> resolves on <c>PATH</c> (or as a rooted path) without spawning a shell.</summary>
     private static bool IsCommandAvailable(string command)
     {
         if (Path.IsPathRooted(command))
@@ -213,7 +185,6 @@ static class FolderLauncherHelper
         var path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(path)) return false;
 
-        // On Windows a bare name like "code" resolves through PATHEXT (code.cmd / code.exe).
 #if WINDOWS
         var extensions = (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

@@ -4,13 +4,6 @@ using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Helpers;
 
-/// <summary>
-/// Source-generated System.Text.Json context covering every type the app (de)serializes.
-/// Required for native AOT: reflection-based JSON (de)serialization is unavailable when
-/// trimming/AOT compiling, so all <c>JsonSerializer</c> and <c>PostAsJsonAsync</c>/<c>PatchAsJsonAsync</c>
-/// call sites must route through <see cref="Default"/>. Matches the previous reflection
-/// options (<c>JsonSerializerDefaults.Web</c>, non-indented output).
-/// </summary>
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, WriteIndented = false,
     UseStringEnumConverter = true,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip,
@@ -22,7 +15,6 @@ namespace UnoVibe.Helpers;
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(List<Integration.QuestionInfo>))]
 [JsonSerializable(typeof(List<TodoInfo>))]
-// --- Event types used by EventsProvider ---
 [JsonSerializable(typeof(MessageUpdatedEvent))]
 [JsonSerializable(typeof(MessagePartUpdatedEvent))]
 [JsonSerializable(typeof(MessagePartDeltaEvent))]
@@ -50,7 +42,6 @@ namespace UnoVibe.Helpers;
 [JsonSerializable(typeof(ServerConnectedEvent))]
 [JsonSerializable(typeof(ServerInstanceDisposedEvent))]
 [JsonSerializable(typeof(TuiToastShowEvent))]
-// --- Tool metadata types used by MessageJsonHelper ---
 [JsonSerializable(typeof(ToolMetadata))]
 internal sealed partial class AppJsonContext : JsonSerializerContext
 {

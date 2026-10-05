@@ -20,8 +20,6 @@ partial class SessionsStateProvider
     DispatcherQueue Dispatcher;
     ModelsProvider Models;
     record Keyed<T>(string Directory, T Value);
-    // TODO [Medium]: chatboxes per-session never evicted except DeleteSession — ShowContinue/queues go stale across switches. Evict/LRU or reset on ActiveSessionId change.
-    // TODO [Medium]: chatParamsNullSessions/chatBoxNullSessions keyed by directory grow forever — remove when directory removed/session created.
     readonly ReactiveKeyedSet<string, Keyed<ChatParameters>> chatParamsNullSessions = new(x => x.Directory);
     readonly ReactiveKeyedSet<string, Keyed<ChatboxState>> chatBoxNullSessions = new(x => x.Directory);
     readonly ReactiveKeyedSet<SessionId, SessionHead> sessions = new(x => x.Id);
@@ -78,8 +76,6 @@ partial class SessionsStateProvider
         FetchInitialSessions();
         ActiveHeadComp.Watch(x =>
         {
-            // Because this session is switched to active
-            // we need to stated that it is read
             x?.IsRead = true;
         });
     }
@@ -134,7 +130,6 @@ partial class SessionsStateProvider
         var directories = new HashSet<string>();
         foreach (var session in sessionsResult)
         {
-            // TODO [Medium]: Guard skips already-known sessions so title/model changes while SSE down never heal. Add per-session refresh on SessionUpdated miss or retry button.
             if (!sessions.ContainsKey(new(session.Id)))
             {
             directories.Add(session.Directory);
@@ -143,7 +138,6 @@ partial class SessionsStateProvider
         }
         if (directories.Count is 0)
         {
-            // add to directory without session
             var finalDir = directory ?? Connection.ServerDirectory;
             if (finalDir is null)
                 return;
@@ -201,16 +195,13 @@ partial class SessionsStateProvider
     }
 
     void MessageUpdated(string _1, MessageUpdatedEvent e)
-        // TODO [High]: AsyncHelper resumes off-UI-thread after await TurnStopActionAsync — Outcome/ShowContinue/reactive writes must marshal via Dispatcher.RunOrEnqueue.
         => AsyncHelper.RunAndReport(async () =>
         {
             var sessId = new SessionId(e.SessionId);
-            // Feed the sidebar outcome tracker for assistant message completions. The last
-            // update for a turn carries its definitive outcome (error/finish/cost/tokens).
             if (e.Info is not AssistantMessageInfo assistent)
                 return;
             var outcome = MessageJsonHelper.ClassifyMessageOutcome(assistent);
-            
+
             sessions[sessId]?.Outcome = outcome;
             if (assistent.Finish is not (null or "tool-calls") && sessions[sessId] is { IsSubagent: false })
             {
@@ -230,7 +221,7 @@ partial class SessionsStateProvider
                 }
             }    
         }, Toasts, "", "Message Handling Error");
-        
+
     void UpsertSession(string _1, SessionCrudEvent properties)
     {
         UpsertSession(properties.Info);
@@ -253,10 +244,6 @@ partial class SessionsStateProvider
         return sess;
     }
 
-    /// <summary>
-    /// Applies a <c>session.deleted</c> event: removes the session from the sidebar and the
-    /// store cache immediately, and clears the active view if the deleted session was active.
-    /// </summary>
     private void DeleteSession(string _1, SessionCrudEvent properties)
     {
         var sessId = new SessionId(properties.SessionId);

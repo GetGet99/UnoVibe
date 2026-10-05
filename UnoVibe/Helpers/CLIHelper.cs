@@ -4,7 +4,6 @@ namespace UnoVibe.Helpers;
 
 static class CLIHelper
 {
-    /// <summary>Parses the process command line into a launch target.</summary>
     public static StartupArgs Parse(string[] args)
     {
         string? positional = null;
@@ -15,8 +14,6 @@ static class CLIHelper
             var arg = args[i];
             if (arg == "--password")
             {
-                // The next token is the value unless it's absent or another flag. A bare
-                // `--password` (or one followed by another option) means "use the env var".
                 if (i + 1 < args.Length && !IsFlag(args[i + 1]))
                 {
                     password = args[++i];
@@ -28,7 +25,6 @@ static class CLIHelper
             }
             else if (IsFlag(arg))
             {
-                // Unknown option — ignored for forward compatibility.
             }
             else if (positional is null)
             {
@@ -46,7 +42,6 @@ static class CLIHelper
                 StartParam = positional,
                 Password = password,
             };
-        // folder
 
         var fullPath = Path.GetFullPath(positional);
         if (File.Exists(fullPath))
@@ -60,7 +55,6 @@ static class CLIHelper
         };
     }
 
-    /// <summary>Terminates the app with a console error, mirroring a CLI launch failure.</summary>
     private static void FailLaunch(string message)
     {
         Console.Error.WriteLine($"UnoVibe: {message}");

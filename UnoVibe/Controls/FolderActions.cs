@@ -1,11 +1,5 @@
 namespace UnoVibe.Controls;
 
-/// <summary>
-/// A row of small folder-action buttons for <paramref name="Directory"/>: open in the configured
-/// editor/IDE, open in the file manager, open in a terminal, and (optionally) start a new session.
-/// All click handling lives here. Reused by the session sidebar and the chat header; the
-/// file-manager button and the new-session button can be disabled per site.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     using Microsoft.UI;
@@ -46,12 +40,10 @@ partial class FolderActions : IQuickMarkupComponent
 
     private void OnNewSession()
     {
-        // Small-screen view switching: a new session lands in its chat view.
         IsSidebarView = false;
         Sessions.PrepareNewSession(Directory);
     }
 
-    /// <summary>Runs a folder-launch action and surfaces failures as a toast.</summary>
     private void RunFolderAction(Func<string, string?> action)
     {
         var error = action(Directory);

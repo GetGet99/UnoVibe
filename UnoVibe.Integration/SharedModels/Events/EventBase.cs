@@ -17,7 +17,6 @@ public enum FileDiffStatus { Added, Deleted, Modified }
 #region Discriminated union base classes
 
 /// <summary>Base class for message info union (role=user|assistant), not SSE events. Fix wording.</summary>
-// TODO [Low]: Comment says "all opencode SSE event payloads" but this is MessageInfo role union.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "role")]
 [JsonDerivedType(typeof(UserMessageInfo), "user")]
 [JsonDerivedType(typeof(AssistantMessageInfo), "assistant")]
@@ -325,158 +324,125 @@ public sealed class ToolFileContent : ToolContent
 /// <summary>All SSE event type strings emitted by the opencode server.</summary>
 public static class EventTypes
 {
-    // Server / lifecycle
     public const string ServerConnected = "server.connected";
     public const string ServerDisposed = "global.disposed";
     public const string ServerInstanceDisposed = "server.instance.disposed";
 
-    // Session V1
     public const string SessionCreated = "session.created";
     public const string SessionUpdated = "session.updated";
     public const string SessionDeleted = "session.deleted";
 
-    // Message V1
     public const string MessageUpdated = "message.updated";
     public const string MessageRemoved = "message.removed";
     public const string MessagePartUpdated = "message.part.updated";
     public const string MessagePartRemoved = "message.part.removed";
     public const string MessagePartDelta = "message.part.delta";
 
-    // Session status
     public const string SessionStatus = "session.status";
     public const string SessionIdle = "session.idle";
     public const string SessionError = "session.error";
     public const string SessionDiff = "session.diff";
     public const string SessionCompacted = "session.compacted";
 
-    // Permission V1
     public const string PermissionAsked = "permission.asked";
     public const string PermissionReplied = "permission.replied";
 
-    // Permission V2
     public const string PermissionV2Asked = "permission.v2.asked";
     public const string PermissionV2Replied = "permission.v2.replied";
 
-    // Question V1
     public const string QuestionAsked = "question.asked";
     public const string QuestionReplied = "question.replied";
     public const string QuestionRejected = "question.rejected";
 
-    // Question V2
     public const string QuestionV2Asked = "question.v2.asked";
     public const string QuestionV2Replied = "question.v2.replied";
     public const string QuestionV2Rejected = "question.v2.rejected";
 
-    // Session V2 (next) — agent/model
     public const string AgentSwitched = "session.next.agent.switched";
     public const string ModelSwitched = "session.next.model.switched";
     public const string Moved = "session.next.moved";
 
-    // Session V2 — prompting
     public const string Prompted = "session.next.prompted";
     public const string PromptAdmitted = "session.next.prompt.admitted";
     public const string ContextUpdated = "session.next.context.updated";
     public const string Synthetic = "session.next.synthetic";
 
-    // Session V2 — shell
     public const string ShellStarted = "session.next.shell.started";
     public const string ShellEnded = "session.next.shell.ended";
 
-    // Session V2 — step
     public const string StepStarted = "session.next.step.started";
     public const string StepEnded = "session.next.step.ended";
     public const string StepFailed = "session.next.step.failed";
 
-    // Session V2 — text streaming
     public const string TextStarted = "session.next.text.started";
     public const string TextDelta = "session.next.text.delta";
     public const string TextEnded = "session.next.text.ended";
 
-    // Session V2 — reasoning
     public const string ReasoningStarted = "session.next.reasoning.started";
     public const string ReasoningDelta = "session.next.reasoning.delta";
     public const string ReasoningEnded = "session.next.reasoning.ended";
 
-    // Session V2 — tool input
     public const string ToolInputStarted = "session.next.tool.input.started";
     public const string ToolInputDelta = "session.next.tool.input.delta";
     public const string ToolInputEnded = "session.next.tool.input.ended";
 
-    // Session V2 — tool lifecycle
     public const string ToolCalled = "session.next.tool.called";
     public const string ToolProgress = "session.next.tool.progress";
     public const string ToolSuccess = "session.next.tool.success";
     public const string ToolFailed = "session.next.tool.failed";
 
-    // Session V2 — retry
     public const string Retried = "session.next.retried";
 
-    // Session V2 — compaction
     public const string CompactionStarted = "session.next.compaction.started";
     public const string CompactionDelta = "session.next.compaction.delta";
     public const string CompactionEnded = "session.next.compaction.ended";
 
-    // Session V2 — revert
     public const string RevertStaged = "session.next.revert.staged";
     public const string RevertCleared = "session.next.revert.cleared";
     public const string RevertCommitted = "session.next.revert.committed";
 
-    // File
     public const string FileEdited = "file.edited";
     public const string FileWatcherUpdated = "file.watcher.updated";
 
-    // VCS
     public const string VcsBranchUpdated = "vcs.branch.updated";
 
-    // Todo
     public const string TodoUpdated = "todo.updated";
 
-    // Command
     public const string CommandExecuted = "command.executed";
 
-    // MCP
     public const string McpToolsChanged = "mcp.tools.changed";
     public const string McpBrowserOpenFailed = "mcp.browser.open.failed";
 
-    // TUI
     public const string TuiPromptAppend = "tui.prompt.append";
     public const string TuiCommandExecute = "tui.command.execute";
     public const string TuiToastShow = "tui.toast.show";
     public const string TuiSessionSelect = "tui.session.select";
 
-    // Project
     public const string ProjectUpdated = "project.updated";
     public const string ProjectDirectoriesUpdated = "project.directories.updated";
 
-    // PTY
     public const string PtyCreated = "pty.created";
     public const string PtyUpdated = "pty.updated";
     public const string PtyExited = "pty.exited";
     public const string PtyDeleted = "pty.deleted";
 
-    // Reference / Plugin / Catalog
     public const string ReferenceUpdated = "reference.updated";
     public const string PluginAdded = "plugin.added";
     public const string CatalogUpdated = "catalog.updated";
     public const string ModelsDevRefreshed = "models-dev.refreshed";
 
-    // Installation
     public const string InstallationUpdated = "installation.updated";
     public const string InstallationUpdateAvailable = "installation.update-available";
 
-    // LSP
     public const string LspUpdated = "lsp.updated";
 
-    // Integration
     public const string IntegrationUpdated = "integration.updated";
     public const string IntegrationConnectionUpdated = "integration.connection.updated";
 
-    // Workspace
     public const string WorkspaceReady = "workspace.ready";
     public const string WorkspaceFailed = "workspace.failed";
     public const string WorkspaceStatus = "workspace.status";
 
-    // Worktree
     public const string WorktreeReady = "worktree.ready";
     public const string WorktreeFailed = "worktree.failed";
 }

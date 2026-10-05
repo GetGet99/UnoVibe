@@ -201,21 +201,11 @@ machine also lacks the reference clones in `agents-doc/referenced-projects.md` �
 - **Windows has no implicit `Brush` conversion.** `Brush b = Colors.Transparent;` compiles under
   Uno (implicit conversion) but not WinUI — construct the brush explicitly, e.g.
   `new SolidColorBrush(Colors.Transparent)`.
-- **Windows APIs that need an HWND to appear.** Dialogs/pickers (e.g. `FolderPicker`,
-  `FileOpenPicker`) and similar WinRT APIs must be associated with a window handle on Windows —
-  calling `PickSingleFolderAsync`/`PickSingleFileAsync` **without** `InitializeWithWindow.Initialize`
-  crashes the app on the Windows target. Uno's Skia target does this internally, so use the
-  `UnoVibe.WindowsHelper` wrapper instead of `WinRT.Interop` directly:
-  `WindowsHelper.InitializeWithWindow(picker, window)` — it takes the app `Window` (resolving the
-  `hwnd` via `window.AppWindow.Id` internally) and no-ops on non-WinUI targets via an internal
-  `#if WASDK` guard. The `Window` is **always non-null** at call sites (never pass null — it must
-  be set or the Windows target crashes). **Getting the `Window` at a picker call site**: the window
-  flows through the QuickMarkup provide/inject context — `MainPage` declares
-  `provide Window HostWindow = null` (filled by `WindowController.ShowMain` via
-  `ProvideWindow(Window)`), and pages/components that open pickers `inject Window HostWindow` and
-  pass it to   `WindowsHelper.InitializeWithWindow`. Callers like `ChatComposer.OnPickImages` pass it via
-  `ImageIOHelper.PickImagesAsync(HostWindow)` directly. `ConnectPage` reaches it through its own
-  `Controller.Window` instead.
+- **Windows APIs that need an HWND to appear.** Dialogs/pickers and similar WinRT APIs must
+  be associated with a window handle on Windows — use the `UnoVibe.WindowsHelper` wrapper
+  instead of `WinRT.Interop` directly. The `Window` is **always non-null** at call sites (never
+  pass null — it must be set or the Windows target crashes). The window flows through the
+  QuickMarkup provide/inject context (see `MainPage`'s `HostWindow`).
   Folder picking routes through `WindowsHelper.PickFolderAsync(window, startPath)` — per-target
   WASDK / polyfill / classic routing — see `agents-doc/polyfills.md`.
 - Since the Windows target is planned/supported, prefer these portable forms whenever convenient;
@@ -304,58 +294,35 @@ the user is talking to this opencode session **through the running UnoVibe app**
 
 ## Source Layout
 
-- `UnoVibe/Pages/Connect/` — `ConnectPage` plus its page-local panels: `RecentListPanel`
-  (the recent-connections card) and `ConnectPanel` (the start-a-session + folder-security column).
+- `UnoVibe/Pages/Connect/` — `ConnectPage` plus its page-local panels.
   The connect flow (serve launch, URL connect, password resolution) stays on the page.
   See `agents-doc/connect-page.md`.
 - `UnoVibe/Pages/Main/` — `MainPage` plus `SessionSidebar` and `SettingsPage` (both only hosted
   by the main page; the settings panel is its modal overlay). See `agents-doc/responsive-layout.md`.
-- `UnoVibe/Pages/Chat/` — `ChatPage` plus the page-local chat components: `ChatHeader`
-  (title/rename/back/stats/usage), `ChatStatusArea` (status banner + subagent strip),
-  `ChatMessageList` (message list, revert/retry/continue/permission cards, autoscroll),
-  `ChatComposer` (image strip, input, send, mode/model/variant), and the message-rendering
-  controls `MessageView`, `MessageTextPart`, `ModelPicker`, `SendMessageButton`.
+- `UnoVibe/Pages/Chat/` — `ChatPage` plus the page-local chat components (`ChatHeader`,
+  `ChatStatusArea`, `ChatMessageList`, `ChatComposer`, message-rendering controls).
   The chat page coordinates sends and provides the shared composer text (`Input`).
   See `agents-doc/session-state.md`, `agents-doc/tool-views.md`, `agents-doc/markdown-rendering.md`.
-- `UnoVibe/Controls/` — reusable UI used across pages: `AccordionHeader`
-  (shared collapsible-section header for reasoning + tool cards), `AppSymbolIcon`,
-  `CodeHighlighter`
-  (ColorCode-based syntax highlighting for fenced code blocks), `CodeView`/`DiffView`
-  (line-numbered syntax-highlighted code and colored unified-diff views for tool cards),
-  `FolderActions`, `MarkdownView` (Markdig-based markdown renderer with a markdown/plain toggle),
-  `SuggestBox` (+ `SuggestionItem`, `SuggestionBoxController`), `SymbolExtemsion`,
-  `ToolViews/*` (ToolView* render opencode tool calls).
+- `UnoVibe/Controls/` — reusable UI used across pages (`AccordionHeader`, `AppSymbolIcon`,
+  `CodeHighlighter`, `CodeView`/`DiffView`, `FolderActions`, `MarkdownView`, `SuggestBox`,
+  `ToolViews/*`).
   See `agents-doc/markdown-rendering.md`, `agents-doc/tool-views.md`, `agents-doc/suggest-box.md`.
-- `UnoVibe/Providers/` — window-level global registration of shared services:
-  `UnoVibeProviders` (composition root, owns all providers), `EventsProvider` (SSE event pump +
-  dispatch), `SessionsStateProvider` (session lifecycle, active session tracking),
-  `ModelsProvider` (agent/model option lists), `ToastsProvider` (in-app toast messages),
-  `NotificationProvider` (native desktop notifications), `UIServiceProvider` (cross-component
-  UI event bus), `ReactiveKeyedSet` (reactive keyed collection).
-- `UnoVibe/States/` — scoped reactive state:
-  `ChatboxState` (per-session send/queue/auto-continue/commands, partial class with
-  `AutoContinue` and `Command` extensions), `SessionHead` (per-session sidebar metadata),
-  `OpencodeConnection` (live server connection, health check, status).
-- `UnoVibe/Helpers/` — static helper functions (may hold little state or read from stores):
-  `AppJsonContext` (app-layer source-generated JSON context), `Notifications` (platform-dispatching
-  notification facade), `CLIHelper`, `CodeFontsHelper`, `FolderLauncherHelper`, `ImageIOHelper`,
-  `MessageJsonHelper`, `OpencodeHelper`, `PathDisplayHelper`, `SystemFontsHelper`, `AsyncHelper`.
-- `UnoVibe/Stores/` — persistence stores:
-  `RecentConnectionsStore` (recent.json persistence), `SettingsStore` (settings.json persistence
-  + data-driven Specs registry). See `agents-doc/settings.md`.
-- `UnoVibe/Models/` — reactive models (not to be confused with `UnoVibe.Integration` DTOs):
-  `MessageItem`, `PartItem`, `ChatboxMessage`, `ImageAttachment`, `SessionState`, `ChatOutcome`,
-  `SessionTokens`, `Model`, `SettingsEntry`, plus `Startup/LaunchKind` and `Startup/StartupArgs`.
-- `UnoVibe/Commands/` — `SuggestionProviders` (the `ISuggestionProvider` implementations for
-  `SuggestBox`, namespace `UnoVibe.Controls`). See `agents-doc/suggest-box.md`.
+- `UnoVibe/Providers/` — window-level global registration of shared services
+  (`UnoVibeProviders` composition root: events, sessions, models, toasts, notifications, UI bus).
+- `UnoVibe/States/` — scoped reactive state (`ChatboxState`, `SessionHead`, `OpencodeConnection`).
+- `UnoVibe/Helpers/` — static helper functions (may hold little state or read from stores).
+- `UnoVibe/Stores/` — persistence stores (`RecentConnectionsStore`, `SettingsStore`).
+  See `agents-doc/settings.md`.
+- `UnoVibe/Models/` — reactive models (not to be confused with `UnoVibe.Integration` DTOs).
+- `UnoVibe/Commands/` — `SuggestionProviders` (namespace `UnoVibe.Controls`).
+  See `agents-doc/suggest-box.md`.
 - `UnoVibe/Services/` — legacy code being removed (classes with `ToBeRemoved` suffix are
   `[Obsolete(..., error: true)]` and will not compile when included). Only
   `OpencodeServeProcess.cs` remains active here. See `agents-doc/session-state.md`.
 - `UnoVibe/Pages/Main/SettingsPage.cs` — the settings panel (modal overlay), rendered from
   `SettingsStore.Specs`. See `agents-doc/settings.md`.
-- `App.xaml.cs` — startup routing: parses `StartupArgs` (`App.CreateWindow`), fails the launch on
-  a file-target, hands folder/URL targets to `ConnectPage` via `WindowController.ShowConnect(startup)`,
-  which runs the connect flow and swaps to `MainPage` on success.
+- `App.xaml.cs` — startup routing: parses `StartupArgs`, fails the launch on a file-target, hands
+  folder/URL targets to `ConnectPage`, which runs the connect flow and swaps to `MainPage`.
 
 ## QuickMarkup
 
@@ -408,8 +375,8 @@ consciously agreed-upon decision before it is used everywhere.
 
 Reactive model fields use `string?` with `null` for absent or invalid — never store `""`
 or whitespace-only strings. Normalize at the mapping boundary where OpenCode DTOs become
-model state (e.g. `MessageJsonHelper.NullIfBlank`), so readers can rely on a plain
-`is not null` check. See `agents-doc/tool-views.md` for the convention detail.
+model state, so readers can rely on a plain `is not null` check.
+See `agents-doc/tool-views.md` for the convention detail.
 
 ### State isolation on directory/session change
 
@@ -418,9 +385,8 @@ resetting state on the existing one. This avoids state leaks and ensures nobody 
 
 ### Need-to-know storage
 
-Store values only on a need-to-know basis. For example, `SessionHead` holds only sidebar-relevant
-metadata (title, busy, outcome, pending attention) — not full chat messages, token counts, or
-other data not needed while it sits in the sidebar.
+Store values only on a need-to-know basis. `SessionHead` holds only sidebar-relevant metadata —
+not full chat messages, token counts, or other data not needed while it sits in the sidebar.
 
 ### Remove values when not needed
 

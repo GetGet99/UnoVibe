@@ -36,12 +36,6 @@ namespace UnoVibe.Controls.ToolViews;
     """)]
 partial class ToolViewShell : IQuickMarkupComponent
 {
-    /// <summary>
-    /// The "Running in …" label above the command: the tool's workdir relative to the
-    /// session's directory (same reference <see cref="ChatStore.ActiveDirectory"/> uses),
-    /// empty when it matches that directory. Rendered in the default font so it reads as
-    /// context, not code.
-    /// </summary>
     private string WorkdirLabel()
     {
         return ToolViewShared.ShellWorkdir(Part, Sessions.ActiveSessionDirectory);

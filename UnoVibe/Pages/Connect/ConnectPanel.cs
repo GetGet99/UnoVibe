@@ -1,13 +1,5 @@
 namespace UnoVibe.Pages.Connect;
 
-/// <summary>
-/// The right column of the connect page: "Start a session" (Open Folder, Connect to URL with
-/// its inline form) and the folder-security block — the single source of truth for folder
-/// passwords. All password/URL/connect-form state is injected from the page so the values are
-/// shared (and restored) there; connecting an action is delegated via
-/// <see cref="OpenFolderRequested"/> / <see cref="ConnectToUrlRequested"/>, while saving the
-/// password is handled here (it only touches this panel's flyout and the recent store).
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -48,7 +40,6 @@ namespace UnoVibe.Pages.Connect;
                             <PasswordBox Password<=>`ServerPassword` PlaceholderText="Server password (leave blank for no password)" IsEnabled=`!Connecting` />
                             <TextBlock Text="Only connect to OpenCode server that you trust" FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                             <Button Content="Connect" @Click+=`await OnConnectToUrl()` IsEnabled=`!Connecting` HorizontalAlignment=Right />
-                            // <TextBlock Text="Tip: OPENCODE_SERVER_PASSWORD environment variable will be used when set." FontSize=11 Foreground=`theme.TertiaryText` TextWrapping=Wrap />
                         </StackPanel>
                     }
                     <Border BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)` Margin=`new Thickness(0, 6, 0, 0)` />
@@ -94,13 +85,10 @@ namespace UnoVibe.Pages.Connect;
     """)]
 partial class ConnectPanel : IQuickMarkupComponent<StackPanel>
 {
-    /// <summary>Handler for <see cref="OpenFolderRequested"/> and <see cref="ConnectToUrlRequested"/>.</summary>
     public delegate Task ActionHandler();
 
-    /// <summary>Raised when the user clicks Open Folder; the page picks a folder and starts serve.</summary>
     public event ActionHandler? OpenFolderRequested;
 
-    /// <summary>Raised when the user clicks Connect in the URL form; the page connects and records the server.</summary>
     public event ActionHandler? ConnectToUrlRequested;
 
     [QuickMarkupConstructor]
@@ -119,10 +107,6 @@ partial class ConnectPanel : IQuickMarkupComponent<StackPanel>
         if (ConnectToUrlRequested is not null) await ConnectToUrlRequested();
     }
 
-    /// <summary>
-    /// Opt-in/out of persisting the custom folder password. Enabling requires confirming the
-    /// plain-text-storage risk in the flyout; the choice is saved immediately either way.
-    /// </summary>
     private void SetSavePassword(bool save)
     {
         if (passwordFlyout is { IsOpen: true }) passwordFlyout.Hide();

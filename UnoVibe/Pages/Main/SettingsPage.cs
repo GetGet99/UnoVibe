@@ -1,12 +1,5 @@
 namespace UnoVibe.Pages.Main;
 
-/// <summary>
-/// App settings panel, rendered as a modal overlay over the main page. Rows are generated from
-/// <see cref="SettingsStore.Specs"/>, so a new setting (a new spec + a GetValue/SetValue case)
-/// appears here automatically. Every change is applied to the shared <see cref="SettingsStore"/>
-/// immediately (persisted + propagated to every window and process); the panel re-reads the store
-/// on <see cref="SettingsStore.Changed"/> so multiple open windows stay in sync.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -82,24 +75,14 @@ partial class SettingsPage : IQuickMarkupComponent<Grid>
         SettingsStore.Changed += OnSettingsChanged;
     }
 
-    /// <summary>The option matching the entry's current value (ComboBox SelectedItem), or null.</summary>
     private static SettingOption? SelectedOption(SettingsEntry entry) =>
         entry.Options.FirstOrDefault(o => o.Value == entry.Value);
 
-    /// <summary>Applies a control's new value to the shared store (persisted + cross-window/proc).
-    /// The entry's own <see cref="SettingsEntry.Value"/> is left to the store resync
-    /// (<c>Changed</c> → <see cref="Resync"/>) so an in-place control edit (typing caret, combo
-    /// selection, toggle state) is never clobbered by a re-render of the one-way binding.</summary>
     private void OnEntryChanged(SettingsEntry entry, string value)
     {
         SettingsStore.SetValue(entry.Key, value);
     }
 
-    /// <summary>
-    /// Re-reads the shared store after a change anywhere (this window, another window, or another
-    /// process via the file watcher). Store changes may arrive on a background thread, so bounce
-    /// to the UI thread first.
-    /// </summary>
     private void OnSettingsChanged()
     {
         _ = _dispatcher?.TryEnqueue(Resync);

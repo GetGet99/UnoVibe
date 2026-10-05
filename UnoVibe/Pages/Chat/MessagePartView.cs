@@ -1,6 +1,5 @@
 namespace UnoVibe.Pages.Chat;
 
-// TODO [Low]: Naming overlap MessageView vs MessagePartView vs MessageParts/* confuses — rename to MessagePartDispatcher/Switch or doc the chain: MessageView -> dispatcher -> per-type views.
 [QuickMarkup("""
     using UnoVibe.Pages.Chat.MessageParts;
     using UnoVibe.Controls.ToolViews;

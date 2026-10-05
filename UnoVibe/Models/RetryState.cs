@@ -2,11 +2,6 @@ using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Models;
 
-/// <summary>
-/// Atomic snapshot of a retry attempt. All retry-related fields change together,
-/// so the whole object is replaced (same pattern as <see cref="SessionTokens"/>).
-/// UI controls derive display strings from these raw values.
-/// </summary>
 class RetryState
 {
     public required bool IsRetrying { get; init; }

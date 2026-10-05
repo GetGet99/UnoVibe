@@ -7,17 +7,10 @@ namespace UnoVibe.Models;
     """)]
 partial class ChatboxMessage
 {
-    /// <summary>Image attachments staged for the next prompt (shown as thumbnails above the input).</summary>
     public ReactiveList<ImageAttachment> Images { get; } = [];
 
     public bool IsEmpty => string.IsNullOrWhiteSpace(Text) && Images.Count is 0;
 
-
-    /// <summary>
-    /// Restores the user message's prompt into the composer: concatenated non-synthetic
-    /// text parts (TUI skips synthetic) plus its data-URL image file parts re-staged as pending
-    /// attachments. Matches the TUI/web undo behavior.
-    /// </summary>
     public static ChatboxMessage From(MessageItem message)
     {
         var msg = new ChatboxMessage();
@@ -36,7 +29,6 @@ partial class ChatboxMessage
         return msg;
     }
 
-    /// <summary>Rebuilds an <see cref="ImageAttachment"/> from a data-URL image file part; null when not decodable.</summary>
     static ImageAttachment? AttachmentFromFile(FilePartItem part)
     {
         if (!part.IsImage || !part.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return null;
@@ -51,8 +43,6 @@ partial class ChatboxMessage
                 Mime = part.Mime.Length > 0 ? part.Mime : "image/png",
                 Bytes = bytes,
             };
-            // Decode fire-and-forget like FilePartItem.LoadImageAsync; the await resumes on the
-            // UI thread so the thumbnail strip updates once the bitmap is ready.
             _ = DecodePreviewAsync(attachment);
             return attachment;
         }

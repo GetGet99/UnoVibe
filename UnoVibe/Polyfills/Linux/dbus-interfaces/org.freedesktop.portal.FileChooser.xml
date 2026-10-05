@@ -1,12 +1,4 @@
 <?xml version="1.0"?>
-<!--
-    Minimal subset of the org.freedesktop.portal.FileChooser D-Bus interface
-    (http://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.FileChooser.html)
-    consumed by the Linux FolderPicker polyfill (UnoVibe/Polyfills/Linux).
-
-    Only the OpenFile method (single folder picking) and the version property are
-    declared — the Tmds.DBus.Generator needs just these.
--->
 <node name="/">
   <interface name="org.freedesktop.portal.FileChooser">
     <method name="OpenFile">

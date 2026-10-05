@@ -15,15 +15,10 @@ https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.wi
 DESKTOP_MACOS` → the polyfill, else the classic fallback; callers pass the app `Window` and get a
 `PickFolderResult?.Path`.
 
-On the **WASDK** target the folder picker is the Windows App SDK's
-`Microsoft.Windows.Storage.Pickers.FolderPicker` (relies on the `Microsoft.WindowsAppSDK` package's
-`StoragePickersContract`, not Uno). It takes the `WindowId` (`window.AppWindow.Id`) in its
-constructor, so it needs **no** `InitializeWithWindow`; its `PickSingleFolderAsync` returns a
-`PickFolderResult` (`.Path`), not a `StorageFolder`. The `startPath` (set via `SuggestedStartFolder`)
-is the current window path, i.e. `OpencodeConnection.ServerDirectory`. Only `DESKTOP_WINDOWS` (a Skia build
-running on Windows) falls back to the classic `Windows.Storage.Pickers.FolderPicker` +
-`InitializeWithWindow`, where `startPath` is ignored (that API has no exact-path control). Both call
-sites pass `OpencodeConnection.ServerDirectory` (`SessionSidebar`'s Open Folder / `ConnectPage`'s folder pick).
+On the **WASDK** target the folder picker is the Windows App SDK picker (needs the `WindowId`
+in its constructor, so no `InitializeWithWindow`; returns `.Path`, not a `StorageFolder`).
+Only desktop-Windows Skia falls back to the classic picker + `InitializeWithWindow`, where the
+start path is ignored (that API has no exact-path control).
 
 ## Conventions for every polyfill file
 
@@ -33,58 +28,34 @@ sites pass `OpencodeConnection.ServerDirectory` (`SessionSidebar`'s Open Folder 
   "Compile-time OS constants" in AGENTS.md), so the guard just keeps disabled targets from
   compiling it.
 - The class registers itself app-wide as `FolderPicker` via a top-level
-  `global using FolderPicker = UnoVibe.Polyfills.<OS>.FolderPicker;` (the app never `#if`s this —
-  callers use the one polyfilled name, and the WASDK/classic branches live inside
-  `WindowsHelper`). `PickFolderResult` is a separate sibling file that owns its own
-  `global using PickFolderResult = ...;` alias — an alias can appear in only one file, so never
-  duplicate it.
+  `global using` alias (the app never `#if`s this — callers use the one polyfilled name).
+  An alias can appear in only one file, so never duplicate it.
 - **API shape mirrors the WASDK picker** with two deliberate deviations: the constructor takes the
-  app `Window` instead of a `WindowId`, and shared props are `SuggestedStartFolder` (exact path),
-  `SuggestedFolder` (fallback), `SuggestedStartLocation` (a `PickerLocationId`), `CommitButtonText`,
-  `Title`, `SettingsIdentifier` (macOS only). Methods: `PickSingleFolderAsync()` →
-  `Task<PickFolderResult?>` (null = user cancelled; native failures throw). Getters/setters are
-  plain .NET properties.
-- **Keep the per-OS dependency footprint minimal** — the whole point of the polyfills is that a
-  platform needs only what it already ships:
-  - Desktop **Linux** talks to the XDG desktop portal over the session D-Bus, so it needs
-    `Tmds.DBus.Protocol` + `Tmds.DBus.Generator` 0.92.0 — the same versions Uno's own X11 picker
-    uses (`~/.nuget/packages/tmds.dbus.*`). C# interfaces are generated from the minimal XML files
-    under `UnoVibe/Polyfills/Linux/dbus-interfaces/`
-    (`org.freedesktop.portal.FileChooser.xml`, `org.freedesktop.portal.Request.xml`, plus
-    `org.freedesktop.Notifications.xml` for toasts), wired to the `Tmds.DBus.Generator` source
-    generator via csproj `AdditionalFiles` items (Namespace `UnoVibe.Polyfills.Linux.DBus`,
-    `GenerateDBusTypes="true"`). The generated types land under
-    `UnoVibe/obj/<tfm>/generated/Tmds.DBus.Generator/.../UnoVibe.Polyfills.Linux.DBus.g.cs`.
+  app `Window` instead of a `WindowId`, and shared props/methods cover the subset the app uses
+  (`SuggestedStartFolder` exact path, `PickSingleFolderAsync()` → null on cancel; native failures
+  throw). Getters/setters are plain .NET properties.
+- **Keep the per-OS dependency footprint minimal** — a platform needs only what it already ships:
+  - Desktop **Linux** talks to the XDG desktop portal over the session D-Bus, so it needs the
+    Tmds.DBus packages (the same versions Uno's own X11 picker uses). C# interfaces are generated
+    from the minimal XML files under `UnoVibe/Polyfills/Linux/dbus-interfaces/`, wired to the
+    generator via csproj `AdditionalFiles` items.
   - Desktop **macOS** drives `NSOpenPanel` through the Objective-C runtime with
-    `[LibraryImport("libobjc.A.dylib")]` stubs in a `static partial` class (libobjc is part of
-    macOS, so **no new dependency**). Because the interop source generator emits
-    `unsafe` blocks, macOS desktop builds set `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` in
-    the csproj (Uno.Sdk enables unsafe only for the WinAppSDK target).
-- **Gating in the csproj is per-OS**, matching the `DefineConstants` conditions above: the Tmds
-  packages + `AdditionalFiles` are referenced only for desktop-Linux builds, and `AllowUnsafeBlocks`
-  only for desktop-macOS builds (both via the same `$(TargetFramework)`, `$(RuntimeIdentifier)`, and
-  `[MSBuild]::IsOSPlatform(...)` combination used for the constants — one ItemGroup each, not two).
+    `[LibraryImport("libobjc.A.dylib")]` stubs (libobjc ships with macOS, so **no new
+    dependency**). Because the interop source generator emits `unsafe` blocks, macOS desktop
+    builds set `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` in the csproj.
+- **Gating in the csproj is per-OS**, matching the `DefineConstants` conditions (see
+  "Compile-time OS constants" in AGENTS.md) — one ItemGroup each, not two.
 
 ## FolderPicker polyfill implementation notes
 
-- The canonical example is `UnoVibe/Polyfills/Linux/FolderPicker.cs` (the old
-  `SampleFolderPicker.cs` was deleted). Copy its `#if` + `global using` + ctor/props/Method shape
-  for a future polyfill.
-- **Linux D-Bus flow** (from Uno's `X11FolderPicker` in `uno/src/Uno.UI.Runtime.Skia.X11/...`):
-  session D-Bus → `org.freedesktop.portal.Desktop` `/org/freedesktop/portal/desktop` → check
-  `version >= 3` → subscribe `org.freedesktop.portal.Request`'s `Response` signal to the expected
-  request path **before** calling `OpenFile` (portal race warning) → `OpenFileAsync("",
-  title, options)` with `handle_token`, `accept_label`, `multiple=false`, `directory=true`,
-  and `current_folder` = the start path NUL-terminated in UTF-8 → validate the returned request path
-  equals the expected `.../request/<unique-names-sans-colons>/<handle_token>`, await the Response,
-  take `uris[0]` → `new Uri(...).LocalPath`. Response codes: 0 = success, 1 = user cancelled. Empty
-  `parent_window` means "no parent" — `WindowNative.GetWindowHandle` here only exposes the fake
-  `AppWindow.Id`, so always pass `""`.
-- **macOS flow**: build `NSOpenPanel` via `objc_msgSend` (`openPanel`,
-  `setCanChooseDirectories:`, `setCanChooseFiles:`, `setAllowsMultipleSelection:`); if the start
-  folder exists, `setDirectoryURL:` (from a `NSURL` built via `fileURLWithPath:`); run `runModal`
-  → 1 = OK, 0 = cancelled → `URL` → `path` → `UTF8String` → `Marshal.PtrToStringUTF8`.
-  **Always enqueue onto the main UI dispatcher before `runModal`** — AppKit crashes on reentrant
-  presentation from an in-flight pointer handler, and `DispatcherQueue.GetForCurrentThread()` wraps
-  Uno's main dispatcher (native `AppWindow.DispatcherQueue` is unimplemented on Skia), so call it
-  from the UI thread. When off the UI thread (no queue), run inline as a best effort.
+- Copy the Linux file's `#if` + `global using` + ctor/props/method shape for a future polyfill.
+- **Linux D-Bus flow** (mirrors Uno's `X11FolderPicker`): session D-Bus → portal `Desktop` →
+  check version → subscribe the `Response` signal to the expected request path **before** calling
+  `OpenFile` (portal race warning) → `OpenFileAsync` with `directory=true` and `current_folder`
+  = the start path → validate the returned request path, await the Response, take `uris[0]`.
+  Response codes: 0 = success, 1 = user cancelled. Empty `parent_window` means "no parent".
+- **macOS flow**: build `NSOpenPanel` via `objc_msgSend`; if the start folder exists, set it;
+  run modal → OK/cancelled → read the path string.
+  **Always enqueue onto the main UI dispatcher before presenting** — AppKit crashes on reentrant
+  presentation from an in-flight pointer handler. When off the UI thread (no queue), run inline
+  as a best effort.

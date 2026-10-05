@@ -2,28 +2,6 @@ using Microsoft.UI.Input;
 
 namespace UnoVibe.Controls;
 
-/// <summary>
-/// A plain-text suggestion box: a multiline <see cref="TextBox"/> that pops a suggestion flyout
-/// when the caret is inside a trigger token ("/" at the start of the input, or any other configured
-/// prefix such as "@" at the start of a token).
-///
-/// Self-contained and portable — to reuse in another QuickMarkup project, copy this file together
-/// with <c>SuggestionItem.cs</c> and <c>SuggestionBoxController.cs</c> and implement
-/// <see cref="ISuggestionProvider"/> for your data source. The control only depends on
-/// QuickMarkup + the WinUI types in <see cref="GlobalUsings"/>.
-///
-/// API (a trimmed-down, plain-text take on CommunityToolkit's RichSuggestBox):
-///   - <see cref="Prefixes"/> — trigger characters (default "/@").
-///   - <see cref="Providers"/> — suggestion sources; the control parses the token, queries every
-///     provider matching the trigger, and shows the merged results.
-///   - <see cref="SubmitRequested"/> — raised on bare Enter (without Shift) while the flyout is
-///     closed; Shift+Enter always inserts a newline. Hosts decide what to do (send the message) and
-///     call <see cref="Clear"/> to reset the box.
-///   - <see cref="CommandTriggered"/> — raised when a built-in command row is committed; the input
-///     is already cleared and the host runs the action.
-///   - Properties/events not listed here (e.g. <c>Text</c>, <c>PlaceholderText</c>, <c>MaxHeight</c>,
-///     <c>PreviewKeyDown</c>) are forwarded to the underlying <see cref="TextBox"/>.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     using Microsoft.UI;
@@ -86,40 +64,18 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
             }
         };
     }
-    /// <summary>Handler for <see cref="SubmitRequested"/>.</summary>
     public delegate Task SubmitHandler(SuggestBox sender, string text);
 
-    /// <summary>
-    /// Raised when the user presses Enter without Shift while the suggestion flyout is closed.
-    /// The text at the time of the key press is passed as the second argument.
-    /// </summary>
     public event SubmitHandler? SubmitRequested;
 
-    /// <summary>Handler for <see cref="CommandTriggered"/>.</summary>
     public delegate Task CommandTriggeredHandler(SuggestBox sender, SuggestionItem item);
 
-    /// <summary>
-    /// Raised when a built-in command row (an item with a non-null <see cref="SuggestionItem.Action"/>,
-    /// e.g. <c>/new</c>) is committed via Tab, Enter or a mouse click. The box has already cleared
-    /// its whole input; the host runs the action identified by the item's <c>Action</c> id.
-    /// </summary>
     public event CommandTriggeredHandler? CommandTriggered;
 
     private readonly ObservableCollection<SuggestionItem> _items = new();
 
-    /// <summary>Stale-response guard for the async suggestion fetch (bumped on every text change).</summary>
     private int _suggestSeq;
 
-    // Uno workaround state: TextBox's real key processing runs in OnPostKeyDown, which Uno invokes
-    // UNCONDITIONALLY during KeyDown even when the event was already marked Handled (see
-    // UIElement.RoutedEvents.cs "PostKeyDown"). So a handled Up/Down still moves the caret and a
-    // handled Enter still inserts a newline (AcceptsReturn). These flags neutralize those side effects:
-    //   - _suppressArrowSelection: set for Up/Down while the flyout is open; cancels the stray caret
-    //     move (which lands in Select → SelectionChanging) on the next dispatcher tick.
-    //   - _blockStrayTextChange: set when a key was consumed (Enter/Tab commit or bare-Enter submit);
-    //     cancels the stray character the TextBox inserts afterwards, until the next dispatcher tick.
-    //   - _programmaticTextChange: true only while WE write input.Text (commit / clear), so our own
-    //     changes are never cancelled by the guard above.
     private bool _suppressArrowSelection;
     private bool _blockStrayTextChange;
     private bool _programmaticTextChange;
@@ -128,30 +84,21 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
     private IReadOnlyList<ISuggestionProvider>? _providers;
     private SuggestionBoxController? _controller;
 
-    /// <summary>Suggestion sources for this box. Set before the user starts typing.</summary>
     public IReadOnlyList<ISuggestionProvider>? Providers
     {
         get => _providers;
         set
         {
             _providers = value;
-            _controller = null; // rebuilt lazily so a late set also picks up the current Prefixes
+            _controller = null;
         }
     }
 
     private SuggestionBoxController Controller =>
         _controller ??= new SuggestionBoxController(Providers ?? Array.Empty<ISuggestionProvider>(), Prefixes);
 
-    /// <summary>
-    /// Clears the input text. Includes an Uno workaround (briefly toggling <c>AcceptsReturn</c>) so a
-    /// multiline TextBox actually repaints empty.
-    /// </summary>
     public void Clear() => _ = SetTextProgrammaticallyAsync("");
 
-    /// <summary>
-    /// Includes an Uno workaround (briefly toggling <c>AcceptsReturn</c>) so a
-    /// multiline TextBox actually repaints empty.
-    /// </summary>
     public void SwapText(string newText, out string oldText)
     {
         oldText = input.Text;
@@ -175,15 +122,12 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         input.AcceptsReturn = true;
     }
 
-    // ── Suggestion pipeline ───────────────────────────────────────────────────────
-
-    /// <summary>Fired on every input change (typing, paste, programmatic edits). Re-parses the caret token.</summary>
     private void OnTextChanged(object sender, TextChangedEventArgs e) => _ = UpdateSuggestionsAsync();
 
     private async Task UpdateSuggestionsAsync()
     {
         var seq = ++_suggestSeq;
-        await Task.Delay(60); // light debounce; network-backed providers add their own latency
+        await Task.Delay(60);
         if (seq != _suggestSeq) return;
 
         var text = input.Text;
@@ -228,25 +172,14 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         SelectedIndex = -1;
     }
 
-    /// <summary>Resets selection state when the flyout dismisses without a commit (light dismiss / Escape).</summary>
     private void OnSuggestFlyoutClosed(object? sender, object e)
     {
         SelectedIndex = -1;
         _items.Clear();
     }
 
-    /// <summary>
-    /// Bounces focus straight back to the input whenever anything inside the suggestion flyout gets
-    /// focus (e.g. a pointer click on a row), so typing keeps working. Mirrors RichSuggestBox's
-    /// SuggestionList_GotFocus — combined with <c>ShowMode=Transient</c> (which never steals focus on
-    /// open, unlike Standard-mode flyouts) the editor keeps focus for the whole suggestion session.
-    /// </summary>
     private void OnSuggestionsGotFocus(object sender, RoutedEventArgs e) => input?.Focus(FocusState.Programmatic);
 
-    /// <summary>
-    /// Keyboard navigation for the suggestion flyout. Returns true when the key was consumed.
-    /// Shift+Enter still inserts a newline; Enter/Tab without Shift commit the selection.
-    /// </summary>
     private bool HandleSuggestionKey(KeyRoutedEventArgs e)
     {
         switch (e.Key)
@@ -266,7 +199,7 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
             case Windows.System.VirtualKey.Enter:
                 if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                     .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-                    return false; // Shift+Enter = newline
+                    return false;
                 e.Handled = true;
                 BlockStrayTextChange();
                 if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
@@ -292,12 +225,6 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
 
     private async Task CommitSuggestionAsync(SuggestionItem item) => CommitSuggestion(item);
 
-    /// <summary>
-    /// Commits a suggestion: insertable rows replace the typed token with the item's
-    /// <see cref="SuggestionItem.Insert"/> text; built-in command rows (non-null
-    /// <see cref="SuggestionItem.Action"/>) clear the whole input and raise
-    /// <see cref="CommandTriggered"/> so the host executes the action.
-    /// </summary>
     private void CommitSuggestion(SuggestionItem item)
     {
         if (input is null) return;
@@ -331,7 +258,6 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         input.Focus(FocusState.Programmatic);
     }
 
-    /// <summary>Pill color for a suggestion's kind badge: cmd = accent, skill = caution, file = success, agent = attention, built-in = neutral.</summary>
     private static Brush? KindBadgeBrush(string kind) => kind switch
     {
         "skill" => ThemeBrushes.Global.SystemCaution,
@@ -341,13 +267,6 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         _ => ThemeBrushes.Global.Accent,
     };
 
-    // ── Keyboard handling ─────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Attaches the guard handlers once. Lazy because they must be active before the TextBox's own
-    /// OnPostKeyDown processing runs for a given key, which is guaranteed since PreviewKeyDown
-    /// tunnels before KeyDown/PostKeyDown fire.
-    /// </summary>
     private void EnsureInputGuards()
     {
         if (_inputGuardsAttached || input is null) return;
@@ -356,11 +275,6 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         input.BeforeTextChanging += OnBeforeTextChanging;
     }
 
-    /// <summary>
-    /// Uno bug workaround (see field docs): a handled Up/Down still makes TextBox move the caret via
-    /// its unconditional OnPostKeyDown processing. That move lands in Select → SelectionChanging, so
-    /// cancelling it here keeps the caret put while the suggestion highlight moves.
-    /// </summary>
     private void OnSelectionChanging(TextBox sender, TextBoxSelectionChangingEventArgs e)
     {
         if (_suppressArrowSelection)
@@ -370,21 +284,12 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         }
     }
 
-    /// <summary>
-    /// Uno bug workaround: a handled Enter still inserts a newline (AcceptsReturn) via OnPostKeyDown.
-    /// Cancels any non-programmatic text change that lands while a key was consumed.
-    /// </summary>
     private void OnBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs e)
     {
         if (_blockStrayTextChange && !_programmaticTextChange)
             e.Cancel = true;
     }
 
-    /// <summary>
-    /// Opens the "consumed key" window: blocks stray TextBox insertions from the same key's
-    /// OnPostKeyDown processing, then self-closes on the next dispatcher tick (after that processing
-    /// has already run — it is synchronous within the same dispatcher turn).
-    /// </summary>
     private void BlockStrayTextChange()
     {
         _blockStrayTextChange = true;

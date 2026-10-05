@@ -9,7 +9,6 @@ class UnoVibeProviders : IDisposable
     public ToastsProvider Toasts { get; }
     public ModelsProvider Models { get; }
     public Window HostWindow { get; }
-    // TODO [Medium]: Sessions + Models missing from Disposables — SessionsStateProvider never disposed, per-stream SSE delegates leak. Add or document why not.
     IDisposable[] Disposables => [Connection, Events, Toasts];
 
     public UnoVibeProviders(OpencodeConnection connection, Window hostWindow)

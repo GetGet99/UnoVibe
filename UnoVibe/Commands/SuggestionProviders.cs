@@ -2,7 +2,6 @@ using UnoVibe.Integration;
 
 namespace UnoVibe.Controls;
 
-/// <summary>Shared case-insensitive substring filter used by the server providers.</summary>
 internal static class SuggestionFilter
 {
     public static SuggestionItem[] Filter(IReadOnlyList<SuggestionItem> items, string query)
@@ -12,23 +11,10 @@ internal static class SuggestionFilter
     }
 }
 
-/// <summary>
-/// An app-level built-in slash command (TUI parity where opencode has an equivalent —
-/// <c>/new</c>, <c>/models</c>, ... — plus UnoVibe-only ones like <c>/explorer</c>):
-/// discovered like server commands (only when <c>/</c> is the first input character) but executed
-/// entirely client-side. Committing one clears the composer and runs the action — it never inserts
-/// text or reaches the model.
-/// </summary>
 public sealed record BuiltInCommand(string Name, string Description);
 
-/// <summary>
-/// The built-in command catalog plus parsing helpers. The TUI's remaining built-ins
-/// (/diff /exit /help /move /sessions /skills /status /themes) are documented as not yet
-/// implemented in agents-doc/suggest-box.md.
-/// </summary>
 static class BuiltInCommands
 {
-    /// <summary>The catalog shown by the suggestion flyout (alphabetical).</summary>
     public static readonly IReadOnlyList<BuiltInCommand> All = new BuiltInCommand[]
     {
         new("agents", "Open the agent/mode picker"),
@@ -49,16 +35,9 @@ static class BuiltInCommands
         new("variants", "Open the reasoning-variant picker"),
     };
 
-    /// <summary>Case-insensitive lookup by name (without the leading slash).</summary>
     public static BuiltInCommand? Find(string name) =>
         All.FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// Parses submitted composer text as a built-in command: the first token of the first line must
-    /// be <c>/name</c> for a catalog name (arguments after it are allowed but ignored, TUI-style).
-    /// Returns false when the text is not an exact built-in command invocation, so ordinary prompts
-    /// and server commands are unaffected.
-    /// </summary>
     public static bool TryParse(string? text, out BuiltInCommand command)
     {
         command = default!;
@@ -71,19 +50,9 @@ static class BuiltInCommands
         return true;
     }
 
-    /// <summary>True when a server-side command name would collide with a built-in (built-in wins).</summary>
     public static bool IsBuiltIn(string name) => Find(name) is not null;
 }
 
-/// <summary>
-/// App built-in slash-command provider (<see cref="BuiltInCommands"/>). Local data — no server
-/// round-trip. Rows are kind "builtin" with a non-null <see cref="SuggestionItem.Action"/> id and
-/// are <see cref="SuggestionItem.InputStartOnly"/>, so they appear only when <c>/</c> is the first
-/// character; committing clears the input and runs the action instead of inserting text.
-/// An optional availability predicate hides commands that make no sense right now (e.g.
-/// <c>/interrupt</c> only while the active session is busy) — committing one that slipped in
-/// anyway still degrades gracefully (warning toast / no-op).
-/// </summary>
 sealed class BuiltInCommandSuggestionProvider : ISuggestionProvider
 {
     private readonly Func<string, bool>? _isAvailable;
@@ -113,17 +82,6 @@ sealed class BuiltInCommandSuggestionProvider : ISuggestionProvider
     }
 }
 
-/// <summary>
-/// Server slash-command provider — lists every command the opencode server knows for the active
-/// directory (legacy <c>GET /command?directory=</c>, falling back to <c>GET /api/command</c>):
-/// built-ins (<c>init</c>/<c>review</c>), user-defined commands, MCP prompts, and any skill entries
-/// the server folds in (<c>source == "skill"</c>). Mirrors the TUI's command list
-/// (autocomplete.tsx <c>commands</c>): MCP entries get a <c>:mcp</c> display suffix only (the insert
-/// stays clean <c>/name </c>); skills are kept under <c>/</c> as a deliberate UnoVibe extra (the TUI
-/// skips them). Returns an empty list when the server is unreachable or returns nothing — the box
-/// then simply shows no suggestions. Commands are <see cref="SuggestionItem.InputStartOnly"/> so they
-/// only appear when <c>/</c> is the first character, like the TUI.
-/// </summary>
 sealed class ServerCommandSuggestionProvider : ISuggestionProvider
 {
     public char Trigger => '/';
@@ -153,8 +111,6 @@ sealed class ServerCommandSuggestionProvider : ISuggestionProvider
             var items = new List<SuggestionItem>(commands.Count);
             foreach (var command in commands)
             {
-                // Built-ins own their names client-side (same rule as the server dropping a skill
-                // whose name is taken), so "/new" always runs the app action, never a user command.
                 if (BuiltInCommands.IsBuiltIn(command.Name)) continue;
                 var isSkill = command.Source == "skill";
                 var isMcp = command.Source == "mcp";
@@ -179,12 +135,6 @@ sealed class ServerCommandSuggestionProvider : ISuggestionProvider
     }
 }
 
-/// <summary>
-/// Server skill provider — lists skills for the active directory (legacy <c>GET /skill?directory=</c>,
-/// falling back to <c>GET /api/skill</c>). Returns an empty list when the server is unreachable or
-/// returns nothing — the box then simply shows no suggestions. Skills are insertable anywhere (not
-/// <see cref="SuggestionItem.InputStartOnly"/>), matching the old mock behavior.
-/// </summary>
 sealed class ServerSkillSuggestionProvider : ISuggestionProvider
 {
     public char Trigger => '/';
@@ -229,12 +179,6 @@ sealed class ServerSkillSuggestionProvider : ISuggestionProvider
     }
 }
 
-/// <summary>
-/// Server file provider (<c>@</c>) — fuzzy file search via <c>GET /api/fs/find</c>. The server
-/// pre-filters and pre-ranks results, so results are NOT re-sorted or re-filtered here. Directories
-/// insert a trailing slash so a follow-up commit keeps browsing into them. Empty list when the server
-/// is unreachable or returns nothing.
-/// </summary>
 sealed class ServerFileSuggestionProvider : ISuggestionProvider
 {
     public char Trigger => '@';

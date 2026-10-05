@@ -9,30 +9,6 @@ using MarkdigInline = Markdig.Syntax.Inlines.Inline;
 
 namespace UnoVibe.Controls;
 
-/// <summary>
-/// A self-contained Markdown renderer for QuickMarkup/WinUI. Renders a markdown string as a
-/// vertical stack of block elements (headings, paragraphs with inline formatting, fenced/indented
-/// code, lists, block quotes, thematic breaks, and raw source for tables/HTML). Inline markup
-/// (bold/italic/underline, inline code, links, autolinks) is built from Markdig's inline AST into
-/// TextBlock Inlines (Run / LineBreak / Hyperlink) — there is no RichTextBlock on Uno, so each block
-/// is its own TextBlock stacked in a StackPanel.
-///
-/// Streaming-friendly: the component re-parses the full <see cref="Text"/> on change (Markdig parses
-/// at ~8 GB/s, so this is microseconds) and reconciles the rendered block stack by content key,
-/// reusing every element whose key is unchanged and only rebuilding from the first divergent block —
-/// so appending to the tail of a message rebuilds just the last block's element. Markdig also handles
-/// unfinished input correctly (an open code fence stays a code block, unclosed inline markers stay
-/// literal), which matches how the web client "heals" partial markdown while a turn streams.
-///
-/// Self-contained and portable: to reuse in another QuickMarkup project, copy this file together with
-/// <c>AppSymbolIcon.cs</c> and add the Markdig + ColorCode.Core packages. It only depends on
-/// QuickMarkup + Markdig + ColorCode.Core + the WinUI types in the app's global usings.
-///
-/// API:
-///   - <see cref="Text"/> — the markdown source. Bind reactively (e.g. `Text=`part.Text``).
-///   - <see cref="PlainMode"/> — toggle between Markdown and raw-text rendering. The host owns the
-///     toggle UI (UnoVibe puts a per-message button in the message action row) and flips this.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     using Microsoft.UI.Xaml.Controls;
@@ -64,18 +40,12 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
         PlainModeProp.Watch(_ => Render());
     }
 
-    // ── render model ─────────────────────────────────────────────────
-
     private sealed record MdBlock(string Key, Func<UIElement> Factory);
 
     private void Render()
     {
         if (blocksHost is null) return;
 
-        // Brushes are baked into elements at build time (runs, inline-code accent, table fills),
-        // so a theme flip would otherwise leave stale colors. Hook the host's ActualThemeChanged
-        // once and re-render; the per-block keys below carry the theme so the reconcile treats
-        // every block as divergent and rebuilds them all with fresh brushes.
         if (!_themeHooked)
         {
             _themeHooked = true;
@@ -119,8 +89,6 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
             var block = blocks[i];
             if (block is HeadingBlock or ParagraphBlock)
             {
-                // Contiguous flow blocks are merged into a single TextBlock (joined with
-                // LineBreak) so text can be selected across lines/paragraphs at once.
                 int start = i;
                 int startLine = block.Line;
                 int endLine = startLine;
@@ -175,8 +143,6 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
         _ => "block",
     };
 
-    // ── block renderers ──────────────────────────────────────────────
-
     private UIElement FlowTextBlock(IReadOnlyList<MarkdigBlock> flowBlocks)
     {
         var tb = new TextBlock
@@ -207,9 +173,6 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
     private UIElement RenderCode(CodeBlock code)
     {
         var text = code.Lines.ToString();
-        // No explicit Foreground: unscoped tokens (plain identifiers) emit Foreground=null runs
-        // that inherit this TextBlock's brush — baking one here froze them to the build-time
-        // theme (black-on-dark after a flip). Left unset, Uno's theme walk keeps it current.
         var tb = new TextBlock
         {
             FontFamily = CodeFontsHelper.Current,
@@ -217,8 +180,6 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
         };
-        // Fenced code carries its language in Info (e.g. ```ts / ```csharp); indented code has
-        // none. Colorize via ColorCode when we can resolve the language, else plain text.
         var info = code is FencedCodeBlock fenced ? fenced.Info : null;
         if (!CodeHighlighter.Colorize(tb, text, info))
             tb.Text = text;
@@ -460,8 +421,6 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
         IsTextSelectionEnabled = true,
     };
 
-    // ── inline rendering ─────────────────────────────────────────────
-
     private readonly record struct InlineStyle(bool Bold = false, bool Italic = false, bool Code = false, bool Underline = false, double FontSize = 0, bool SemiBold = false);
 
     private void BuildInlines(ContainerInline? container, InlineCollection target, InlineStyle style)
@@ -507,8 +466,6 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 break;
 
             case AutolinkInline auto:
-                // Email autolinks (<foo@bar.com>) carry the bare address; prefix mailto: so the
-                // Hyperlink navigates correctly while the displayed text stays the address.
                 var autoUrl = auto.IsEmail && !auto.Url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
                     ? "mailto:" + auto.Url
                     : auto.Url;
@@ -550,14 +507,10 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
         if (style.Code)
         {
             run.FontFamily = CodeFontsHelper.Current;
-            // Secondary accent (hue-shifted from the primary) so snippets read distinct from
-            // accent-colored links; falls back to the attention color when no solid accent exists.
             run.Foreground = AccentPaletteHelper.InlineCodeBrush(_theme) ?? _theme.SystemAttention;
         }
         target.Add(run);
     }
-
-    // ── helpers ──────────────────────────────────────────────────────
 
     private static int BlockRawStart(string text, MarkdigBlock block) => LineStart(text, block.Line);
 

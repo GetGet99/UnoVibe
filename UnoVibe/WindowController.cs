@@ -5,11 +5,6 @@ using UnoVibe.Pages.Main;
 
 namespace UnoVibe;
 
-/// <summary>
-/// Tracks one top-level <see cref="MicaWindow"/> together with its own
-/// <see cref="ChatStoreToBeRemoved"/>. This lets each window scope to an independent
-/// (or shared) opencode serve session instead of a single global store.
-/// </summary>
 sealed class WindowController
 {
     public event Action? Disposed;

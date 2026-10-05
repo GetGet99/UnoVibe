@@ -27,10 +27,6 @@ static class ToolViewShared
         return $"{days}d {h}h";
     }
 
-    /// <summary>
-    /// True while a tool part is not finished: either the model is still streaming
-    /// the tool-call arguments ("pending") or the tool call is executing ("running").
-    /// </summary>
     public static bool Busy(ToolCallPartItem p) => p.IsBusy;
 
     public static string Shell(ToolCallPartItem p) =>
@@ -38,13 +34,6 @@ static class ToolViewShared
             ? "$ " + command
             : p.TitleOrDisplay("Running command...");
 
-    /// <summary>
-    /// Workdir label for a shell tool card: the working directory relative to the session's
-    /// directory ("sub/dir"), or "" when there is nothing to show — no workdir in the input,
-    /// no known session directory, or the workdir IS the session directory. Paths outside
-    /// the session directory fall back to the raw workdir. Mirrors the TUI's
-    /// <c>workdirDisplay</c> (relative-to-location, hidden when it resolves to ".").
-    /// </summary>
     public static string ShellWorkdir(ToolCallPartItem p, string? referenceDir)
     {
         var workdir = p.ToolWorkdir;
@@ -55,7 +44,7 @@ static class ToolViewShared
                 ? Path.GetFullPath(workdir)
                 : Path.GetFullPath(Path.Combine(referenceDir, workdir));
             var relative = Path.GetRelativePath(Path.GetFullPath(referenceDir), full);
-            if (relative.Length == 0 || relative == ".") return ""; // same folder as the session
+            if (relative.Length == 0 || relative == ".") return "";
             if (relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar))
                 return relative;
         }
@@ -96,7 +85,6 @@ static class ToolViewShared
     public static string QuestionTitle(ToolCallPartItem p) =>
         p.TitleOrDisplay("Asking question...");
 
-    /// <summary>Friendly line for a question tool that ended in an error (e.g. the user dismissed it).</summary>
     public static string QuestionError(ToolCallPartItem p)
     {
         var error = p.ToolError;
@@ -152,11 +140,6 @@ static class ToolViewShared
     public static string Write(ToolCallPartItem p) =>
         "← " + (p.ToolFilePath is { Length: > 0 } path ? "Write " + path : p.TitleOrDisplay("Writing"));
 
-    /// <summary>
-    /// Edit title with an added/changed line count derived from the unified diff
-    /// (the TUI itself does not surface these numbers, but the diff has enough
-    /// information to compute them).
-    /// </summary>
     public static string EditTitle(ToolCallPartItem p)
     {
         var (added, removed) = DiffStats(p.Diff);
@@ -181,30 +164,20 @@ static class ToolViewShared
     public static string WriteTitle(ToolCallPartItem p)
     {
         var title = Write(p);
-        // The written file's content lives in input.content (ToolContent); fall back to the
-        // input/output JSON when an older server only surfaces those.
         var source = p.ToolContent is { Length: > 0 } content ? content : p.ToolOutput is { Length: > 0 } output ? output : p.ToolInput;
         var lineCount = CountLines(source);
         return lineCount > 0 ? $"{title}  ({lineCount} lines)" : title;
     }
 
-    /// <summary>
-    /// Header for an <c>apply_patch</c> card: the touched file for a single-file patch,
-    /// "N files" otherwise, "Preparing patch..." while in flight. Mirrors the web client's
-    /// "Patch" card title/subtitle and the TUI's pending label.
-    /// </summary>
     public static string Patch(ToolCallPartItem p)
     {
         if (p.PatchFiles.Count == 1) return "← Patch " + p.PatchFiles[0].RelativePath;
         if (p.PatchFiles.Count > 1) return $"← Patch {p.PatchFiles.Count} files";
         if (Busy(p)) return "Preparing patch...";
-        // Server without per-file metadata: fall back to the first line of the tool title
-        // (the "Success. Updated the following files:..." summary).
         var title = p.TitleOrDisplay("Patch").Split('\n')[0].Trim();
         return title.Length > 0 ? title : "Patch";
     }
 
-    /// <summary>Per-file label mirroring the TUI's "Created/Deleted/Moved/Patched" block titles.</summary>
     public static string PatchFileLine(Integration.Events.ApplyPatchFileMeta f)
     {
         var label = f.Type switch
@@ -232,14 +205,12 @@ static class ToolViewShared
     public static string Generic(ToolCallPartItem p) =>
         "⚙ " + p.TitleOrDisplay("Running tool...");
 
-    /// <summary>Title for a subagent-spawning <c>task</c> tool call. The state.title is the model's short description.</summary>
     public static string Task(ToolCallPartItem p)
     {
         var name = p.TitleOrDisplay("Delegating...");
         return "✳ " + name;
     }
 
-    /// <summary>Status line for a <c>task</c> tool card: agent type + live state + open hint.</summary>
     public static string TaskStatus(ToolCallPartItem p)
     {
         var type = p.ToolSubagentType is { Length: > 0 } subagentType ? subagentType : "subagent";
@@ -288,12 +259,6 @@ static class ToolViewShared
         return CollapseLines(value, ShellMaxLines, ShellMaxChars);
     }
 
-    /// <summary>
-    /// Mirrors the TUI's collapseToolOutput: keeps at most <paramref name="maxLines"/>
-    /// lines and at most <paramref name="maxChars"/> characters in the preview, so a
-    /// single huge line (e.g. minified JSON) still gets collapsed before it hits the
-    /// layout engine (which shapes the whole string regardless of TextBlock.MaxLines).
-    /// </summary>
     public static (string Output, bool Overflow) CollapseLines(string output, int maxLines, int maxChars)
     {
         var lines = output.Split('\n');
@@ -307,11 +272,6 @@ static class ToolViewShared
         return (preview + "\n…", true);
     }
 
-    /// <summary>
-    /// Collapse helper for line-numbered views (DiffView/CodeView): returns the preview WITHOUT
-    /// the trailing "…" marker (the host renders it as a separate muted line so it isn't numbered
-    /// as diff/code content) plus an overflow flag.
-    /// </summary>
     public static (string Preview, bool Overflow) CollapsePreview(string output, int maxLines, int maxChars)
     {
         var lines = output.Split('\n');

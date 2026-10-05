@@ -2,9 +2,6 @@ using System.Text.Json;
 
 namespace UnoVibe.Services;
 
-/// <summary>
-/// Only in use for SessionStore and ChatStore. Will be removed
-/// </summary>
 [Obsolete("This class will be removed", error: true)]
 internal static class OpencodeClientExtensionsToBeRemoved
 {

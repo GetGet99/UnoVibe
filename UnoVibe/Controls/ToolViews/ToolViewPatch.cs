@@ -1,12 +1,5 @@
 namespace UnoVibe.Controls.ToolViews;
 
-/// <summary>
-/// Renders an <c>apply_patch</c> tool call (OpenAI-style models emit this instead of
-/// <c>edit</c>). Mirrors the TUI's per-file "Created/Deleted/Moved/Patched" blocks and
-/// the web client's "Patch" card: one bordered block per patched file with a label,
-/// add/delete counts, and the unified diff. Falls back to the raw combined diff when the
-/// server omits the per-file metadata (older servers only surface <c>state.metadata.diff</c>).
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;

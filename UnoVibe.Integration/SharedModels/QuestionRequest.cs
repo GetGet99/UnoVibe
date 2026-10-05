@@ -1,6 +1,5 @@
 namespace UnoVibe.Integration;
 
-
 /// <summary>One question inside a <see cref="PendingQuestion"/>.</summary>
 public sealed class QuestionInfo
 {

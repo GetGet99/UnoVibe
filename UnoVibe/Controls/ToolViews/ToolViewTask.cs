@@ -1,11 +1,5 @@
 namespace UnoVibe.Controls.ToolViews;
 
-/// <summary>
-/// Renders a subagent-spawning <c>task</c> tool call as a clickable card. The card shows the
-/// task description, the subagent type, and a live status (from the part's streamed state);
-/// clicking it opens the subagent's own session (part.state.metadata.sessionId). Subagent
-/// sessions are hidden from the sidebar, so this card is the entry point to view them.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;

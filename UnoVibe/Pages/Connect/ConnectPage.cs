@@ -4,16 +4,6 @@ using UnoVibe.Models.Startup;
 
 namespace UnoVibe.Pages.Connect;
 
-/// <summary>
-/// Shown at startup when no launch-target argument was given, and used as the host for a
-/// command-line launch target (folder path or server URL) while it connects. Lets the user
-/// either connect to an existing opencode server or launch a local `opencode serve` from
-/// a picked folder, then navigates to the main chat page. Recent folders and server
-/// URLs are listed VSCode-style (<see cref="RecentListPanel"/>); the folder-security
-/// toggle on the right (<see cref="ConnectPanel"/>) is the single source of truth for
-/// folder passwords (recent or new). The shared form/security state is provided so the
-/// panels stay bidirectionally in sync with the page.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Services;
     using QuickMarkup.WinUI;
@@ -60,8 +50,6 @@ namespace UnoVibe.Pages.Connect;
                             <ConnectPanel OpenFolderRequested+=`PickFolderAsync` ConnectToUrlRequested+=`ConnectToUrlAsync` />
                         </Grid>
                     </Grid>
-                    // we don't have CLI command installed for user yet.
-                    // <TextBlock Text="Tip: launch with a folder path or server URL to open it directly, e.g. `unovibe ~/project` or `unovibe http://localhost:4096`." FontSize=11 Foreground=`theme.TertiaryText` HorizontalAlignment=Center TextWrapping=Wrap />
 
                     await `OpencodeServeProcess.GetExecutableStatus()`
                     with {
@@ -92,14 +80,8 @@ namespace UnoVibe.Pages.Connect;
     """)]
 partial class ConnectPage : IQuickMarkupComponent<Page>
 {
-    /// <summary>Owning window; set by the consumer before Init so it's ready for use.</summary>
     public WindowController Controller { get; private set; } = null!;
 
-    /// <param name="startup">
-    /// Command-line launch target (set by the consumer before the constructor method runs).
-    /// When present, the page immediately runs the folder/serve or server connect flow and
-    /// navigates to the main chat page on success — the VSCode-style `UnoVibe /path` open.
-    /// </param>
     [QuickMarkupConstructor]
     private void Ctor(WindowController controller, StartupArgs? startup)
     {
@@ -108,21 +90,15 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         SettingsStore.Load();
         Init(controller, startup);
 
-        // Restore the persisted folder-security settings (the source of truth for folder passwords).
-        // A previously-confirmed custom password also pre-fills the confirm box so the stored value
-        // passes the match check when opening a folder without retyping it.
         UseGeneratedPassword = RecentConnectionsStore.UseGeneratedPassword;
         SaveFolderPassword = RecentConnectionsStore.SaveFolderPassword;
         CustomPassword = RecentConnectionsStore.CustomPassword;
         if (SaveFolderPassword && CustomPassword.Length > 0)
             ConfirmPassword = CustomPassword;
 
-        // Keep the centered content tall enough to fill the viewport so it stays vertically centered
-        // while still scrolling when the window is small.
         scrollHost.ViewChanged += (_, _) => UpdateContentMinHeight();
         scrollHost.SizeChanged += OnScrollHostSizeChanged;
 
-        // Pre-fill the server password box from the standard environment variable.
         ServerPassword = Environment.GetEnvironmentVariable(OpencodeHelper.PasswordEnvVar) ?? "";
 
         if (startup is { Kind: not LaunchKind.None })
@@ -131,21 +107,14 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         }
     }
 
-    /// <summary>Viewport width (in pixels) below which the recent/connect panels switch from
-    /// the side-by-side two-column layout to the stacked small-screen layout.</summary>
     private const double CompactBreakpoint = 820;
 
-    /// <summary>Keeps the centered content tall enough to fill the viewport so it stays vertically
-    /// centered while still scrolling when the window is small.</summary>
     private void UpdateContentMinHeight()
     {
         var h = scrollHost.ViewportHeight;
         if (Math.Abs(content.MinHeight - h) > 0.5) content.MinHeight = h;
     }
 
-    /// <summary>Re-fits the content for the current viewport size: keeps the centered block tall
-    /// enough to fill the viewport and switches the recent/connect panels between the side-by-side
-    /// desktop layout and the stacked small-screen layout.</summary>
     private void OnScrollHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
         UpdateContentMinHeight();
@@ -153,16 +122,9 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         if (compact != IsCompact) IsCompact = compact;
     }
 
-    /// <summary>Connects to an existing server URL and records it in the recent list.
-    /// A blank password falls back to the OPENCODE_SERVER_PASSWORD environment variable.</summary>
     private async Task ConnectToUrlAsync() =>
         await ConnectCoreAsync(Url, ServerPassword.Trim() is { Length: > 0 } p ? p : null);
 
-    /// <summary>
-    /// Connects to an existing server URL and records it in the recent list on success.
-    /// <paramref name="password"/> null → the client falls back to OPENCODE_SERVER_PASSWORD;
-    /// "" → connect without a password; non-empty → use it.
-    /// </summary>
     private async Task ConnectCoreAsync(string url, string? password)
     {
         var clean = url.Trim();
@@ -178,8 +140,6 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
 
         if (connection.ConnectionStatus == "Connected")
         {
-            // Never persist the password itself — only record that the server needs one,
-            // so a later click on the recent entry can prompt for it.
             RecentConnectionsStore.UpsertServer(clean, password is { Length: > 0 });
             Controller.ShowMain(connection);
         }
@@ -189,11 +149,6 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         }
     }
 
-    /// <summary>
-    /// Resolves the folder password from the UI security settings (the source of truth):
-    /// generated strong password, or a validated custom password. Returns Ok=false (with a
-    /// status message) when a custom password is missing or doesn't match its confirmation.
-    /// </summary>
     private (bool Ok, string? Password) ResolveUiFolderPassword()
     {
         if (UseGeneratedPassword) return (true, null);
@@ -210,15 +165,10 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         return (true, CustomPassword);
     }
 
-    /// <summary>
-    /// Picks a folder and immediately launches `opencode serve` there using the current
-    /// folder-security settings (the source of truth), saving a click.
-    /// </summary>
     private async Task PickFolderAsync()
     {
         try
         {
-            // TODO [Low]: Lost start directory (was ServerDirectory, now null) — dialog opens at arbitrary path. Restore or document portal current_folder reason.
             var path = await WindowsHelper.PickFolderAsync(Controller.Window, startPath: null);
             if (path is null) return;
             var (ok, password) = ResolveUiFolderPassword();
@@ -235,12 +185,6 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         }
     }
 
-    /// <summary>
-    /// Launches a local `opencode serve` in <paramref name="folder"/> and connects.
-    /// <paramref name="password"/> null → generate a strong password; "" → no password;
-    /// non-empty → use it. On success the folder is recorded in the recent list.
-    /// Returns true when connected.
-    /// </summary>
     private async Task<OpencodeConnection?> StartServeCoreAsync(string folder, string? password)
     {
         Connecting = true;
@@ -270,11 +214,6 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         return connection;
     }
 
-    /// <summary>
-    /// Runs a command-line launch target: a folder starts `opencode serve` there (the folder
-    /// is created if missing) and a server URL connects directly. On success the main chat
-    /// page is shown; on failure the ConnectPage stays with the error in its status line.
-    /// </summary>
     private async Task RunStartupAsync(StartupArgs startup)
     {
         switch (startup.Kind)
@@ -289,9 +228,6 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         }
     }
 
-    /// <summary>
-    /// Re-opens a recent entry: folder → serve using the current folder-security settings; server → direct connect.
-    /// </summary>
     private async Task OnOpenRecent(RecentConnection item)
     {
         if (Connecting) return;
@@ -307,12 +243,11 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
         }
         else
         {
-            // A password-protected server's password is never stored — ask for it on reopen.
             string? password = null;
             if (item.RequiresPassword)
             {
                 password = await PromptForServerPasswordAsync(item.Detail);
-                if (password is null) return; // cancelled
+                if (password is null) return;
                 if (password.Length == 0) password = null;
             }
             await ConnectCoreAsync(item.Detail, password);
@@ -321,11 +256,6 @@ partial class ConnectPage : IQuickMarkupComponent<Page>
 
     private void OnRemoveRecent(string key) => RecentConnectionsStore.Remove(key);
 
-    /// <summary>
-    /// Asks the user for the password of a password-protected server URL that has no stored
-    /// password (only the <c>RequiresPassword</c> flag). Returns the entered password, an empty
-    /// string when the user wants to try without one, or null when the dialog is cancelled.
-    /// </summary>
     private async Task<string?> PromptForServerPasswordAsync(string url)
     {
         var box = new PasswordBox { PlaceholderText = "Server password", Width = 300 };

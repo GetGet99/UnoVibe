@@ -1,11 +1,5 @@
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Renders one non-synthetic text part as a chat bubble with a per-part action row underneath:
-/// a markdown/plain toggle (both roles) and a "revert to here" button (user messages only).
-/// The toggle state is internal to this component, so it only affects this bubble. The bubble
-/// and action row align right for user messages and left for assistant messages.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -58,30 +52,17 @@ namespace UnoVibe.Pages.Chat;
     """)]
 partial class MessageTextPart : IQuickMarkupComponent
 {
-    /// <summary>Handler for <see cref="RevertRequested"/>.</summary>
     public delegate Task RevertHandler(MessageItem message);
 
-    /// <summary>
-    /// Raised when the user clicks the per-message "revert to here" button under a user message.
-    /// The subscriber performs the actual revert (ChatStore) and restores the prompt into the
-    /// composer. Matches the web client's per-message revert action / TUI message dialog.
-    /// </summary>
     public event RevertHandler? RevertRequested;
 
-    /// <summary>Handler for <see cref="ForkRequested"/>.</summary>
     public delegate Task ForkHandler(MessageItem message);
 
-    /// <summary>
-    /// Raised when the user clicks the per-message "fork from here" button under a user message.
-    /// The subscriber forks the conversation at that message (ChatStore), switches to the new
-    /// session, and restores the prompt into the composer. Matches the web client / TUI fork.
-    /// </summary>
     public event ForkHandler? ForkRequested;
 
     [QuickMarkupConstructor]
     private void Ctor()
     {
-        // User messages default to plain (accent bubble); assistant messages to markdown.
         PlainMode = Message?.Role == "user";
         Init();
     }

@@ -2,9 +2,6 @@ using QuickMarkup.Infra.Collections;
 
 namespace UnoVibe.Pages.Main;
 
-/// <summary>
-/// Left sidebar listing sessions grouped by directory, with per-group "new session" buttons.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -49,7 +46,7 @@ namespace UnoVibe.Pages.Main;
             </ScrollViewer>
 
             <McpStatusView />
-            
+
             <Border Grid.Row=2 Padding=`new Thickness(12, 8, 12, 10)` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(0, 1, 0, 0)`>
                 <Grid ColumnDefinitions=<>
                     <ColumnDefinition />
@@ -80,19 +77,12 @@ partial class SessionSidebar : IQuickMarkupComponent
 {
     Thickness SessionSidebarBorder =>
 #if WASDK
-        // WASDK title bar have the same mica color as body so would make sense to have top border too
         new(0, 1, 1, 0)
 #else
         new(0, 0, 1, 0)
 #endif
         ;
 
-    /// <summary>
-    /// Opens a folder picker and starts a new session in the picked folder. The session is
-    /// created lazily on the first message send, so no empty server-side session is produced.
-    /// The folder is registered immediately so the sidebar shows its group (with existing
-    /// sessions, or a "No sessions yet" line) right away.
-    /// </summary>
     private async Task OpenFolderAndStartSessionAsync()
     {
         try
@@ -101,7 +91,6 @@ partial class SessionSidebar : IQuickMarkupComponent
             if (path is null) return;
             Sessions.PrepareNewSession(path);
             await Sessions.AddDirectoryAsync(path);
-            // Small-screen view switching: opening a folder lands in its new chat view.
             IsSidebarView = false;
         }
         catch (Exception ex)

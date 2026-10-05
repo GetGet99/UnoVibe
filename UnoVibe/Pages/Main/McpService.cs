@@ -4,9 +4,6 @@ namespace UnoVibe.Pages.Main;
 
 class McpService
 {
-    // TODO [Medium]: View-owned service with _ = Task.Run — Provider-shaped (window-scoped like Sessions/Events). Move to Providers/ and use AsyncHelper.RunAndReport.
-    // Compact "N active, M inactive, K error" summary for the collapsed MCP sidebar header.
-    // inactive = explicitly disabled; error = failed/needs_auth/needs_client_registration (mutually exclusive).
     public Reference<string> SummaryProp { get; } = new("");
     public string Summary
     {
@@ -14,9 +11,7 @@ class McpService
         private set => SummaryProp.Value = value;
     }
 
-    // Guards concurrent connect/disconnect requests (one toggle at a time).
     private volatile bool _mcpBusy;
-    // Background poll is only active while the sidebar MCP section is expanded.
     private volatile bool _polling;
     public bool Polling
     {
@@ -38,7 +33,7 @@ class McpService
         Events = events;
         Toasts = toasts;
         Dispatcher= dispatcher;
-        
+
         Events.RegisterMcpToolsChanged(Directory, McpToolsChangedHandler);
         _ = Task.Run(() => McpPollLoopAsync());
         _ = RefreshMcpStatusAsync();
@@ -49,17 +44,8 @@ class McpService
     }
 
     public ObservableCollection<McpServerItem> Servers { get; } = [];
-    // O(1) lookup index for Servers by name, kept in sync with the ObservableCollection
-    // so ApplyMcpStatus can reconcile in place instead of a Clear+re-Add rebuild.
     private readonly Dictionary<string, McpServerItem> _mcpServersByName = new();
 
-
-    /// <summary>
-    /// Refreshes the MCP server list from GET /mcp for the active session's directory.
-    /// MCP status is per workspace directory (instance), not per session, so the sidebar
-    /// reflects whichever session is currently open. When there is no session yet, falls
-    /// back to the pending/current directory.
-    /// </summary>
     public async Task RefreshMcpStatusAsync()
     {
         if (!(await Client.GetMcpStatusAsync(Directory, ct)).TryGetValue(out var status, out var error))
@@ -78,13 +64,6 @@ class McpService
         Summary = summaryParts.Count > 0 ? string.Join(", ", summaryParts) : "none";
     }
 
-    /// <summary>
-    /// Reconciles <see cref="Servers"/> against the server's GET /mcp report in place
-    /// (the sidebar poll runs every few seconds while the MCP section is expanded):
-    /// servers the server no longer reports are removed, existing ones keep their item
-    /// (and any in-flight toggle state) with Status/Error updated, and new ones are
-    /// inserted in name order — no Clear+re-Add rebuild.
-    /// </summary>
     private void ApplyMcpStatus(Dictionary<string, McpStatusInfo> status)
     {
         for (var i = Servers.Count - 1; i >= 0; i--)
@@ -110,13 +89,6 @@ class McpService
         }
     }
 
-    /// <summary>
-    /// Connects, disconnects, or authenticates an MCP server based on its current status, then
-    /// refreshes the list. Mirrors the web client's <c>toggleMcp</c>: connected → disconnect,
-    /// needs_auth → authenticate (OAuth), anything else → connect. A needs_auth server has no
-    /// usable client yet — the server routes <c>POST /mcp/{name}/auth/authenticate</c>, which
-    /// opens the browser on the authorization URL and blocks until the OAuth callback completes.
-    /// </summary>
     public async Task ToggleMcpAsync(string name)
     {
         if (_mcpBusy) return;
@@ -164,13 +136,6 @@ class McpService
         await RefreshMcpStatusAsync();
     }
 
-    /// <summary>
-    /// Background poll: re-fetches GET /mcp every few seconds while enabled. The server
-    /// pushes no MCP status event (only mcp.tools.changed, without status), so expanded
-    /// sections need periodic polling to stay live. Runs on a background thread and hops
-    /// to the UI dispatcher for the actual refresh, since McpServers/McpSummary are
-    /// reactive references.
-    /// </summary>
     private async Task McpPollLoopAsync()
     {
         while (!ct.IsCancellationRequested)

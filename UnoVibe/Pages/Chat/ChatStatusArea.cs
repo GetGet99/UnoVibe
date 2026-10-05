@@ -1,9 +1,5 @@
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Chat page status strip below the header: the retry/status banner and the horizontal
-/// strip of active subagent chips (busy ring, attention glyph, turn-outcome icon).
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using UnoVibe.States;

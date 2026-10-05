@@ -3,15 +3,6 @@ using UnoVibe.Integration.Events;
 
 namespace UnoVibe.States;
 
-/// <summary>
-/// Session-scoped reactive state owning the message list, cost/tokens, revert marker,
-/// retry state, permission queue, and question handlers for a single chat session.
-/// Created by <see cref="Pages.Chat.ChatPage"/> when the active session changes and
-/// disposed when switching away.
-///
-/// Chat UI components read from this state. Formatting is the caller's responsibility —
-/// this state stores raw values.
-/// </summary>
 [QuickRefs("""
     double Cost;
     SessionTokens Tokens = `SessionTokens.Zero`;
@@ -24,7 +15,6 @@ namespace UnoVibe.States;
     """)]
 partial class ChatMessagesState : IDisposable
 {
-    /// <summary>Maximum number of messages kept in the UI; older ones are dropped for rendering performance.</summary>
     public const int MaxVisibleMessages = 200;
 
     public SessionId SessionId { get; private set; }
@@ -61,14 +51,11 @@ partial class ChatMessagesState : IDisposable
         return state;
     }
 
-    // ── Initial fetch ───────────────────────────────────────────────────────
-
     async Task FetchInitialStateAsync()
     {
         var head = Sessions.Head(SessionId);
         var directory = head?.Directory;
 
-        // Messages
         if (!(await Opencode.GetMessagesAsync(SessionId.Id)).TryGetValue(out var messages, out var error))
         {
             Toasts.ShowError(error, "Could not load messages");
@@ -84,16 +71,12 @@ partial class ChatMessagesState : IDisposable
         }
         UpdateSessionStats();
 
-        // Pending permissions
         if (directory is not null)
             await SyncPendingPermissionsAsync(directory);
 
-        // Pending questions (attach to existing tool parts)
         if (directory is not null)
             await SyncPendingQuestionsAsync(directory);
     }
-
-    // ── Message collection management ───────────────────────────────────────
 
     void AppendMessage(MessageItem message)
     {
@@ -104,8 +87,6 @@ partial class ChatMessagesState : IDisposable
             TruncatedMessagesCount++;
         }
     }
-
-    // ── SSE event registration ──────────────────────────────────────────────
 
     void RegisterEvents()
     {
@@ -138,8 +119,6 @@ partial class ChatMessagesState : IDisposable
         Events.UnregisterQuestionReplied(null, OnQuestionReplied);
         Events.UnregisterQuestionRejected(null, OnQuestionRejected);
     }
-
-    // ── SSE event handlers ──────────────────────────────────────────────────
 
     void OnMessageUpdated(string _, MessageUpdatedEvent e)
     {
@@ -239,14 +218,10 @@ partial class ChatMessagesState : IDisposable
 
         if (existing is ToolCallPartItem existingTool && part is ToolPart toolPart)
         {
-            // Same identity, update fields in place: swapping the instance would drop
-            // live-only state (question form, selections) and orphan the mounted views.
             MessageJsonHelper.ApplyToolPart(existingTool, toolPart);
             return;
         }
 
-        // TODO [Medium]: Extend in-place update to the remaining part types (same contract:
-        // create on absent, update fields on present) instead of swapping the instance here.
         var updated = MessageJsonHelper.PartFromPart(part);
         var idx = message.Parts.IndexOf(existing);
         message.Parts[idx] = updated;
@@ -298,8 +273,6 @@ partial class ChatMessagesState : IDisposable
         }
     }
 
-    // ── Session status (retry / busy) ───────────────────────────────────────
-
     void OnSessionStatus(string _, SessionStatusEvent e)
     {
         if (e.SessionId != SessionId.Id) return;
@@ -317,8 +290,6 @@ partial class ChatMessagesState : IDisposable
                 break;
         }
     }
-
-    // ── Permissions ─────────────────────────────────────────────────────────
 
     void OnPermissionAsked(string _, PermissionAskedEvent e)
     {
@@ -402,8 +373,6 @@ partial class ChatMessagesState : IDisposable
             Toasts.ShowError(ex.Message, "Approval reply failed");
         }
     }
-
-    // ── Questions ───────────────────────────────────────────────────────────
 
     void OnQuestionAsked(string _, QuestionAskedEvent e)
     {
@@ -532,11 +501,8 @@ partial class ChatMessagesState : IDisposable
         }
     }
 
-    // ── Stats computation ───────────────────────────────────────────────────
-
     void UpdateSessionStats()
     {
-        // TODO [Medium]: Cost re-sums truncated 200-msg window + Tokens from last assistant only — long sessions under-report. Intended-or-fix; verify ChatCost cache lines.
         var last = Messages.LastOrDefault(m => m.Role == "assistant" && m.TokensOutput > 0);
         if (last is null)
         {
@@ -557,8 +523,6 @@ partial class ChatMessagesState : IDisposable
             && (message.ProviderId.Length == 0 || m.ProviderId == message.ProviderId));
         return model?.LimitContext ?? 0;
     }
-
-    // ── Revert ──────────────────────────────────────────────────────────────
 
     public async Task RevertToMessageAsync(MessageItem message)
     {
@@ -629,8 +593,6 @@ partial class ChatMessagesState : IDisposable
         if (messageId.Length == 0) return 0;
         return Messages.Count(m => m.Role == "user" && StringComparer.Ordinal.Compare(m.Id, messageId) >= 0);
     }
-
-    // ── Dispose ─────────────────────────────────────────────────────────────
 
     public void Dispose()
     {

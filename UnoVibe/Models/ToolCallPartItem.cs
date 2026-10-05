@@ -8,9 +8,6 @@ namespace UnoVibe.Models;
     public string? ToolStatus;
     public string? ToolTitle;
     public string? QuestionRequestId;
-    // Every other field read in markup must be reactive too: since parts are updated
-    // in place (same instance, see MessageJsonHelper.ApplyToolPart), a plain property
-    // assignment would never re-render the views bound to it (e.g. shell output).
     public string? ToolCommand;
     public string? ToolFilePath;
     public string? ToolContent;
@@ -103,30 +100,15 @@ partial class ToolCallPartItem : ChatPartItem
         }
     }
 
-    // Tool-specific input fields and metadata-derived fields live in the [QuickRefs] block
-    // above (they must be reactive — parts are updated in place). Only non-bound state stays here.
-
-    // Attachment URLs extracted from completed state
     public ReactiveList<string> Files { get; } = new();
 
-    // Typed metadata collections (populated from ToolMetadata by MessageJsonHelper).
-    // ReactiveLists that are never reassigned, only refilled in place, so live views update
-    // without swapping the part instance — see MessageJsonHelper.ApplyToolPart.
     public ReactiveList<Integration.Events.TodoInfo> Todos { get; } = new();
     public ReactiveList<List<string>> Answers { get; } = new();
     public ReactiveList<Integration.Events.ApplyPatchFileMeta> PatchFiles { get; } = new();
 
-    // Question support
     public ReactiveList<Integration.QuestionInfo> Questions { get; } = new();
     public ReactiveList<QuestionFormItem> QuestionForm { get; } = new();
 
-    // TODO: Add GetInput<T>() back when typed tool input classes are implemented (Phase 2c)
-
-    /// <summary>
-    /// Maps a raw tool name to its friendly display label (the same text each view's
-    /// last-resort fallback uses), so a title-less running tool shows "Editing" instead
-    /// of leaking the raw "edit". Unknown names pass through unchanged.
-    /// </summary>
     public static string? ToolDisplayName(string? toolName)
     {
         if (string.IsNullOrEmpty(toolName)) return null;

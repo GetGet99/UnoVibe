@@ -1,13 +1,5 @@
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Chat page: composes the page-local sub-components (<see cref="ChatHeader"/>,
-/// <see cref="ChatStatusArea"/>, <see cref="ChatMessageList"/>, <see cref="ChatComposer"/>)
-/// in a vertical layout. Provides the shared composer text (<c>Input</c>) that the message
-/// list and composer both read/write, kicks off the connection, and coordinates sends.
-/// Each sub-component sits in a single-cell Grid because QuickMarkup forwards attached
-/// placement properties (Grid.Row) to the component instance, not its MarkupNode.
-/// </summary>
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     using UnoVibe.States;
@@ -76,19 +68,17 @@ partial class ChatPage : Page
                     x.Failure!.ToString(),
                     "Chat State"
                 );
-            
+
             ChatState = x.IsSuccess ? x.Value : null;
         }, immediate: true);
     }
 
-    // TODO [Medium]: Banned async void + forced GC.Collect smell — make async Task + AsyncHelper.RunAndReport or delete with GC hack.
     static async void CallGCAfterDelay(int ms)
     {
         await Task.Delay(ms).ConfigureAwait(continueOnCapturedContext: false);
         GC.Collect();
     }
 
-    /// <summary>Enters the header's imposer, then scroll to the end.</summary>
     public async Task UndoLastAsync()
     {
         if (ChatState is not null)
@@ -98,7 +88,6 @@ partial class ChatPage : Page
         UIs.ScrollChatToBottom();
     }
 
-    /// <summary>Restore reverted messages (/redo built-in), then scroll to the end.</summary>
     public async Task RedoLastAsync()
     {
         if (ChatState is not null)
@@ -108,16 +97,6 @@ partial class ChatPage : Page
         UIs.ScrollChatToBottom();
     }
 
-
-    /// <summary>
-    /// Forks the conversation at a specific message (TUI/web parity: "Fork" action). Calls
-    /// POST /session/{id}/fork with the target message id — the server creates a new session
-    /// containing all messages strictly before the fork point (the forked-at message itself is
-    /// excluded) titled "&lt;original&gt; (fork #N)" — then switches to it and restores the
-    /// forked-at message's prompt (text + staged images) into the composer so the user can
-    /// continue from there. Returns the new session id, or null on failure/no session.
-    /// </summary>
-    // TODO [Medium]: async void event handler — exceptions after await escape. Wrap body in try/catch -> toast.
     async void ForkAndSwitchSession(SessionId sessionId, MessageItem message)
     {
         var forkedResult = await Opencode.ForkSessionAsync(sessionId, new()
@@ -134,19 +113,10 @@ partial class ChatPage : Page
 
         Sessions.ActiveSessionId = head.Id;
         Sessions.ActiveChatbox.Message = ChatboxMessage.From(message);
-        
+
         return;
     }
 
-
-    /// <summary>
-    /// Forks the whole active session (TUI/web parity: "Full session" fork). Calls
-    /// POST /session/{id}/fork with no message id so the server copies every message and titles
-    /// the new session "&lt;original&gt; (fork #N)", then switches to it. Unlike the per-message
-    /// fork there's no prompt to restore — the composer keeps whatever the user had. Returns the
-    /// new session id, or null on failure/no session.
-    /// </summary>
-    // TODO [Medium]: async void — same escape risk as per-message fork. Wrap in try/catch.
     async void ForkAndSwitchSession(SessionId sessionId)
     {
         var forkedResult = await Opencode.ForkSessionAsync(sessionId, new());

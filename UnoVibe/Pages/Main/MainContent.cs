@@ -1,9 +1,5 @@
 namespace UnoVibe.Pages.Main;
 
-/// <summary>
-/// Root page: session sidebar on the left, chat page on the right.
-/// Also hosts the top-right toast overlay (from <c>tui.toast.show</c> events).
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Pages.Chat;
     using QuickMarkup.WinUI;
@@ -16,9 +12,6 @@ namespace UnoVibe.Pages.Main;
         var theme = ThemeBrushes.Global;
     </setup>
     <Grid>
-        // On wide windows the sidebar and chat sit side by side (the flag is ignored). On compact
-        // windows only one of them is shown at a time — the flag picks which — since there's no room
-        // for both. The hidden panel is Collapsed (not just 0-width) so it doesn't lay out at all.
         <Grid ColumnDefinitions=<>
             <ColumnDefinition Width=`!IsCompact ? new GridLength(280) : (IsSidebarView ? new GridLength(1, GridUnitType.Star) : new GridLength(0))` />
             <ColumnDefinition Width=`IsSidebarView ? new GridLength(0) : new GridLength(1, GridUnitType.Star)` />

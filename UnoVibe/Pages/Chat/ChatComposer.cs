@@ -3,13 +3,6 @@ using UnoVibe.Controls;
 using Uno.Extensions;
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Chat page composer block: the staged-image strip, the message input (SuggestBox) with
-/// attach/stop/send buttons, and the mode / model / variant pickers row. The busy-state
-/// send mode sync from <see cref="SettingsStore"/>, and the suggestion providers.
-/// Raises <see cref="SendRequested"/> for the page to run the send + autoscroll, and
-/// <see cref="SendShellCommandAsync"/> for shell-mode submits ("!" prefix).
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -26,9 +19,6 @@ namespace UnoVibe.Pages.Chat;
     inject ModelsProvider Models;
     inject `AsyncComputed<ChatMessagesState>` ChatStateAsync;
     string SendMode = "";
-    // Shell mode (TUI parity): "!" typed as the entire input flips the composer into shell
-    // command entry; Esc, the ✕ button, or submitting leaves it again. Submit runs
-    // POST /session/{id}/shell instead of a prompt.
     bool ShellMode = false;
     `IReadOnlyList<string>` SelectionVariants => `
         Sessions.ActiveChatParams.Model is not {} model
@@ -38,7 +28,7 @@ namespace UnoVibe.Pages.Chat;
             : EmptyList
         )`;
     bool IsBusy => `Sessions.ActiveHead?.IsBusy ?? false`;
-    private bool IsEnabled = true; // Should be disabled if there is an active permission prompt
+    private bool IsEnabled = true;
     ChatboxState Chatbox => `Sessions.ActiveChatbox`;
     ChatboxMessage Message => `Chatbox.Message`;
     <setup>
@@ -137,7 +127,6 @@ namespace UnoVibe.Pages.Chat;
 partial class ChatComposer : IQuickMarkupComponent<Grid>
 {
     static readonly IReadOnlyList<string> EmptyList = [];
-    /// <summary>UI-thread dispatcher for bouncing <see cref="SettingsStore.Changed"/> onto the UI thread.</summary>
     private DispatcherQueue? _dispatcher;
 
     [QuickMarkupConstructor]
@@ -145,18 +134,10 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
     {
         Init();
 
-        // The busy-state send button's primary action (and menu checkmark) track the configured
-        // send default live, so a change from the Settings page applies immediately. The event may
-        // fire on a background thread (cross-process file watcher), so bounce to the UI thread.
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         SendMode = SettingsStore.SendMode.ToString();
         SettingsStore.Changed += OnSettingsChanged;
 
-        // Suggestion sources for the input box. Built-in commands are local (the availability
-        // predicate hides context-dependent ones like /interrupt while nothing is running);
-        // server-backed providers (commands, skills, files) return empty lists when the server is
-        // unreachable or has no data (no mock fallback — the box simply shows nothing); the
-        // directory is read fresh on every query so it tracks the active session.
         suggestBox.Providers =
         [
             new BuiltInCommandSuggestionProvider(IsBuiltInAvailable),
@@ -172,10 +153,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     void WatchMessage()
     {
-        // Due to us not wanting to hook text changed event or
-        // text dependency property as it will be slow every
-        // keystroke. This is the logic that should defer
-        // the message read/write text to whenever it is changed.
         var message = Message;
         MessageComp.Watch(newMessage =>
         {
@@ -184,7 +161,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             message = newMessage;
         });
 
-        // write also happens when user sends the message before it sends
     }
 
     private void OnSettingsChanged()
@@ -207,7 +183,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             !InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
         {
-            // handled must be returned synchronously so doing that first
             e.Handled = true;
             var images = await ImageIOHelper.PasteImageFromClipboardAsync();
             if (images.Count > 0)
@@ -216,39 +191,23 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             } else
             {
 #if WASDK
-                // e.Handled does not cancel paste in Uno
-                // paste from clipboard normally
                 suggestBox.PasteFromClipboard();
 #endif
             }
         }
     }
-    // TODO [Low]: async void handler (banned form, handler-justified) — ensure exceptions can't escape; prefer async Task where markup allows.
     private async void OnPickImages()
     {
         var images = await ImageIOHelper.PickImagesAsync(HostWindow);
         Message.Images.AddRange(images);
     }
 
-    /// <summary>
-    /// Enters shell mode when "!" lands as the entire input — the TUI's first-character rule,
-    /// watched via text instead of keys so it works on any keyboard layout (and for a lone "!"
-    /// paste). Emptying the input does not exit shell mode; Esc, the ✕ button, or submitting
-    /// does.
-    /// </summary>
     private void OnInputTextChanged(object sender, TextChangedEventArgs e)
     {
-        // EnterShellMode strips the trigger character and Uno may deliver that clear's
-        // TextChanged asynchronously (after the suppress window would have closed), so this is
-        // deliberately guarded by !ShellMode rather than a suppression flag: re-entry here with
-        // an empty text is a no-op once shell mode is on.
         if (!ShellMode && (suggestBox.MarkupNode.Text ?? "") == "!")
             EnterShellMode();
     }
 
-    /// <summary>Flips the composer into shell command entry and strips the "!" trigger character
-    /// (TUI parity: the key never enters the buffer). "/" and "@" suggestions are disabled while
-    /// shell mode is active — slash tokens in command text must not pop the flyout.</summary>
     private void EnterShellMode()
     {
         ShellMode = true;
@@ -257,7 +216,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
     }
 
-    /// <summary>Leaves shell mode, discarding the typed command text.</summary>
     private void ExitShellMode()
     {
         if (!ShellMode) return;
@@ -267,8 +225,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
     }
 
-    /// <summary>Sets the suggestion trigger prefixes. The controller caches them at construction,
-    /// so Providers is re-set to force a rebuild with the new prefixes.</summary>
     private void SetSuggestionPrefixes(string prefixes)
     {
         var providers = suggestBox.Providers;
@@ -276,10 +232,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         suggestBox.Providers = providers;
     }
 
-    /// <summary>
-    /// Runs the typed shell command in the session, then resets the composer (TUI parity:
-    /// submitting ends shell mode).
-    /// </summary>
     private async Task SubmitShellAsync()
     {
         var command = (suggestBox.MarkupNode.Text ?? "").Trim();
@@ -288,9 +240,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         await SendShellCommandAsync(command);
     }
 
-    /// <summary>Enter was pressed in the input box with the suggestion flyout closed — run a built-in
-    /// command when the text is one (e.g. "/new" typed with the flyout dismissed), else send the
-    /// message (or run the shell command when shell mode is active).</summary>
     private async Task OnSubmitRequested(SuggestBox sender, string text)
     {
         if (ShellMode)
@@ -301,12 +250,9 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         if (await TryRunBuiltInTextAsync(text)) return;
         Message.Text = text;
         await SendAsync(null);
-        // TODO
         sender.Clear();
     }
 
-    /// <summary>Sends with an explicit mode (the busy-state split button's primary action or a one-shot dropdown override);
-    /// in shell mode the send button runs the command instead.</summary>
     private async Task OnSendWithMode(SendPromptMode mode)
     {
         if (ShellMode)
@@ -317,23 +263,11 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         if (await TryRunBuiltInTextAsync(suggestBox.MarkupNode.Text)) return;
         Message.Text = suggestBox.MarkupNode.Text;
         await SendAsync(mode);
-        // TODO
         suggestBox.Clear();
     }
 
-    // ── Built-in slash commands (/new /models /agents /variants /connect /editor /explorer
-    //    /terminal /mcps /fork /rename /setting /interrupt /continue /undo /redo) ──
-
-    /// <summary>
-    /// Availability predicate for the built-in command flyout: context-dependent rows are hidden
-    /// when they make no sense right now (e.g. <c>/interrupt</c> only while the session runs).
-    /// </summary>
     private bool IsBuiltInAvailable(string name) => name != "interrupt" || IsBusy;
 
-    /// <summary>
-    /// Runs the action for a built-in command row committed from the suggestion flyout
-    /// (Tab / Enter / mouse click — the box has already cleared its input).
-    /// </summary>
     private async Task RunBuiltInCommandAsync(string name)
     {
         switch (name)
@@ -345,8 +279,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
                 await ProviderConnectDialog.ShowAsync(Opencode, Toasts, Models, MarkupNode.XamlRoot!);
                 break;
             case "continue":
-                // Same as the ⟳ Continue card: a literal "continue" user message the agent is
-                // instructed to treat as "pick up where you stopped".
                 await EnsureActiveCurrentSession();
                 HandleSentStatus(await Chatbox.SendManualContinueAsync());
                 break;
@@ -404,13 +336,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         }
     }
 
-    /// <summary>
-    /// Creates a new session if it is currently a null session.
-    /// And ensure that the session id of the currently selected chat matches.
-    /// Ensure that the chatbox message is copied if it is changed during creation.
-    /// </summary>
-    /// <returns></returns>
-    /// <exception cref="InvalidOperationException">The session is not current session.</exception>
     async Task EnsureActiveCurrentSession()
     {
         var chatbox = Chatbox;
@@ -424,10 +349,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             throw new InvalidOperationException($"Session id not the same {resolved?.SessionId ?? "null"} != {sess}");
         if (chatbox != Chatbox)
         {
-            // a new chatbox has appeared
-            // set to a new one, and clear
             Chatbox.Message = chatbox.Message;
-            // clear
             chatbox.Message = new();
         }
     }
@@ -442,22 +364,17 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         return false;
     }
 
-    /// <inheritdoc cref="HandleSentStatus" />
     private async Task SendAsync(SendPromptMode? mode)
     {
         await EnsureActiveCurrentSession();
         HandleSentStatus(await Chatbox.SendAsync(mode));
     }
 
-    /// <summary>Runs a shell-mode command in the session (composer "!" prefix, TUI parity).</summary>
-    /// <inheritdoc cref="HandleSentStatus" />
     private async Task SendShellCommandAsync(string command)
     {
         await EnsureActiveCurrentSession();
         HandleSentStatus(await Chatbox.SendShellAsync(command));
     }
-    /// <returns>True if caller should clear the composer text if sent from textbox.
-    /// False when composer text should not be cleared.</returns>
     void HandleSentStatus(ChatboxSentStatus sentStatus)
     {
         switch (sentStatus)
@@ -469,14 +386,10 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             case ChatboxSentStatus.Error:
             case ChatboxSentStatus.Empty:
             default:
-                // do nothing
                 return;
         }
     }
 
-    /// <summary>Intercepts submitted text that is an exact built-in command ("/name", optional
-    /// ignored arguments) so it executes instead of reaching the model verbatim. Returns true when
-    /// the text was consumed.</summary>
     private async Task<bool> TryRunBuiltInTextAsync(string? text)
     {
         if (!BuiltInCommands.TryParse(text, out var command)) return false;
@@ -490,8 +403,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         if (combo is not null) combo.IsDropDownOpen = true;
     }
 
-    /// <summary>The /editor //explorer //terminal built-ins: run a <see cref="FolderLauncherHelper"/>
-    /// open on the active directory, toast on failure.</summary>
     private void LaunchFolder(Func<string, string?> open)
     {
         var error = open(Sessions.ActiveSessionDirectory);
@@ -509,7 +420,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     public void SetChatText(string txt)
     {
-        // A restored prompt must never land in shell mode and run as a command.
         if (ShellMode) ExitShellMode();
         suggestBox.MarkupNode.Text = txt;
     }

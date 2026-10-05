@@ -56,36 +56,19 @@ the app).
 ## Titles
 
 `POST /session` with no title yields a default `"New session - <ISO>"`/`"Child session - <ISO>"`.
-On the first prompt the server runs a `title` agent with the small model (`provider.getSmallModel`)
-and replaces the default via `session.setTitle` (source: `session/prompt.ts` `SessionPrompt.ensureTitle`;
-regex in `session/session.ts` `isDefaultTitle`).
-The write emits a `session.updated` event carrying `{ sessionID, info }`, which
-`SessionsStateProvider` applies to the sidebar + header.
-UnoVibe creates sessions without a title, displays `"New Chat"` for default-titled sessions
-(`NormalizeTitle`), and surfaces the generated name when the event arrives.
-Manual rename (`SessionsStateProvider.RenameSessionAsync`, header ✎ button) calls `PATCH /session/:id` and
-short-circuits future auto-naming because the title no longer matches `isDefaultTitle`.
+On the first prompt the server runs a `title` agent with the small model and replaces the default
+via a `session.updated` event. UnoVibe creates sessions without a title, displays `"New Chat"`
+for default-titled sessions, and surfaces the generated name when the event arrives.
+Manual rename calls `PATCH /session/:id` and short-circuits future auto-naming because the title
+no longer matches the server's default-title pattern.
 
 ## Subagents
 
-The `task` tool spawns a child session whose `SessionInfo` carries a `parentID`
-(field `SessionInfo.ParentId`; `IsSubagent` = `ParentId` non-empty).
-`SessionsStateProvider` keeps subagent `SessionInfo`s in `Sessions` (needed for `SwitchSessionAsync` lookup)
-but **filters them out of `ReconcileDirectoryGroups`**, so they never appear in the
-sidebar — mirroring the TUI (`parentID === undefined` filter).
-
-Entry point is the tool call itself:
-`ApplyToolState` parses the `task` part's `state.metadata.sessionId`/`parentSessionId` and
-`state.input.subagent_type` into `PartItem.ToolSessionId`/`ToolParentSessionId`/`ToolSubagentType`,
-and `MessageView` dispatches `tool == "task"` to `ToolViewTask` — a clickable card
-(✳ title + subagent-type pill + status line + ✓/✕/■) that calls
-`SessionsStateProvider.SwitchSessionAsync(part.ToolSessionId)` on click.
-
-Opening a subagent session shows a **back button before the title** in the ChatPage header
-(`SessionsStateProvider.ParentSessionId.Length > 0`) that calls `SessionsStateProvider.GoToParentAsync()`; `ParentSessionId` is
-set in `SwitchSessionAsync` (with a `GET /session/:id` fallback via `OpencodeClient.GetSessionAsync`
-when the child isn't in the sidebar list) and reset in
-`Configure`/`NewSessionAsync`/`EnsureSessionAsync`/`ApplySessionDeleted`.
+The `task` tool spawns a child session whose `SessionInfo` carries a `parentID`.
+Subagent sessions are kept for lookup but **filtered out of the sidebar**, mirroring the TUI.
+The tool call's `state.metadata.sessionId`/`parentSessionId` link to a clickable card that
+switches to the child session. Opening a subagent shows a **back button** returning to the
+parent (with a `GET /session/:id` fallback when the child isn't listed).
 
 ## Permission API
 
@@ -96,27 +79,18 @@ when the child isn't in the sidebar list) and reset in
   and `permission.replied` (`{ sessionID, requestID, reply }`).
 
 **Pending permission requests are per workspace directory (instance).**
-`OpencodeClient.GetPendingPermissionsAsync`/`ReplyPermissionAsync` take a `directory` and are called
-with the active session's instance (`SessionsStateProvider.SyncPendingPermissionsAsync` uses `ActiveDirectory()`;
-`ReplyPermissionAsync` resolves the request's session directory via `PermissionDirectory`), so replies
+Client methods take a `directory` and are called with the owning session's instance, so replies
 reach the instance that owns the request (folder-opened sessions live in a non-default instance —
 a directory-less reply would 404).
 
-`SessionsStateProvider` keeps a pending-request queue (`ActivePermission` = oldest pending) that is
-**rebuilt from the authoritative server list** on connect/session-switch
-(`SyncPendingPermissionsAsync` clears `_permissions` then re-adds requests for the active session,
-deduped by `AddPermissionRequest`) — the server is the source of truth because a request can vanish
-with **no `permission.replied` event** when its turn is aborted/interrupted or its instance is disposed
-(`Effect.ensuring`/`InstanceState` finalizers in `permission/index.ts` just delete/fail the pending
-entry). A reply that comes back 404 (`HttpRequestException` with `StatusCode == NotFound`) drops the
-stale request from the queue so the next pending one surfaces instead of a dead card.
+The pending-request queue is **rebuilt from the authoritative server list** on connect/session-switch —
+the server is the source of truth because a request can vanish with **no `permission.replied`
+event** when its turn is aborted or its instance is disposed. A reply that comes back 404 drops
+the stale request so the next pending one surfaces instead of a dead card.
 
-`permission.asked/replied` are NOT session-filtered in `Apply` (subagents run in their own sessions) —
-the per-session `SessionFlags.PendingPermissions` counter still drives the sidebar attention indicator.
-The active-view queue (`AddPermissionRequest`) accepts a request when its session is the active session
-**or a descendant of it** (`IsActiveOrDescendant` walks the `SessionInfo.ParentId` chain), so a task
-child's pending permission surfaces in the parent's dialog and can be approved without navigating into
-the subagent.
+`permission.asked/replied` are NOT session-filtered (subagents run in their own sessions).
+A child's pending permission surfaces in the parent's dialog when its session is the active
+session **or a descendant of it**, so it can be approved without navigating into the subagent.
 
 The UI shows an inline allow/always/reject dialog above the input and disables sending while one
 is pending.
@@ -129,71 +103,41 @@ the TUI treats anything `!= "idle"` as busy and shows the retry message.
 `SessionsStateProvider.StatusMessage` surfaces the retry banner.
 
 `session.status`, `message.updated`, and the `question.*` events are intentionally **not**
-session-filtered in `Apply` — `SessionsStateProvider` tracks per-session busy state (`SessionHead.IsBusy`)
-to drive the sidebar spinner, and polls `GET /session/status` at connect to
-catch sessions already busy before the SSE stream attached (the server only emits status on
-transitions).
+session-filtered — per-session busy state drives the sidebar spinner, and the client polls
+`GET /session/status` at connect to catch sessions already busy before the SSE stream attached
+(the server only emits status on transitions).
 
-Background session activity: when a *background* session's turn completes (`session.status` → idle
-while not active), `SessionsStateProvider` sets `IsRead = false` on the session's `SessionHead` and records the
-turn outcome (`SessionHead.Outcome`, a `ChatOutcome` enum: `Success`/`Error`/`Interrupted`/`None`,
-derived from the last assistant `message.updated` `info.error`). Viewing the session sets
-`IsRead = true`, which suppresses the indicator. **Right-clicking a sidebar session** opens a
-`ContextFlyout` `MenuFlyout` with **Mark as unread / Mark as read** (directly toggles
-`SessionHead.IsRead`). The indicator is resolved by `SessionHead.ResolveState()` → `SessionState`
-enum: if `IsRead` is true the state is `None` (no indicator); otherwise the outcome maps to
-`Success`/`Interrupted`/`Error`. The `SessionIndicator` control (`Controls/SessionIndicator.cs`)
-renders the appropriate glyph/color for each `SessionState` value.
+Background session activity: when a *background* session's turn completes while not active, the
+sidebar marks it unread with the turn outcome (`Success`/`Error`/`Interrupted`/`None`, derived
+from the last assistant `message.updated` error); viewing the session marks it read.
+**Right-clicking a sidebar session** offers **Mark as unread / Mark as read**.
+Pending-permission/question attention **overrides** the busy spinner (mirrors the web client).
 
-Pending attention is tracked per-session via `SessionInfo.IsPendingPermission` and
-`SessionInfo.IsPendingQuestion` booleans, set from `permission.asked/replied` and
-`question.asked/replied/rejected` counts (`SessionFlags.PendingPermissions`/`PendingQuestions`,
-seeded at connect + switch via `SyncPending*Async` from `GET /permission` + `GET /question`).
-`SessionInfo.ResolveState()` returns `SessionState.PendingPermission` or
-`SessionState.PendingQuestion` accordingly, which **overrides** the busy spinner (mirrors the web
-client's `needsAttention`). The `SessionIndicator` control (`Controls/SessionIndicator.cs`) renders
-the appropriate glyph/color for each `SessionState` value.
-
-**Inline question form** (`ToolViewQuestion`/`ToolViewQuestionItem`):
+**Inline question form:**
 - Submits via `POST /question/:requestID/reply`
   (`{ answers: [[label,...], ...] }`, one array per question — `"Unanswered"` if empty).
-- Dismisses via `POST /question/:requestID/reject` (no body), which fails the question tool with
-  `QuestionRejectedError` so the agent sees it was declined.
-- Per question, a `custom` field adds a "Type your own answer..." option that is exclusive with
-  the options (single) or combinable (multi) and enables the text box only while selected.
-- **Pending questions are per workspace directory (instance), like permissions** — the server's
-  pending map lives in `InstanceState` (`question/index.ts`), so `ReplyQuestionAsync`/
-  `RejectQuestionAsync`/`GetPendingQuestionsAsync` take a `directory` and are called with the
-  owning session's instance (`SessionsStateProvider.QuestionDirectory`/`DirectoryOf`, `SyncPendingQuestionsAsync`
-  uses `ActiveDirectory()`), so a reply reaches the instance holding the request
-  (folder-opened sessions live in a non-default instance — a directory-less reply 404s
-  `QuestionNotFoundError`). A 404 reply/reject drops the stale request so the next pending
-  question surfaces instead of a dead form.
+- Dismisses via `POST /question/:requestID/reject` (no body), which fails the question tool so
+  the agent sees it was declined.
+- A `custom` field adds a "Type your own answer..." option (exclusive for single-select,
+  combinable for multi-select).
+- **Pending questions are per workspace directory (instance), like permissions** — reply/reject
+  take a `directory` and are called with the owning session's instance (a directory-less reply
+  404s). A 404 reply/reject drops the stale request so the next pending question surfaces.
 
-**Assistant message errors** (`info.error`) are rendered as an `error` part box
-(`UnknownError` e.g. `"Streaming response failed: [503]..."`);
-`MessageAbortedError` maps to the interrupted part instead.
-Error message strings may contain surrounding literal quotes — `UnwrapErrorMessage` strips them.
+**Assistant message errors** (`info.error`) render as an `error` part box;
+aborts map to the interrupted part instead.
+Surrounding literal quotes in error strings are stripped before display.
 
 **Auto-retry card:**
-The active turn's auto-retry (`status type "retry"` with `attempt`/`message`/`next` unix-ms) drives
-an **end-of-chat retry card** (`ChatboxState.IsRetrying`/`RetryMessage`/`RetryAttempt`/`RetryNextMs`;
-`ChatPage` ticks a `DispatcherTimer` every second calling `UpdateRetryCountdown` for the live
-"retrying in Ns · attempt #N" line — the header `StatusMessage` banner also still shows it).
+the active turn's auto-retry (`status type "retry"` with attempt/message/countdown) drives an
+end-of-chat retry card with a live "retrying in Ns · attempt #N" line (the header banner shows
+it too).
 
 **Continue button:**
-A stopped-with-error turn shows a **"⟳ Continue" button** (`ChatboxState.ShowContinue`), set at
-`session.status` idle or when the final `message.updated` lands after idle (the server emits idle
-before the error-carrying `message.updated`, since `halt` runs before `cleanup`), and computed by
-`ShouldShowContinue()` = `LastAssistantMessageErrored()` (last assistant message has an `error` part)
-**or** `LastAssistantMessageEndsOnThinking()` (the chat visibly ends on a Thinking/reasoning part —
-a turn that stops mid-reasoning or finishes reasoning-only often carries no `error` part to latch
-onto); aborts never qualify (interrupt → "aborted" part).
-The button (a bare left-aligned button — no card, since the error part box above already surfaces
-the error; tooltip explains it sends a `"continue"` message) just calls `ChatboxState.SendAsync("continue")`
-— there is **no server continue API**; the agent prompt (`prompt/beast.txt`) tells the model to
-resume from the last incomplete todo step (matches the TUI, which only lets the user type it).
-Flags reset in `ResetTurnFlags()` on connect/new/switch/delete and before each send.
+a stopped-with-error turn shows a **"⟳ Continue" button**. It appears when the last assistant
+message carries an `error` part **or** the chat visibly ends on a Thinking/reasoning part;
+aborts never qualify. The button just sends the literal `"continue"` message — there is
+**no server continue API** (matches the TUI, which only lets the user type it).
 
 ## MCP API
 
@@ -209,28 +153,18 @@ share the same MCP servers from that directory's `opencode.json` `mcp` key; the 
 `?directory=`/`x-opencode-directory` instance header.
 There is **no push event for MCP status changes** (only `mcp.tools.changed` /
 `mcp.browser.open.failed`), so clients poll `/mcp` at connect, on session switch, and after each
-toggle — exactly what `McpService.RefreshMcpStatusAsync` does.
+toggle.
 
-UnoVibe shows a collapsible **MCP section in `SessionSidebar`** (status dot + name + status/error +
-Connect/Disconnect toggle, summary `N active, M error`); `McpService.ToggleMcpAsync` calls
-connect/disconnect/authenticate based on current status (mirrors the web client's `toggleMcp`):
-connected → disconnect, `needs_auth` → **`POST /mcp/{name}/auth/authenticate`**, anything else →
-connect. A `needs_auth` toggle therefore runs the server-side OAuth flow: the **server** opens the
-default browser on the authorization URL and the request **blocks** until the redirect returns to
-its own local callback server (up to 5 minutes), storing the tokens; the button label reads
-"Authenticate" (and "Authenticating…" while in flight). `OpencodeClient.McpAuthenticateAsync` uses a
-dedicated `HttpClient` with a 6-minute timeout because the shared client's 100s default would abort
-the wait, and surfaces the returned status (`{status, error}`) as the new `McpServerInfo`.
-
-The remaining OAuth routes (`POST /mcp/{name}/auth` start, `POST .../auth/callback` `{code}`,
-`DELETE /mcp/{name}/auth` remove) exist but are unused — the blocking `authenticate` route covers
-the browser-based flow UnoVibe needs.
-TUI source: `packages/tui/src/feature-plugins/sidebar/mcp.tsx` + `context/local.tsx`;
-API def: `server/routes/instance/httpapi/groups/mcp.ts`.
+UnoVibe shows a collapsible **MCP section in the sidebar** (status dot + name + status/error +
+Connect/Disconnect toggle) mirroring the web client's toggle mapping: connected → disconnect,
+`needs_auth` → blocking server-side OAuth flow (the button reads "Authenticate" while in flight,
+using a dedicated long-timeout client because the shared client's default would abort the wait),
+anything else → connect. The remaining OAuth routes (start/callback/remove) exist but are unused —
+the blocking `authenticate` route covers the browser-based flow.
 
 ## Unhandled events
 
-`EventsProvider.Apply` has `// TODO:` placeholder `case`s (with `break;`) for every other event the
+`EventsProvider.Apply` keeps placeholder `case`s (with `break;`) for every other event the
 server's `/event` stream emits:
 `session.deleted/error/diff/idle/compacted`, `file.edited`, `file.watcher.updated`,
 `todo.updated`, `lsp.updated`, `command.executed`,
@@ -238,11 +172,11 @@ server's `/event` stream emits:
 
 Handled: `session.created`/`session.updated`, `session.status`, `message.removed`,
 `question.replied`/`question.rejected` (pending-attention counters),
-`mcp.tools.changed` (→ `RefreshMcpStatusAsync`),
-and `vcs.branch.updated` (→ `SessionsStateProvider.RefreshBranches`).
+`mcp.tools.changed` (→ MCP status refresh),
+and `vcs.branch.updated` (→ branch refresh).
 
 The `session.next.*` streaming events exist in the schema but are not published by the current CLI
-server. Implement a case and remove its TODO marker when adopting it.
+server. Implement a case when adopting it.
 
 ## Serve flags & port probing
 

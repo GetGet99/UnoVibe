@@ -3,8 +3,8 @@ using System.Diagnostics;
 namespace UnoVibe.States;
 
 [QuickRefs("""
-    bool IsRead = true; // client driven
-    
+    bool IsRead = true;
+
     string Directory = `null!`;
 
     string Title = "";
@@ -18,16 +18,13 @@ namespace UnoVibe.States;
     bool IsPendingPermission;
     SessionState State => `ResolveState()`;
 
-    // Refers to selected values
     ChatParameters ChatParams = `new()`;
     """)]
 partial class SessionHead
 {
     public long Created { get; private set; }
     public SessionId Id { get; private set; }
-    /// <summary>ID of the parent session when this is a subagent session (spawned by a <c>task</c> tool call), else "".</summary>
     public SessionId? ParentId { get; private set; }
-    /// <summary>True when this session is a subagent (its server info carries a parentID).</summary>
     public bool IsSubagent => ParentId is not null;
     SessionState ResolveState()
     {
@@ -51,9 +48,6 @@ partial class SessionHead
         Directory = directory;
         Created = created;
     }
-    // QuickMarkup Computed<string> (backing field TimeLabelComp): reads the reactive `Updated`
-    // field, so it caches and re-evaluates automatically whenever Updated changes — the sidebar's
-    // `s.TimeLabel` binding updates without any manual rebuild.
     private static string FormatTimeLabel(long updated)
     {
         if (updated <= 0) return "";

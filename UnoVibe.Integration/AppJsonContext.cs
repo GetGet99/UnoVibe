@@ -64,7 +64,6 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(List<AgentInfo>))]
 [JsonSerializable(typeof(List<CommandInfo>))]
 [JsonSerializable(typeof(List<SkillInfo>))]
-// TODO [Low]: Duplicate List<CommandInfo> — remove one.
 [JsonSerializable(typeof(List<CommandInfo>))]
 [JsonSerializable(typeof(List<PendingQuestion>))]
 [JsonSerializable(typeof(FileSystemEntry))]
@@ -77,7 +76,6 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(Dictionary<string, SessionStatusInfo>))]
 [JsonSerializable(typeof(Dictionary<string, McpStatusInfo>))]
 [JsonSerializable(typeof(Dictionary<string, ProviderAuthMethod[]>))]
-// --- Event base types and shared sub-models ---
 [JsonSerializable(typeof(MessageInfo))]
 [JsonSerializable(typeof(UserMessageInfo))]
 [JsonSerializable(typeof(AssistantMessageInfo))]
@@ -143,9 +141,7 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(ToolFileContent))]
 [JsonSerializable(typeof(List<Part>))]
 [JsonSerializable(typeof(List<SnapshotFileDiff>))]
-// --- Session CRUD events ---
 [JsonSerializable(typeof(SessionCrudEvent))]
-// TODO [Low]: Duplicate registration — SessionInfo already registered at top. Remove one.
 [JsonSerializable(typeof(SessionInfo))]
 [JsonSerializable(typeof(SessionModelInfo))]
 [JsonSerializable(typeof(SessionTimeInfo))]
@@ -155,7 +151,6 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(SessionShareInfo))]
 [JsonSerializable(typeof(SessionPermissionRule))]
 [JsonSerializable(typeof(SessionRevertInfo))]
-// --- Message events ---
 [JsonSerializable(typeof(MessageUpdatedEvent))]
 [JsonSerializable(typeof(MessageRemovedEvent))]
 [JsonSerializable(typeof(MessagePartUpdatedEvent))]
@@ -169,20 +164,17 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(StepFinishTokens))]
 [JsonSerializable(typeof(RetryPartTime))]
 [JsonSerializable(typeof(SubtaskPartModel))]
-// --- Session status events ---
 [JsonSerializable(typeof(SessionStatusEvent))]
 [JsonSerializable(typeof(SessionIdleEvent))]
 [JsonSerializable(typeof(SessionErrorEvent))]
 [JsonSerializable(typeof(SessionDiffEvent))]
 [JsonSerializable(typeof(SessionCompactedEvent))]
-// --- Permission events ---
 [JsonSerializable(typeof(PermissionAskedEvent))]
 [JsonSerializable(typeof(PermissionRepliedEvent))]
 [JsonSerializable(typeof(PermissionEventTool))]
 [JsonSerializable(typeof(PermissionV2AskedEvent))]
 [JsonSerializable(typeof(PermissionV2RepliedEvent))]
 [JsonSerializable(typeof(PermissionV2Source))]
-// --- Question events ---
 [JsonSerializable(typeof(QuestionAskedEvent))]
 [JsonSerializable(typeof(QuestionRepliedEvent))]
 [JsonSerializable(typeof(QuestionRejectedEvent))]
@@ -192,7 +184,6 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(QuestionV2RejectedEvent))]
 [JsonSerializable(typeof(QuestionPayload))]
 [JsonSerializable(typeof(QuestionOptionPayload))]
-// --- Session next (V2) supporting types ---
 [JsonSerializable(typeof(ModelRef))]
 [JsonSerializable(typeof(LocationRef))]
 [JsonSerializable(typeof(PromptPayload))]
@@ -209,7 +200,6 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(List<List<string>>))]
 [JsonSerializable(typeof(List<ToolContent>))]
 [JsonSerializable(typeof(List<RevertFileDiff>))]
-// --- Session next (V2) events ---
 [JsonSerializable(typeof(AgentSwitchedEvent))]
 [JsonSerializable(typeof(ModelSwitchedEvent))]
 [JsonSerializable(typeof(MovedEvent))]
@@ -242,7 +232,6 @@ namespace UnoVibe.Integration;
 [JsonSerializable(typeof(RevertStagedEvent))]
 [JsonSerializable(typeof(RevertClearedEvent))]
 [JsonSerializable(typeof(RevertCommittedEvent))]
-// --- Simple events ---
 [JsonSerializable(typeof(ServerConnectedEvent))]
 [JsonSerializable(typeof(ServerDisposedEvent))]
 [JsonSerializable(typeof(ServerInstanceDisposedEvent))]

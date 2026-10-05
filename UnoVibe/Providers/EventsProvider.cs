@@ -6,7 +6,6 @@ using UnoVibe.Integration;
 using UnoVibe.Integration.Events;
 
 namespace UnoVibe.Providers;
-// TODO [High]: SSE never reconnects/unsubscribes — single ReadEvent loop, _ = Task.Run no catch/retry, registered/delegateMapping grow, per-dir streams never torn down. Add reconnect+watchdog+Unsubscribe, clean map.
 class EventsProvider : IDisposable
 {
     OpencodeClient client;
@@ -54,7 +53,6 @@ class EventsProvider : IDisposable
             dict = registeredForAllDirectories;
         } else if (!registered.TryGetValue(directory, out dict!))
         {
-            // nothing to unregister
             return;
         }
         if (dict.ContainsKey(eventType))
@@ -66,7 +64,6 @@ class EventsProvider : IDisposable
                 dict[eventType] = result;
         } else
         {
-            // nothing to unregister
         }
     }
     private void UnregisterDelegate(string? directory, string eventType, Delegate handler)
@@ -129,16 +126,13 @@ class EventsProvider : IDisposable
         => Register(directory, EventTypes.McpBrowserOpenFailed, MakeHandler(handler, AppJsonContext.Default.McpBrowserOpenFailedEvent));
     public void RegisterServerConnected(string? directory, Action<string, ServerConnectedEvent> handler)
         => Register(directory, EventTypes.ServerConnected, MakeHandler(handler, AppJsonContext.Default.ServerConnectedEvent));
-    // Heartbeat has no typed model — synthetic event with empty properties.
     public void RegisterServerHeartbeat(string? directory, Action<string, JsonElement> handler)
         => Register(directory, "server.heartbeat", handler);
     public void RegisterServerInstanceDisposed(string? directory, Action<string, ServerInstanceDisposedEvent> handler)
         => Register(directory, EventTypes.ServerInstanceDisposed, MakeHandler(handler, AppJsonContext.Default.ServerInstanceDisposedEvent));
     public void RegisterTuiToastShow(string? directory, Action<string, TuiToastShowEvent> handler)
         => Register(directory, EventTypes.TuiToastShow, MakeHandler(handler, AppJsonContext.Default.TuiToastShowEvent));
-    
-    // An MCP server's tool set changed (or its connection closed). The server
-    // doesn't push a status event for connect/disconnect, so re-poll GET /mcp.
+
     public void UnregisterMcpToolsChanged(string? directory, Action<string, McpToolsChangedEvent> handler)
         => UnregisterDelegate(directory, EventTypes.McpToolsChanged, handler);
     public void UnregisterMessageUpdated(string? directory, Action<string, MessageUpdatedEvent> handler)
@@ -232,32 +226,21 @@ class EventsProvider : IDisposable
 
             dispatcherQueue?.TryEnqueue(() =>
             {
-                // TODO [Medium]: If dispatcherQueue is null (constructed off-UI-thread) ?. silently drops all events. Capture DispatcherQueue.GetForCurrentThread() at root and Debug.Assert non-null.
                 foreach (var evt in batch) Apply(evt);
             });
         }
     }
 
-    // Bounded set of recently-seen SSE event ids, used to drop duplicates when an opened folder
-    // equals the server's default instance (both the default and the folder stream deliver the
-    // same events, and double-applying part deltas would corrupt message text).
     private const int MaxSeenEventIds = 2000;
-    /// <summary>
-    /// Returns true when an SSE event id was already processed. Each stream instance generates
-    /// globally-unique ids, but an opened folder that equals the server's default instance is
-    /// delivered by both the default stream and its folder stream — the second copy is dropped.
-    /// Ids are globally unique so the bounded set never false-positives across reconnects.
-    /// </summary>
     private bool IsDuplicateEvent(OpencodeEvent evt)
     {
-        // TODO [Low]: Two nested locks redundant — single lock suffices. Also UnregisterDelegate never removes delegateMapping entry (leak, see file header TODO).
         lock (_seenEventIds)
         {
             lock (_seenEventIdOrder)
             {
                 if (string.IsNullOrEmpty(evt.Id)) return false;
                 if (_seenEventIds.Contains(evt.Id)) return true;
-                
+
                 _seenEventIds.Add(evt.Id);
                 _seenEventIdOrder.Enqueue(evt.Id);
                 while (_seenEventIdOrder.Count > MaxSeenEventIds)

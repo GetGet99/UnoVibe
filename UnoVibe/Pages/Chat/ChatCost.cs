@@ -93,8 +93,6 @@ namespace UnoVibe.Pages.Chat;
             </StackPanel>
         </Flyout>
     >
-        // On compact the inline cost summary lives on the second header line, so the stats
-        // button itself shrinks to a "more details" icon (the flyout stays reachable).
         if (`IsCompact`)
         {
             <AppSymbolIcon Symbol=More FontSize=11 Foreground=`theme.SecondaryText` />
@@ -107,7 +105,7 @@ namespace UnoVibe.Pages.Chat;
     """)]
 partial class ChatCost : IQuickMarkupComponent
 {
-    
+
 }
 
 [QuickMarkup("""
@@ -129,5 +127,5 @@ partial class ChatCost : IQuickMarkupComponent
     """)]
 partial class ChatCostInline : IQuickMarkupComponent
 {
-    
+
 }

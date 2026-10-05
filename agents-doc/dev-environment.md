@@ -9,7 +9,5 @@ Reference for the Linux dev machine's runtime details.
 - Logging for the app run goes to `/mnt/LinuxProgramData/tmp/opencode/app_run.log`.
   Harmless X11 warnings about `_NET_WM_STATE` / `OverlappedPresenter` appear on launch and can be
   ignored.
-- **Tips about `unovibe` CLI and environment variables:**
-  the `unovibe` CLI command is not put on PATH automatically, so users can't use it without adding
-  it manually. That's why those hints are commented out for now, until installing the CLI command
-  is supported.
+- The `unovibe` CLI command is not on PATH automatically, so shell-setup hints referencing it
+  stay disabled until installing the CLI command is supported.

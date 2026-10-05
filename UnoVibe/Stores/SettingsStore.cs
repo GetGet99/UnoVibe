@@ -2,26 +2,15 @@ using System.Text.Json;
 
 namespace UnoVibe.Stores;
 
-/// <summary>How sending a message behaves while a turn is already running.</summary>
 public enum SendPromptMode
 {
-    /// <summary>Send immediately; the server serializes prompts itself (runs the message at the
-    /// next agent step when a turn is busy) — the default behavior of TUI and API.</summary>
     OnNextToolCall,
 
-    /// <summary>Hold prompts in a client-side queue (<see cref="SessionStore"/>'s
-    /// <c>EnqueuePrompt</c>/<c>DrainPendingPromptsAsync</c>) and flush them one at a time when the
-    /// session goes idle.</summary>
     Queue,
 
-    /// <summary>Interrupt the running turn (abort) first, then send the prompt — the new message
-    /// becomes the active request instead of waiting for the next agent step. When idle it sends
-    /// like <see cref="OnNextToolCall"/>.</summary>
     SendImmediately,
 }
 
-/// <summary>The UI kinds a setting can have (values of <see cref="SettingSpec.Kind"/>); the settings
-/// page renders the matching control per row. Strings so markup compares them directly.</summary>
 static class SettingKinds
 {
     public const string Text = "text";
@@ -29,9 +18,6 @@ static class SettingKinds
     public const string Toggle = "toggle";
 }
 
-/// <summary>Static metadata describing one settings row. The settings page renders every
-/// <see cref="SettingsStore.Specs"/> entry automatically, so a new setting is just a new spec
-/// plus a <c>GetValue</c>/<c>SetValue</c> case — the UI needs no changes.</summary>
 public sealed record SettingSpec(
     string Key,
     string Label,
@@ -40,18 +26,6 @@ public sealed record SettingSpec(
     SettingOption[]? Options = null,
     string? Placeholder = null);
 
-/// <summary>
-/// App settings: a single static source of truth for every window (and, via a file watcher,
-/// every process). Values are persisted to <c>settings.json</c> under the app's local-data
-/// directory and loaded once at startup. Typed static properties are the canonical store
-/// (read live by the app logic, e.g. <see cref="FolderLauncherHelper"/> and <see cref="SessionStore"/>);
-/// the <see cref="Specs"/> registry + <see cref="GetValue"/>/<see cref="SetValue"/> bridge them to
-/// the data-driven settings page.
-///
-/// Multi-window: the store is static, so all windows share the same values immediately.
-/// Multi-process: a <see cref="FileSystemWatcher"/> reloads the file when another process writes
-/// it (debounced + loop-guarded), and <see cref="Changed"/> notifies open settings pages to re-read.
-/// </summary>
 static class SettingsStore
 {
     public const string EditorCommandKey = "editor.command";
@@ -68,37 +42,18 @@ static class SettingsStore
     private static FileSystemWatcher? _watcher;
     private static int _reloadScheduled;
 
-    /// <summary>Raised after a setting changes (same window, another window, or another process).</summary>
     public static event Action? Changed;
 
-    // ── Typed settings (the canonical values; read live by the app logic) ──────────
-
-    /// <summary>Command used to open a folder in the user's editor (default: VS Code's <c>code</c>).</summary>
     public static string EditorCommand { get; set; } = "code";
 
-    /// <summary>How a send behaves while the session is busy.</summary>
     public static SendPromptMode SendMode { get; set; } = SendPromptMode.OnNextToolCall;
 
-    /// <summary>Monospaced font used for code blocks, tool output, and diffs. Empty string (the
-    /// default) picks a font that ships with the OS (see <see cref="CodeFontsHelper"/>); any other
-    /// value is a font family name used verbatim.</summary>
     public static string CodeFont { get; set; } = CodeFontsHelper.DefaultValue;
 
-    /// <summary>Whether a slash command that matches a skill expands it (TUI behavior, default).
-    /// Off: only real commands/MCP prompts expand — a skill-only name falls through to a plain
-    /// prompt. A name backed by a real command still expands (the server itself gives commands
-    /// priority over skills of the same name).</summary>
     public static bool ExpandSkills { get; set; } = true;
 
-    /// <summary>Automatically sends a "continue" message when a turn stops with the chat left
-    /// ending on a Thinking (reasoning) part, instead of surfacing the Continue button. The
-    /// swallowed stop fires no completion notification and no sidebar unread/outcome indicator.
-    /// See <see cref="SessionStore"/> for the streak cap that bounds runaway loops.</summary>
     public static bool AutoContinueOnThinking { get; set; } = false;
 
-    /// <summary>The settings-page rows. Built lazily (on first settings open) so the Code font options
-    /// can enumerate the user's installed fonts via <see cref="SystemFontsHelper"/>; cached thereafter.
-    /// Adding a setting = add a spec here + a GetValue/SetValue case.</summary>
     public static IReadOnlyList<SettingSpec> Specs => _specs ??= BuildSpecs();
 
     private static IReadOnlyList<SettingSpec>? _specs;
@@ -150,7 +105,6 @@ static class SettingsStore
         };
     }
 
-    /// <summary>Reads the current value of a setting by key (the UI-facing string form).</summary>
     public static string GetValue(string key) => key switch
     {
         EditorCommandKey => EditorCommand,
@@ -161,7 +115,6 @@ static class SettingsStore
         _ => "",
     };
 
-    /// <summary>Sets a setting by key (UI-facing string form), persists it, and notifies listeners.</summary>
     public static void SetValue(string key, string value)
     {
         switch (key)
@@ -191,7 +144,6 @@ static class SettingsStore
         Changed?.Invoke();
     }
 
-    /// <summary>Loads the persisted settings once and starts the cross-process file watcher.</summary>
     public static void Load()
     {
         lock (Gate)
@@ -209,13 +161,11 @@ static class SettingsStore
             }
             catch
             {
-                // Best effort: a corrupt/missing file just yields the defaults.
             }
             StartWatcher();
         }
     }
 
-    /// <summary>Applies persisted JSON to the typed settings (unknown/invalid values keep defaults).</summary>
     private static void Apply(string json)
     {
         try
@@ -230,7 +180,6 @@ static class SettingsStore
         }
         catch (JsonException)
         {
-            // Best effort.
         }
     }
 
@@ -249,15 +198,9 @@ static class SettingsStore
         }
         catch
         {
-            // Best effort: settings persistence must never break the UI.
         }
     }
 
-    /// <summary>
-    /// Watches settings.json for writes from other processes so every running instance follows
-    /// the latest values (multi-process support). Only reacts to changes that were not written by
-    /// this process (<see cref="_lastWritten"/> guard prevents a self-trigger loop).
-    /// </summary>
     private static void StartWatcher()
     {
         try
@@ -273,13 +216,12 @@ static class SettingsStore
         }
         catch
         {
-            _watcher = null; // watcher unavailable — single-process sync only
+            _watcher = null;
         }
     }
 
     private static void OnFileChanged()
     {
-        // Debounce: multiple rapid writes (own saves, other processes) coalesce into one reload.
         if (Interlocked.CompareExchange(ref _reloadScheduled, 1, 0) != 0) return;
         _ = Task.Run(async () =>
         {
@@ -293,14 +235,13 @@ static class SettingsStore
                     {
                         if (!File.Exists(FilePath)) return;
                         var json = File.ReadAllText(FilePath);
-                        if (json == _lastWritten) return; // our own write
+                        if (json == _lastWritten) return;
                         Apply(json);
                         _lastWritten = json;
                         applied = true;
                     }
                     catch
                     {
-                        // Best effort.
                     }
                 }
                 if (applied) Changed?.Invoke();
@@ -312,7 +253,6 @@ static class SettingsStore
         });
     }
 
-    /// <summary>On-disk shape of settings.json.</summary>
     internal sealed class SettingsFileModel
     {
         public string? EditorCommand { get; set; }

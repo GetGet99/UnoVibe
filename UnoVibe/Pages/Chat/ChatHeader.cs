@@ -1,10 +1,5 @@
 namespace UnoVibe.Pages.Chat;
 
-/// <summary>
-/// Chat page header: session title (with inline rename), back-to-parent button, busy ring,
-/// folder actions, full-session fork button, the session stats flyout, and the compact
-/// cost / tokens / context usage summary next to it.
-/// </summary>
 [QuickMarkup("""
     using UnoVibe.Controls;
     using QuickMarkup.WinUI;
@@ -16,7 +11,6 @@ namespace UnoVibe.Pages.Chat;
     inject ToastsProvider Toasts;
     inject UIServiceProvider UIs;
     bool EditingTitle = false;
-    // Can be null if it's pending session to create
     SessionHead? Head => `Sessions.Head(Sessions.ActiveSessionId)`;
 
     bool IsSubagent => `Head?.IsSubagent ?? false`;
@@ -47,11 +41,6 @@ namespace UnoVibe.Pages.Chat;
                 }
                 else
                 {
-                    // Title row as a Grid so a long title truncates with an ellipsis instead of
-                    // pushing the pencil off-screen: the title is a star column, so the trailing
-                    // Auto columns (pencil, busy ring) always keep their room. The conditional
-                    // leading buttons (hamburger, back-to-parent) sit in Auto columns that react
-                    // to 0-width when absent, so they never leave phantom gaps.
                     <Grid ColumnDefinitions=<>
                         <ColumnDefinition Width=`IsCompact ? GridLength.Auto : new GridLength(0)` />
                         <ColumnDefinition Width=`IsSubagent ? GridLength.Auto : new GridLength(0)` />
@@ -95,8 +84,6 @@ namespace UnoVibe.Pages.Chat;
                 </Button>
                 <ChatCost />
             </StackPanel>
-            // On compact windows the cost/tokens/context summary moves to a second line (it's
-            // important enough to keep visible) instead of the inline text on the stats button.
             if (`IsCompact`)
             {
                 <ChatCostInline />
@@ -113,8 +100,6 @@ partial class ChatHeader : IQuickMarkupComponent<Grid>
         UIs.BeginRenameAndFocusRequested += BeginRename;
     }
 
-    /// <summary>Public entry into rename mode for the /rename built-in command (the pencil icon
-    /// calls <see cref="StartTitleEdit"/> directly). No-op while already editing.</summary>
     public void BeginRename()
     {
         if (EditingTitle) return;
@@ -130,7 +115,6 @@ partial class ChatHeader : IQuickMarkupComponent<Grid>
 
     private void CancelTitleEdit() => EditingTitle = false;
 
-    // TODO [Low]: async void (banned form, internally guarded) — prefer async Task + await in markup.
     private async void SaveTitle()
     {
         EditingTitle = false;
@@ -144,7 +128,6 @@ partial class ChatHeader : IQuickMarkupComponent<Grid>
             }
     }
 
-    /// <summary>Focuses and selects the rename box once the reactive tree has materialized it.</summary>
     private async Task FocusTitleEditAsync()
     {
         await Task.Delay(16);

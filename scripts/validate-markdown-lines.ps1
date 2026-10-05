@@ -8,7 +8,6 @@
         scripts/validate-markdown-lines.ps1
     Without arguments the whole doc set is checked; file/folder arguments (repo
     root relative) restrict the check. Exit code 0 = all clean, 1 = violations.
-#>
 
 $ErrorActionPreference = 'Stop'
 
