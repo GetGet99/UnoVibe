@@ -215,6 +215,7 @@ partial class ToolRunningState : ToolCallState
     public string? Title { get; set; }
     public JsonElement? Structured { get; set; }
     public List<ToolContentItem>? Content { get; set; }
+    public Integration.Events.ToolMetadata? Metadata { get; set; }
 }
 
 partial class ToolCompletedState : ToolCallState

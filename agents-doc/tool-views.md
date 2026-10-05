@@ -24,7 +24,7 @@ is a per-file list
 `{ filePath, relativePath, type: "add"|"update"|"delete"|"move", patch, additions, deletions, movePath }`
 (source `packages/opencode/src/tool/apply_patch.ts`), landing in the tool part's `state.metadata`.
 
-`ApplyToolState` captures both `metadata.diff` and `metadata.files` (→ `PatchJson`);
+`ApplyToolPart` captures both `metadata.diff` and `metadata.files` (→ `PatchFiles`);
 `MessageView` dispatches `tool == "apply_patch"` to `ToolViewPatch` — a collapsible card that
 parses the per-file list and renders one bordered block per file with a TUI-style label plus
 `(+N -M)` counts. Each non-delete file's patch renders through `DiffView` (see below); delete
@@ -32,6 +32,14 @@ files show a summary instead (TUI parity). Falls back to the raw `Part.Diff` whe
 omits per-file metadata.
 
 Mirrors the TUI's `ApplyPatch` and the web client's `patch` renderer.
+
+## Running metadata
+
+`ApplyToolPart` applies `state.metadata` for `running` as well as `completed`/`error`.
+This matters for `task`: the server publishes `{ sessionId, parentSessionId }` via
+`ctx.metadata()` while the subagent is still running
+(source `packages/opencode/src/tool/task.ts`), so `ToolViewTask` can enable its button
+and navigate to the live subagent session before completion.
 
 ## Accordion headers
 

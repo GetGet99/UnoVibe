@@ -207,6 +207,7 @@ static class MessageJsonHelper
             {
                 Input = running.Input,
                 Title = running.Title,
+                Metadata = running.Metadata,
             },
             ToolStateCompleted completed => new ToolCompletedState
             {
@@ -232,8 +233,13 @@ static class MessageJsonHelper
         item.State = state;
         item.ToolStatus = state.Status;
 
-        if (state is ToolRunningState runningState && !string.IsNullOrWhiteSpace(runningState.Title))
-            item.ToolTitle = runningState.Title;
+        if (state is ToolRunningState runningState)
+        {
+            if (!string.IsNullOrWhiteSpace(runningState.Title))
+                item.ToolTitle = runningState.Title;
+            if (runningState.Metadata is { } runningMeta)
+                ApplyToolMetadata(item, runningMeta);
+        }
         if (state is ToolCompletedState completedState)
         {
             item.ToolTitle = NullIfBlank(completedState.Title);

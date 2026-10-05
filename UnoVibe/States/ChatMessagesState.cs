@@ -56,12 +56,13 @@ partial class ChatMessagesState : IDisposable
         var head = Sessions.Head(SessionId);
         var directory = head?.Directory;
 
-        if (!(await Opencode.GetMessagesAsync(SessionId.Id)).TryGetValue(out var messages, out var error))
+        var messagesResult = await Opencode.GetMessagesAsync(SessionId.Id);
+        RegisterEvents();
+        if (!messagesResult.TryGetValue(out var messages, out var error))
         {
             Toasts.ShowError(error, "Could not load messages");
             return;
         }
-        RegisterEvents();
         foreach (var msg in messages)
         {
             var message = MessageJsonHelper.MessageFromJson(msg);
@@ -69,6 +70,7 @@ partial class ChatMessagesState : IDisposable
             _messagesById[message.Id] = message;
             AppendMessage(message);
         }
+        await SyncBusyToolsAsync();
         UpdateSessionStats();
 
         if (directory is not null)
@@ -289,7 +291,51 @@ partial class ChatMessagesState : IDisposable
                 break;
             case SessionStatusIdle:
                 Retry = RetryState.None;
+                AsyncHelper.RunAndReport(SyncBusyToolsAsync(), Toasts, "", "Sync tools");
                 break;
+        }
+    }
+
+    async Task SyncBusyToolsAsync()
+    {
+        try
+        {
+            var hasBusy = false;
+            foreach (var message in Messages)
+            {
+                foreach (var part in message.Parts)
+                {
+                    if (part is ToolCallPartItem tool && tool.IsBusy)
+                    {
+                        hasBusy = true;
+                        break;
+                    }
+                }
+                if (hasBusy) break;
+            }
+            if (!hasBusy) return;
+            if (!(await Opencode.GetMessagesAsync(SessionId.Id)).TryGetValue(out var messages, out _)) return;
+            var byPartId = new Dictionary<string, Integration.Events.ToolPart>();
+            foreach (var msg in messages)
+            {
+                if (msg.Parts is null) continue;
+                foreach (var part in msg.Parts)
+                {
+                    if (part is Integration.Events.ToolPart tool) byPartId[part.Id] = tool;
+                }
+            }
+            foreach (var message in Messages)
+            {
+                foreach (var part in message.Parts)
+                {
+                    if (part is ToolCallPartItem toolItem && toolItem.IsBusy
+                        && byPartId.TryGetValue(toolItem.Id, out var serverPart))
+                        MessageJsonHelper.ApplyToolPart(toolItem, serverPart);
+                }
+            }
+        }
+        catch
+        {
         }
     }
 

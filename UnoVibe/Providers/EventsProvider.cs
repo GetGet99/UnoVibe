@@ -10,6 +10,7 @@ class EventsProvider : IDisposable
 {
     OpencodeClient client;
     DispatcherQueue dispatcherQueue;
+    public ToastsProvider? Toasts { get; set; }
     public EventsProvider(OpencodeClient client, DispatcherQueue dispatcherQueue)
     {
         this.client = client;
@@ -226,13 +227,33 @@ class EventsProvider : IDisposable
 
             dispatcherQueue?.TryEnqueue(() =>
             {
-                foreach (var evt in batch) Apply(evt);
+                string? firstError = null;
+                var failures = 0;
+                foreach (var evt in batch)
+                {
+                    try
+                    {
+                        Apply(evt);
+                    }
+                    catch (Exception ex)
+                    {
+                        failures++;
+                        firstError ??= $"{evt.Type}: {ex.Message}";
+                    }
+                }
+                if (failures > 0)
+                    Toasts?.ShowError(Truncate(firstError ?? "", 500) + (failures > 1 ? $"\n({failures} events failed)" : ""), "Event error");
             });
         }
     }
 
-    private const int MaxSeenEventIds = 2000;
-    private bool IsDuplicateEvent(OpencodeEvent evt)
+    private static string Truncate(string value, int max)
+    {
+        if (value.Length <= max) return value;
+        return value.Substring(0, max) + "…";
+    }
+
+    private const int MaxSeenEventIds = 2000;    private bool IsDuplicateEvent(OpencodeEvent evt)
     {
         lock (_seenEventIds)
         {

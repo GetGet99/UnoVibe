@@ -66,6 +66,18 @@ indicator). A streak cap of 10 consecutive auto-continues hands control back to 
 as a runaway-loop guard. Aborted turns never qualify. A client-side interrupt flag suppresses
 auto-continue even when the aborted marker hasn't arrived yet.
 
+## Idle reconciliation for busy tools
+
+`message.part.updated` is the live path for tool completion, but a missed event leaves a card
+stuck busy (e.g. patch on "Preparing..." with a yellow spinner after the turn already ended).
+The miss happens on session open: events arriving between the initial `GET message` response
+and the event subscription are never delivered, so a tool completing in that window stays
+busy locally. `ChatMessagesState` therefore runs the same repair in two places, both
+targeted to a single session (never a blanket refresh):
+- Right after the initial load, once events are subscribed, it refetches and re-applies any
+  server-side `tool` part over a locally-busy `ToolCallPartItem`.
+- When `session.status idle` arrives, it repeats the check (no-op when none are busy).
+
 ## Revert / undo
 
 **API:**

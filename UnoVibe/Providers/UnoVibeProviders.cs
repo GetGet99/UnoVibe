@@ -19,6 +19,7 @@ class UnoVibeProviders : IDisposable
         Notifications = new(hostWindow);
         Events = new EventsProvider(Connection.Client, dispatcher);
         Toasts = new(Events, dispatcher);
+        Events.Toasts = Toasts;
         Models = new(Connection.Client, Toasts);
         Sessions = new(Connection, Events, Toasts, Notifications, Models, dispatcher);
     }

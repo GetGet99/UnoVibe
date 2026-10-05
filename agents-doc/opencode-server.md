@@ -26,6 +26,8 @@ events for sessions in other directories are filtered out server-side, so
 `EventsProvider` opens an extra `/event?directory=<path>` stream per opened sidebar
 folder, feeding the same channel; `PumpAsync` dedupes by SSE event id because a folder equal to the
 server's default instance would otherwise deliver every event twice).
+Batch dispatch is per-event guarded: one failing handler no longer drops the rest of the batch,
+and the first failure surfaces as an "Event error" toast (wired via `Events.Toasts`).
 
 **Worktree caveat:** git worktrees of the same repo share one project ID, so the default `GET /session`
 list can include sessions from *other* worktree directories (their events are tagged with that directory
