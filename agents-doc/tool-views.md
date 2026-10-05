@@ -43,6 +43,9 @@ keeps its own `bool Expanded` and flips it via a toggle callback.
 - Props: `Title` (required), `Expanded`, `Enabled` (default true), plus styling flags.
 - When `Enabled` is false the header renders as a plain row with no click target — never a
   greyed-out disabled `Button`.
+- Every tool card using it passes `Enabled` matching its expanded content, so an empty card
+  renders the plain row: `edit` uses `Diff`/`ToolOutput`, `write` uses `ToolContent`/`ToolOutput`,
+  `apply_patch` uses `Diff`/`PatchFiles`, reasoning uses the summary body.
 - Tool cards pass the busy flag with pending/running foregrounds.
 
 ## Tool diff / code views

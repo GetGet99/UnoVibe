@@ -9,7 +9,7 @@ namespace UnoVibe.Controls.ToolViews;
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4>
-        <AccordionHeader Title=`Part.DisplayName` Expanded=`Expanded` ShowSpinner=`Part.IsBusy` SpinnerForeground=`Part.ToolStatus == "pending" ? theme.SystemNeutral : theme.SystemCaution` TitleForeground=`theme.PrimaryText` Toggle=`() => Expanded = !Expanded` />
+        <AccordionHeader Title=`Part.DisplayName` Expanded=`Expanded` Enabled=`Part.Diff is not null || Part.PatchFiles.Count > 0` ShowSpinner=`Part.IsBusy` SpinnerForeground=`Part.ToolStatus == "pending" ? theme.SystemNeutral : theme.SystemCaution` TitleForeground=`theme.PrimaryText` Toggle=`() => Expanded = !Expanded` />
         if (`Expanded`)
         {
             foreach (var f in `Part.PatchFiles`)
