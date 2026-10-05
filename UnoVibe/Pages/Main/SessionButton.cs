@@ -15,7 +15,7 @@ namespace UnoVibe.Pages.Main;
     <Button
         Margin=`new Thickness(0, 4, 0, 0)`
         Padding=`new Thickness(8, 6, 8, 6)`
-        HorizontalAlignment=Stretch HorizontalContentAlignment=Left
+        HorizontalAlignment=Stretch HorizontalContentAlignment=Stretch
         @Click+=`IsSidebarView = false; Sessions.ActiveSessionId = Session.Id`
         Background=`Sessions.ActiveSessionId == Session.Id ? theme.ControlFill : transparent`
         ContextFlyout=<MenuFlyout Placement=BottomEdgeAlignedRight>
