@@ -10,7 +10,7 @@ namespace UnoVibe.Pages.Chat.MessageParts;
         var theme = ThemeBrushes.Global;
     </setup>
     <StackPanel Spacing=4 MaxWidth=720 HorizontalAlignment=Left>
-        <AccordionHeader Title=`Part.Time.IsDone ? Part.ThoughtLabel : Part.Label` Expanded=`Expanded` Enabled=`Part.Summary.Body.Length > 0` SemiBold ShowSpinner=`!Part.Time.IsDone` SpinnerForeground=`theme.SystemCaution` TitleForeground=`Part.Time.IsDone ? theme.SecondaryText : theme.SystemCaution` Toggle=`() => Expanded = !Expanded` />
+        <AccordionHeader Title=`Part.Time.IsDone ? Part.ThoughtLabel : Part.Label` Expanded=`Expanded` Enabled=`Part.Summary.Body.Length > 0` ShowSpinner=`!Part.Time.IsDone` SpinnerForeground=`theme.SystemCaution` TitleForeground=`Part.Time.IsDone ? theme.SecondaryText : theme.SystemCaution` Toggle=`() => Expanded = !Expanded` />
         if (`Expanded`)
         {
             if (`Part.Summary.Body.Length > 0`)

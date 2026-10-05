@@ -6,7 +6,6 @@ namespace UnoVibe.Controls;
     required string Title;
     bool Expanded = false;
     bool Enabled = true;
-    bool SemiBold = false;
     bool ShowSpinner = false;
     Brush? SpinnerForeground;
     Brush? TitleForeground;
@@ -20,13 +19,13 @@ namespace UnoVibe.Controls;
                 <StackPanel Orientation=Horizontal Spacing=8>
                     <ProgressRing Width=14 Height=14 IsActive=true Foreground=`SpinnerForeground ?? theme.SystemCaution` VerticalAlignment=Center Visibility=`ShowSpinner ? Visibility.Visible : Visibility.Collapsed` />
                     <TextBlock Text=`Expanded ? "▾" : "▸"` FontSize=12 Foreground=`TitleForeground` VerticalAlignment=Center />
-                    <TextBlock Text=`Title` FontSize=12 FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal` Foreground=`TitleForeground` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                    <TextBlock Text=`Title` FontSize=12 Foreground=`TitleForeground` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
                 </StackPanel>
             </Button>
         else
             <StackPanel Orientation=Horizontal Spacing=8 HorizontalAlignment=Stretch>
                 <ProgressRing Width=14 Height=14 IsActive=true Foreground=`SpinnerForeground ?? theme.SystemCaution` VerticalAlignment=Center Visibility=`ShowSpinner ? Visibility.Visible : Visibility.Collapsed` />
-                <TextBlock Text=`Title` FontSize=12 FontWeight=`SemiBold ? FontWeights.SemiBold : FontWeights.Normal` Foreground=`TitleForeground` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
+                <TextBlock Text=`Title` FontSize=12 Foreground=`TitleForeground` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>
     </root>
     """)]
