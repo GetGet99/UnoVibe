@@ -12,6 +12,14 @@ Reference for the per-session, client-side state and behaviors that drive the ch
 > `SessionsStateProvider.Chatbox(sessionId)`. `ChatPage` re-hooks the active session's state
 > on session switch.
 
+## Send bumps sidebar order
+
+Every user-initiated transmission (`SendPromptNowAsync` with `isUserSend`, plus the
+fire-and-forget shell/command dispatches and local create/fork) bumps the session's sidebar
+`SortKey` to now — see "Sidebar ordering" in [`session-sidebar.md`](session-sidebar.md).
+Queued-prompt drains bump (they carry user-typed content); silent auto-continue loops pass
+`isUserSend: false` and never reorder.
+
 ## Interrupt / send-while-busy
 
 Interrupting calls `POST /session/:id/abort` (the server cancels the runner + in-flight tools

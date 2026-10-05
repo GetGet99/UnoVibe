@@ -192,7 +192,9 @@ partial class SessionsStateProvider
     public SessionHead Register(SessionInfo newSession)
     {
         Events.Register(newSession.Directory);
-        return UpsertSession(newSession);
+        var head = UpsertSession(newSession);
+        head.TouchOrder();
+        return head;
     }
 
     void MessageUpdated(string _1, MessageUpdatedEvent e)
@@ -290,7 +292,7 @@ partial class SessionsStateProvider
         directoriesWithoutSession.Select(x => new SessionGroupModel(x, GetBranch(x), [])).Concat(
             sessions
             .Where(s => !s.IsSubagent)
-            .OrderByDescending(s => s.Updated).ThenByDescending(s => s.Id.Id, StringComparer.Ordinal)
+            .OrderByDescending(s => s.SortKey).ThenByDescending(s => s.Id.Id, StringComparer.Ordinal)
             .GroupBy(s => s.Directory)
             .Select(g => new SessionGroupModel(g.Key, GetBranch(g.Key), [.. g]))
         );

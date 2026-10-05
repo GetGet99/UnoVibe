@@ -31,7 +31,7 @@ partial class ChatboxState
                 return false;
             try
             {
-                await SendPromptNowAsync(text);
+                await SendPromptNowAsync(text, isUserSend: true);
                 _pendingPrompts.Dequeue();
                 PendingPromptsCount = _pendingPrompts.Count;
                 return true;
@@ -54,7 +54,7 @@ partial class ChatboxState
                         If you have already finished your task, end the turn with a non-reasoning message instead.
                         </automatic_message_metadata>
                         """
-                });
+                }, isUserSend: false);
                 return true;
             } catch (Exception ex)
             {

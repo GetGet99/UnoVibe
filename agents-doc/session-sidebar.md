@@ -13,6 +13,22 @@ server API + toggle mapping is also there.
 > authoritative store for busy/outcome/pending-attention because SSE can fire for sessions
 > not yet in the list.
 
+## Sidebar ordering (`SortKey`)
+
+Sessions sort by a client-side `SortKey` on `SessionHead`, **not** by the server's
+`time.updated` — the server bumps `updated` on background activity (compaction summaries,
+permission/revert touches, other clients' prompts), which used to flip the order every few
+seconds while sessions were running.
+
+- `SortKey` is seeded from `time.updated` when the head is created (`SessionHead.From`),
+  so initial order is most-recent-first as before.
+- It is bumped to "now" (`TouchOrder`) only on local user sends: composer send, slash
+  command, shell run, manual Continue, queued-prompt drains, and local create/fork
+  (`SessionsStateProvider.Register`). Silent auto-continue loops never bump it.
+- `ApplyUpdateFrom` (driven by `session.updated` SSE) keeps syncing `Updated` for the
+  relative time label but leaves `SortKey` alone. The time label therefore still reflects
+  last server activity while the order reflects your last touch.
+
 ## Git branch in the sidebar
 
 Each sidebar directory group shows its git branch (`⎇ <branch>`) after the folder name, from

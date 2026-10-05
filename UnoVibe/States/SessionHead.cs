@@ -12,6 +12,8 @@ namespace UnoVibe.States;
     long Updated;
     string TimeLabel => `FormatTimeLabel(Updated)`;
 
+    long SortKey;
+
     bool IsBusy;
     ChatOutcome Outcome;
     bool IsPendingQuestion;
@@ -60,6 +62,8 @@ partial class SessionHead
         return $"{span.TotalDays / 30:0}mo";
     }
 
+    public void TouchOrder() => SortKey = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+
     public static SessionHead From(Integration.SessionInfo theirs)
     {
         SessionHead sess = new(new(theirs.Id), theirs.ParentId is null ? null : new(theirs.ParentId), theirs.Directory, theirs.Time.Created)
@@ -74,7 +78,11 @@ partial class SessionHead
             sess.ChatParams.Model = new(model.ProviderId, model.Id);
             sess.ChatParams.Variant = model.Variant;
         }
-        if (theirs.Time is not null) sess.Updated = theirs.Time.Updated;
+        if (theirs.Time is not null)
+        {
+            sess.Updated = theirs.Time.Updated;
+            sess.SortKey = theirs.Time.Updated > 0 ? theirs.Time.Updated : theirs.Time.Created;
+        }
         return sess;
     }
 
