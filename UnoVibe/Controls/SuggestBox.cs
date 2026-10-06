@@ -97,17 +97,42 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
     private SuggestionBoxController Controller =>
         _controller ??= new SuggestionBoxController(Providers ?? Array.Empty<ISuggestionProvider>(), Prefixes);
 
-    public void Clear() => _ = SetTextProgrammaticallyAsync("");
-
-    public void SwapText(string newText, out string oldText)
+    public string Text
     {
-        oldText = input.Text;
-        _ = SetTextProgrammaticallyAsync(newText);
+        get => input?.Text ?? "";
+        set => SetDraftText(value);
     }
 
-    private async Task SetTextProgrammaticallyAsync(string newText)
+    public void Clear() => SetDraftText("");
+
+    public void ClearAfterSubmit() => _ = SetTextWithEnterSuppressionAsync("");
+
+    public void RestoreDraft(string newText, out string oldText)
+    {
+        oldText = Text;
+        SetDraftText(newText);
+    }
+
+    private void SetDraftText(string newText)
     {
         if (input is null) return;
+        _programmaticTextChange = true;
+        try
+        {
+            input.Text = newText;
+            input.SelectionStart = newText.Length;
+        }
+        finally
+        {
+            _programmaticTextChange = false;
+        }
+        CloseSuggestions();
+    }
+
+    private async Task SetTextWithEnterSuppressionAsync(string newText)
+    {
+        if (input is null) return;
+        BlockStrayTextChange();
         _programmaticTextChange = true;
         try
         {
@@ -117,12 +142,21 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         {
             _programmaticTextChange = false;
         }
+        CloseSuggestions();
         input.AcceptsReturn = false;
         await Task.Delay(16);
-        input.AcceptsReturn = true;
+        if (input is not null) input.AcceptsReturn = true;
     }
 
-    private void OnTextChanged(object sender, TextChangedEventArgs e) => _ = UpdateSuggestionsAsync();
+    private void OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_programmaticTextChange)
+        {
+            CloseSuggestions();
+            return;
+        }
+        _ = UpdateSuggestionsAsync();
+    }
 
     private async Task UpdateSuggestionsAsync()
     {
@@ -232,7 +266,7 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         if (item.Action is not null)
         {
             CloseSuggestions();
-            _ = SetTextProgrammaticallyAsync("");
+            _ = SetTextWithEnterSuppressionAsync("");
             input.Focus(FocusState.Programmatic);
             if (CommandTriggered is { } handler)
                 _ = handler(this, item);

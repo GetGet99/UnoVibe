@@ -8,9 +8,27 @@ use. For the Uno TextBox key-processing quirk the focus management depends on, s
 
 `SuggestBox` (`UnoVibe/Controls/SuggestBox.cs`) is a self-contained QuickMarkup component
 (multiline TextBox + attached suggestion `Flyout`) offering `@` and `/` completions.
-Public surface: `Prefixes` (default `"/@"`), `Providers`, `SubmitRequested`/`CommandTriggered`
-events, `Clear()`. The flyout never steals focus (`ShowMode=Transient` + focus bounce-back),
+Public surface: `Prefixes` (default `"/@"`), `Providers`, `Text`,
+`SubmitRequested`/`CommandTriggered` events, `RestoreDraft()`, `Clear()`,
+`ClearAfterSubmit()`. Read and write the input only through those members —
+never reach into `SuggestBox.MarkupNode.Text` directly.
+The flyout never steals focus (`ShowMode=Transient` + focus bounce-back),
 so the editor keeps focus for the whole suggestion session.
+
+**Programmatic text: pick the method by intent.**
+Setting the input falls into two cases with different stray-Enter needs
+(Uno delivers a handled Enter as a newline anyway — see
+[`referenced-projects.md`](referenced-projects.md)), so they are separate methods:
+- Draft restore (`Text` setter, `RestoreDraft()`, plain `Clear()`): writes the text
+  as-is, parks the caret at the end, and closes the flyout. No `AcceptsReturn`
+  toggling — flipping the box to single-line while assigning multiline text clips it
+  to one line. Used for session-switch draft swap, revert/fork restore, and mode switches.
+- Post-submit clear (`ClearAfterSubmit()`): additionally arms the stray-Enter guards
+  (`BeforeTextChanging` cancel + a brief `AcceptsReturn=false` pulse) so the Enter that
+  submitted cannot land a newline in the emptied box. Used after every send/submit path
+  (bare Enter, send button, shell submit, built-in command commit).
+Programmatic writes never trigger a suggestion fetch (the `TextChanged` handler ignores
+them and just closes the flyout).
 
 **Parsing + dispatch** (`SuggestionBoxController`): every prefix triggers at start-of-token,
 so `foo /skill` works while `foo/bar` and `foo@bar` do not. `InputStartOnly` items (whole-input

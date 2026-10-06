@@ -156,7 +156,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         var message = Message;
         MessageComp.Watch(newMessage =>
         {
-            suggestBox.SwapText(newMessage.Text, out var oldText);
+            suggestBox.RestoreDraft(newMessage.Text, out var oldText);
             message.Text = oldText;
             message = newMessage;
         });
@@ -204,7 +204,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private void OnInputTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (!ShellMode && (suggestBox.MarkupNode.Text ?? "") == "!")
+        if (!ShellMode && suggestBox.Text == "!")
             EnterShellMode();
     }
 
@@ -220,7 +220,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
     {
         if (!ShellMode) return;
         ShellMode = false;
-        suggestBox.Clear();
+        suggestBox.ClearAfterSubmit();
         SetSuggestionPrefixes("/@");
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
     }
@@ -234,7 +234,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private async Task SubmitShellAsync()
     {
-        var command = (suggestBox.MarkupNode.Text ?? "").Trim();
+        var command = suggestBox.Text.Trim();
         ExitShellMode();
         if (command.Length == 0) return;
         await SendShellCommandAsync(command);
@@ -250,7 +250,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         if (await TryRunBuiltInTextAsync(text)) return;
         Message.Text = text;
         await SendAsync(null);
-        sender.Clear();
+        sender.ClearAfterSubmit();
     }
 
     private async Task OnSendWithMode(SendPromptMode mode)
@@ -260,10 +260,10 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             await SubmitShellAsync();
             return;
         }
-        if (await TryRunBuiltInTextAsync(suggestBox.MarkupNode.Text)) return;
-        Message.Text = suggestBox.MarkupNode.Text;
+        if (await TryRunBuiltInTextAsync(suggestBox.Text)) return;
+        Message.Text = suggestBox.Text;
         await SendAsync(mode);
-        suggestBox.Clear();
+        suggestBox.ClearAfterSubmit();
     }
 
     private bool IsBuiltInAvailable(string name) => name != "interrupt" || IsBusy;
@@ -394,7 +394,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
     {
         if (!BuiltInCommands.TryParse(text, out var command)) return false;
         await RunBuiltInCommandAsync(command.Name);
-        suggestBox.Clear();
+        suggestBox.ClearAfterSubmit();
         return true;
     }
 
@@ -421,6 +421,6 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
     public void SetChatText(string txt)
     {
         if (ShellMode) ExitShellMode();
-        suggestBox.MarkupNode.Text = txt;
+        suggestBox.Text = txt;
     }
 }
