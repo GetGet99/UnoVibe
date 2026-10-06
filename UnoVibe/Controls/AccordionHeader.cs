@@ -13,7 +13,7 @@ namespace UnoVibe.Controls;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
-    <root>
+    <Border>
         if (`Enabled`)
             <Button CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)` BorderThickness=0 HorizontalContentAlignment=Left HorizontalAlignment=Stretch Click+=`(s, e) => Toggle?.Invoke()`>
                 <StackPanel Orientation=Horizontal Spacing=8>
@@ -27,6 +27,6 @@ namespace UnoVibe.Controls;
                 <ProgressRing Width=14 Height=14 IsActive=true Foreground=`SpinnerForeground ?? theme.SystemCaution` VerticalAlignment=Center Visibility=`ShowSpinner ? Visibility.Visible : Visibility.Collapsed` />
                 <TextBlock Text=`Title` FontSize=12 Foreground=`TitleForeground` TextWrapping=Wrap IsTextSelectionEnabled=true VerticalAlignment=Center />
             </StackPanel>
-    </root>
+    </Border>
     """)]
-partial class AccordionHeader : IQuickMarkupComponent<UIElement>;
+partial class AccordionHeader : IQuickMarkupComponent<Border>;
