@@ -50,15 +50,8 @@ static class ImageIOHelper
 
             foreach (var (name, mime, ext) in ImageClipboardFormats)
             {
-                var format = 
-#if DESKTOP_LINUX
-                    mime
-#else
-                    name
-#endif
-                    ;
-                if (!content.Contains(format)) continue;
-                var item = await content.GetDataAsync(format);
+                if (!content.Contains(name)) continue;
+                var item = await content.GetDataAsync(name);
                 byte[]? bytes = item switch
                 {
                     byte[] raw => raw,
@@ -69,6 +62,9 @@ static class ImageIOHelper
                 if (bytes is { Length: > 0 })
                 {
                     images.Add(await ImageAttachment.CreateFromBytesAsync(bytes, mime, $"Pasted image.{ext}"));
+                    // Each format of images should still be the same image
+                    // So will return the first one that is matced
+                    return images;
                 }
             }
         }
