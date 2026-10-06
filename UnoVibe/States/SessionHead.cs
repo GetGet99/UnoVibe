@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using QuickMarkup.Infra.Collections;
 
 namespace UnoVibe.States;
 
@@ -16,14 +17,16 @@ namespace UnoVibe.States;
 
     bool IsBusy;
     ChatOutcome Outcome;
-    bool IsPendingQuestion;
-    bool IsPendingPermission;
+    bool IsPendingQuestion => `PendingQuestionIds.Count > 0`;
+    bool IsPendingPermission => `PendingPermissionIds.Count > 0`;
     SessionState State => `ResolveState()`;
 
     ChatParameters ChatParams = `new()`;
     """)]
 partial class SessionHead
 {
+    public ReactiveSet<string> PendingPermissionIds { get; } = [];
+    public ReactiveSet<string> PendingQuestionIds { get; } = [];
     public long Created { get; private set; }
     public SessionId Id { get; private set; }
     public SessionId? ParentId { get; private set; }

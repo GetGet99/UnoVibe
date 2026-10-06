@@ -88,6 +88,11 @@ partial class SessionsStateProvider
         Events.RegisterSessionStatus(null, OnSessionStatus);
         Events.RegisterMessageUpdated(null, MessageUpdated);
         Events.RegisterVcsBranchUpdated(null, VcsBranchUpdated);
+        Events.RegisterPermissionAsked(null, OnPermissionAsked);
+        Events.RegisterPermissionReplied(null, OnPermissionReplied);
+        Events.RegisterQuestionAsked(null, OnQuestionAsked);
+        Events.RegisterQuestionReplied(null, OnQuestionReplied);
+        Events.RegisterQuestionRejected(null, OnQuestionRejected);
     }
     void FetchInitialSessions()
         => AsyncHelper.RunAndReport(
@@ -133,8 +138,8 @@ partial class SessionsStateProvider
         {
             if (!sessions.ContainsKey(new(session.Id)))
             {
-            directories.Add(session.Directory);
-                sessions.Add(SessionHead.From(session));
+                directories.Add(session.Directory);
+                UpsertSession(session);
             }
         }
         if (directories.Count is 0)
@@ -253,6 +258,15 @@ partial class SessionsStateProvider
 
         if (ActiveSessionId == sessId)
             ActiveSessionId = null;
+        if (!sessions.TryGetValue(sessId, out var head))
+        {
+            chatboxes.Remove(sessId);
+            return;
+        }
+        foreach (var requestId in head.PendingPermissionIds.ToArray())
+            ClearAncestorsPendingPermission(head, requestId);
+        foreach (var requestId in head.PendingQuestionIds.ToArray())
+            ClearAncestorsPendingQuestion(head, requestId);
         sessions.Remove(sessId);
         chatboxes.Remove(sessId);
     }
@@ -263,6 +277,119 @@ partial class SessionsStateProvider
         if (!sessions.TryGetValue(sessId, out var head)) return;
 
         head.IsBusy = e.Status is not SessionStatusIdle;
+    }
+
+    void OnPermissionAsked(string _, PermissionAskedEvent e)
+    {
+        if (e.Id.Length is 0 || e.SessionId.Length is 0) return;
+        if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
+        if (!head.PendingPermissionIds.Add(e.Id)) return;
+        MarkAncestorsPendingPermission(head, e.Id);
+        if (head.Id != ActiveSessionId)
+            head.IsRead = false;
+        var request = PermissionRequestItem.From(e);
+        Notifications.NotifyPermission(head, request.Title, request.Body, IsActiveOrDescendant(head.Id));
+    }
+
+    void OnPermissionReplied(string _, PermissionRepliedEvent e)
+    {
+        if (e.RequestId.Length is 0 || e.SessionId.Length is 0) return;
+        if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
+        head.PendingPermissionIds.Remove(e.RequestId);
+        ClearAncestorsPendingPermission(head, e.RequestId);
+    }
+
+    void OnQuestionAsked(string _, QuestionAskedEvent e)
+    {
+        if (e.Id.Length is 0 || e.SessionId.Length is 0) return;
+        if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
+        if (!head.PendingQuestionIds.Add(e.Id)) return;
+        MarkAncestorsPendingQuestion(head, e.Id);
+        if (head.Id != ActiveSessionId)
+            head.IsRead = false;
+        var first = e.Questions.FirstOrDefault()?.Question ?? "";
+        Notifications.NotifyQuestion(head, first, head.Id == ActiveSessionId);
+    }
+
+    void OnQuestionReplied(string _, QuestionRepliedEvent e)
+    {
+        if (e.RequestId.Length is 0 || e.SessionId.Length is 0) return;
+        if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
+        head.PendingQuestionIds.Remove(e.RequestId);
+        ClearAncestorsPendingQuestion(head, e.RequestId);
+    }
+
+    void OnQuestionRejected(string _, QuestionRejectedEvent e)
+    {
+        if (e.RequestId.Length is 0 || e.SessionId.Length is 0) return;
+        if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
+        head.PendingQuestionIds.Remove(e.RequestId);
+        ClearAncestorsPendingQuestion(head, e.RequestId);
+    }
+
+    void MarkAncestorsPendingPermission(SessionHead head, string requestId)
+    {
+        var current = head.ParentId;
+        var guard = 0;
+        while (current is not null && guard++ < 64)
+        {
+            if (!sessions.TryGetValue(current, out var parent)) break;
+            parent.PendingPermissionIds.Add(requestId);
+            if (parent.Id != ActiveSessionId)
+                parent.IsRead = false;
+            current = parent.ParentId;
+        }
+    }
+
+    void ClearAncestorsPendingPermission(SessionHead head, string requestId)
+    {
+        var current = head.ParentId;
+        var guard = 0;
+        while (current is not null && guard++ < 64)
+        {
+            if (!sessions.TryGetValue(current, out var parent)) break;
+            parent.PendingPermissionIds.Remove(requestId);
+            current = parent.ParentId;
+        }
+    }
+
+    void MarkAncestorsPendingQuestion(SessionHead head, string requestId)
+    {
+        var current = head.ParentId;
+        var guard = 0;
+        while (current is not null && guard++ < 64)
+        {
+            if (!sessions.TryGetValue(current, out var parent)) break;
+            parent.PendingQuestionIds.Add(requestId);
+            if (parent.Id != ActiveSessionId)
+                parent.IsRead = false;
+            current = parent.ParentId;
+        }
+    }
+
+    void ClearAncestorsPendingQuestion(SessionHead head, string requestId)
+    {
+        var current = head.ParentId;
+        var guard = 0;
+        while (current is not null && guard++ < 64)
+        {
+            if (!sessions.TryGetValue(current, out var parent)) break;
+            parent.PendingQuestionIds.Remove(requestId);
+            current = parent.ParentId;
+        }
+    }
+
+    bool IsActiveOrDescendant(SessionId sessionId)
+    {
+        if (ActiveSessionId is null) return false;
+        SessionId? current = sessionId;
+        var guard = 0;
+        while (current is not null && guard++ < 64)
+        {
+            if (current == ActiveSessionId) return true;
+            current = Head(current)?.ParentId;
+        }
+        return false;
     }
 
     void VcsBranchUpdated(string directory, VcsBranchUpdatedEvent e)
