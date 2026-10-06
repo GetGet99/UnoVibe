@@ -7,7 +7,7 @@ namespace UnoVibe.Pages.Chat.MessageParts;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
-    <root>
+    <Border>
         if (`Part.IsImage`)
             <Border CornerRadius=6 Padding=2 MaxWidth=320 MinWidth=48 MinHeight=48
                     HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`
@@ -19,6 +19,6 @@ namespace UnoVibe.Pages.Chat.MessageParts;
             <Border Background=`theme.SubtleFill` CornerRadius=4 Padding=`new Thickness(8, 4, 8, 4)`>
                 <TextBlock Text=`Part.FileName.Length > 0 ? $"file: {Part.FileName}" : "file"` FontSize=12 TextWrapping=Wrap IsTextSelectionEnabled=true />
             </Border>
-    </root>
+    </Border>
     """)]
 partial class MessageFileView : IQuickMarkupComponent;
