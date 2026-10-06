@@ -9,7 +9,7 @@ namespace UnoVibe.Pages.Chat.MessageParts;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
-    <root>
+    <Border>
         if (`Part.ToolName == "bash" || Part.ToolName == "shell"`)
             <ToolViewShell Part=`Part` />
         else if (`Part.ToolName == "glob"`)
@@ -36,6 +36,6 @@ namespace UnoVibe.Pages.Chat.MessageParts;
             <ToolViewPatch Part=`Part` />
         else
             <ToolViewGeneric Part=`Part` />
-    </root>
+    </Border>
     """)]
 partial class MessageToolView : IQuickMarkupComponent;

@@ -7,7 +7,7 @@ namespace UnoVibe.Pages.Chat;
     public string Mode = "";
     public bool IsBusy = false;
     public bool Enabled = true;
-    <root>
+    <Border>
         if (`IsBusy`)
             <SplitButton IsEnabled=`Enabled` ToolTipService.ToolTip=`SendTooltip`
                     @Click+=`OnPrimaryClick()` Flyout=sendMenu=<MenuFlyout Placement=BottomEdgeAlignedRight>
@@ -21,9 +21,9 @@ namespace UnoVibe.Pages.Chat;
             <Button IsEnabled=`Enabled` ToolTipService.ToolTip=`SendTooltip` @Click+=`OnPlainClick()`>
                 <SymbolIcon Symbol=Send VerticalAlignment=Center />
             </Button>
-    </root>
+    </Border>
     """)]
-partial class SendMessageButton : IQuickMarkupComponent<ContentControl>
+partial class SendMessageButton : IQuickMarkupComponent
 {
     public delegate Task SendModeHandler(SendPromptMode mode);
 
