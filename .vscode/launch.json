@@ -59,6 +59,21 @@
       "stopAtEntry": false
     },
     {
+      "name": "Uno Platform Desktop Debug (Test Page)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-desktop",
+      "program": "${workspaceFolder}/UnoVibe/bin/Debug/net10.0-desktop/UnoVibe.dll",
+      "launchSettingsProfile": "UnoVibe (Desktop)",
+      "env": {
+        "DOTNET_MODIFIABLE_ASSEMBLIES": "debug",
+        "UNOVIBE_TEST_PAGE": "1"
+      },
+      "cwd": "${workspaceFolder}/UnoVibe",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
       "name": "Uno Platform Desktop Debug (Standalone)",
       "type": "coreclr",
       "request": "launch",

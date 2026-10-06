@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using UnoVibe.Models.Startup;
 using UnoVibe.Pages.Connect;
 using UnoVibe.Pages.Main;
+using UnoVibe.Pages.Test;
 
 namespace UnoVibe;
 
@@ -35,6 +36,12 @@ sealed class WindowController
     {
         Window.Child = new ConnectPage(this, startup).MarkupNode;
         Window.Title = "UnoVibe - Welcome";
+    }
+
+    public void ShowTest()
+    {
+        Window.Child = new TestPage().MarkupNode;
+        Window.Title = "UnoVibe - Test";
     }
 
     public void ShowMain(OpencodeConnection connection)

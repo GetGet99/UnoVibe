@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using UnoVibe.Models.Startup;
+using UnoVibe.Pages.Test;
 
 namespace UnoVibe;
 
@@ -31,7 +32,9 @@ partial class App : Application
         Windows.Add(controller);
 
         var startup = CLIHelper.Parse(Environment.GetCommandLineArgs());
-        if (startup.Kind == LaunchKind.None)
+        if (TestPage.IsEnabled)
+            controller.ShowTest();
+        else if (startup.Kind == LaunchKind.None)
             controller.ShowConnect();
         else
             controller.ShowConnect(startup);

@@ -98,6 +98,9 @@ that code, and keep it up to date alongside AGENTS.md (see "Contribution guideli
 - **`agents-doc/dev-environment.md`** — Linux dev-machine runtime notes: the day-to-day 4196
   server, the app log path, and the `unovibe` CLI caveat.
   _Read when_ running/debugging/logging the app on the Linux dev machine.
+- **`agents-doc/test-page.md`** — the dev-only tool-view harness: the `UNOVIBE_TEST_PAGE` flag,
+  the Test Page launch config, and the `TestEditParts` fixture pattern.
+  _Read before_ editing `UnoVibe/Pages/Test/*` or adding fixtures for other tool views.
 
 ## What This Project Is
 
@@ -303,6 +306,8 @@ the user is talking to this opencode session **through the running UnoVibe app**
   `ChatStatusArea`, `ChatMessageList`, `ChatComposer`, message-rendering controls).
   The chat page coordinates sends and provides the shared composer text (`Input`).
   See `agents-doc/session-state.md`, `agents-doc/tool-views.md`, `agents-doc/markdown-rendering.md`.
+- `UnoVibe/Pages/Test/` — dev-only `TestPage` harness (`UNOVIBE_TEST_PAGE=1` opens it instead
+  of the connect flow) plus per-tool fixtures (`TestEditParts`). See `agents-doc/test-page.md`.
 - `UnoVibe/Controls/` — reusable UI used across pages (`AccordionHeader`, `AppSymbolIcon`,
   `CodeHighlighter`, `CodeView`/`DiffView`, `FolderActions`, `MarkdownView`, `SuggestBox`,
   `ToolViews/*`).
