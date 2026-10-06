@@ -157,7 +157,7 @@ partial class MyModel
 }
 ```
 
-When the same class also has `[QuickMarkup]`, refs from both attributes merge (template can use refs from either, `required` refs from `[QuickRefs]` become constructor parameters), and the normal `[QuickMarkup]` constructor rules apply — generated constructors take over, use `[QuickMarkupConstructor]` for custom init logic. `provide`/`inject` may appear in `[QuickRefs]` only in that combined case; standalone `[QuickRefs]` rejects them. Duplicate ref names across fragments are an error.
+When the same class also has `[QuickMarkup]`, refs from both attributes merge (template can use refs from either, `required` refs from `[QuickRefs]` become constructor parameters), and the normal `[QuickMarkup]` constructor rules apply — generated constructors take over, use `[QuickMarkupConstructor]` for custom init logic. `provide`/`inject` and `required` may appear in `[QuickRefs]` only in that combined case; standalone `[QuickRefs]` rejects them. Duplicate ref names across fragments are an error.
 
 ## Required Properties
 
@@ -618,6 +618,18 @@ ReactiveScheduler.AddTickCallbackForCurrentThread(delegate
 });
 ```
 
+### Reporting reactive exceptions
+
+Reactive callbacks that throw are reported via `ReactiveScheduler.UnhandledExceptionForCurrentThread`. Set `e.Handled = true` to record the exception and let remaining effects run, otherwise the scheduler rethrows.
+
+```csharp
+ReactiveScheduler.UnhandledExceptionForCurrentThread += (_, e) =>
+{
+    Log(e.Exception);
+    e.Handled = true;
+};
+```
+
 ## Order of Operations
 
 ### Recommended Pattern (`[QuickMarkupConstructor]` / no explicit constructor)
@@ -845,6 +857,7 @@ A class may implement at most **one** of the two interfaces. Implementing both p
 
 Note:
 - `if`/`else`/`foreach` directly on top level without `<root>` tag is currently not supported due to a bug. If you need to use them, you can add `<root>` tag.
+- `IQuickMarkupComponent<T>` `<root>` must be a single static element: `if`/`else` or `await` directly under `<root>` (even nested in fragments) is a compile error. Wrap the branches in a container element or use `IQuickMarkupFragmentComponent<T>` instead.
 - subclassing regular UI still requires `<root>` tag if you have UI markup. Only QuickMarkup components may omit root tags and have non-root tag directly.
 
 ## Reactivity Infrastructure
