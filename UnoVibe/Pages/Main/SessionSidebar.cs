@@ -8,6 +8,7 @@ namespace UnoVibe.Pages.Main;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     inject SessionsStateProvider Sessions;
+    inject HomeProvider Home;
     inject EventsProvider Events;
     inject ToastsProvider Toasts;
     inject Window HostWindow;
@@ -27,17 +28,26 @@ namespace UnoVibe.Pages.Main;
         </>>
             <ScrollViewer Grid.Row=0>
                 <StackPanel Padding=`new Thickness(12, 0, 12, 12)`>
-                    if (`IsCompact`)
-                    {
-                        <Button HorizontalAlignment=Left Margin=`new Thickness(0, 8, 0, 0)` Padding=`new Thickness(6, 4, 10, 4)`
-                                Background=`transparent` BorderThickness=0 CornerRadius=6 Foreground=`theme.SecondaryText`
-                                @Click+=`IsSidebarView = false` ToolTipService.ToolTip="Back to chat">
-                            <StackPanel Orientation=Horizontal Spacing=6>
-                                <AppSymbolIcon Symbol=Back FontSize=12 />
-                                <TextBlock Text="Back to chat" FontSize=12 />
-                            </StackPanel>
-                        </Button>
-                    }
+                    <Button
+                        Margin=`new Thickness(0, 8, 0, 0)`
+                        Padding=`new Thickness(8, 6, 8, 6)`
+                        HorizontalAlignment=Stretch HorizontalContentAlignment=Stretch
+                        @Click+=`Home.GoHome(); IsSidebarView = false`
+                        Background=`Home.IsHomeView ? theme.ControlFill : transparent`
+                        ToolTipService.ToolTip="Pinned chats">
+                        <Grid ColumnDefinitions=<>
+                            <ColumnDefinition Width=Auto />
+                            <ColumnDefinition />
+                            <ColumnDefinition Width=Auto />
+                        </>>
+                            <AppSymbolIcon Symbol=Home FontSize=12 Foreground=`theme.SecondaryText` Margin=`new Thickness(0, 0, 6, 0)` VerticalAlignment=Center />
+                            <TextBlock Grid.Column=1 Text="Home" FontSize=12 VerticalAlignment=Center />
+                            if (`Home.PinnedCount > 0`)
+                            {
+                                <TextBlock Grid.Column=2 Text=`Home.PinnedCount.ToString()` FontSize=10 Foreground=`theme.TertiaryText` Margin=`new Thickness(8, 0, 0, 0)` VerticalAlignment=Center />
+                            }
+                        </Grid>
+                    </Button>
                     foreach (var group in `Sessions.SessionSidebar`; `group.Directory`)
                     {
                         <SessionGroup Group=`group` />
@@ -89,6 +99,7 @@ partial class SessionSidebar : IQuickMarkupComponent
         {
             var path = await WindowsHelper.PickFolderAsync(HostWindow, Connection.ServerDirectory);
             if (path is null) return;
+            Home.IsHomeView = false;
             Sessions.PrepareNewSession(path);
             await Sessions.AddDirectoryAsync(path);
             IsSidebarView = false;

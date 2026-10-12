@@ -137,6 +137,26 @@ MyValue = new(); // reassigning value triggers reactivity as usual
 MyValue.SomePublicWrapper = 2; // triggers reactivity too
 ```
 
+### Callbacks are not references
+
+Do NOT declare callbacks (`Action`, `Func<...>`) as markup references. A reference wraps the value in `Reference<T>` with change tracking, which a callback identity almost never needs — it only adds overhead and generated code. Declare callbacks as plain C# members instead (events are preferred):
+
+```csharp
+partial class MyComponent : IQuickMarkupComponent<Grid>
+{
+    public event Action? Submitted;
+    public event Func<Task>? LoadRequested;
+}
+```
+
+Consumers subscribe from markup with `+=` (see Events), or from C# as usual:
+
+```quickmarkup
+<MyComponent Submitted+=`OnSubmitted` LoadRequested+=`() => ReloadAsync()` />
+```
+
+Only declare a callback as a markup reference when the handler identity itself must be reactive — i.e. the parent swaps the handler at runtime and the child must observe the swap. This is rare.
+
 ## QuickRefs Attribute
 
 `[QuickRefs("""...""")]` declares reactive references without UI markup. It accepts reference, computed (`=>`), and async computed (`=> async`) declarations only — no `<root>`/`<setup>`/tags. It can be applied multiple times on the same `partial class`; all fragments merge.
@@ -966,6 +986,7 @@ partial class MyPage : Page;
 
 - **Prefer the recommended pattern** — omit explicit constructors or use `[QuickMarkupConstructor]` (with an `Init()` call at the end) instead of manually writing a C# constructor.
 - Use `required` on reference declarations that the consumer must provide, to get compile-time safety and cleaner constructor APIs.
+- Declare callbacks (`Action`, `Func<...>`) as C# events, not markup references, unless the handler identity itself must be reactive.
 - Define **global usings** for common namespaces (`QuickMarkup.Infra`, `static QuickMarkup.Infra.QuickRefs`, etc.) so markup stays clean.
 - Define **C# extension methods** like (`CenterH`, `CenterV`, `Center`, `Right`, `Bottom`, `StretchH`, `StretchV`) for layout shortcuts.
 - The class must be `partial` (source generator emits the other part). The base class should be a UI element (`Page`, `Grid`, `StackPanel`, etc.) or QuickMarkup component interface mentioned above.

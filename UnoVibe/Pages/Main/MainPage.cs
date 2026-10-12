@@ -11,6 +11,7 @@ namespace UnoVibe.Pages.Main;
     provide OpencodeConnection Connection = `null!`;
     provide OpencodeClient Opencode = `null!`;
     provide ModelsProvider Models = `null!`;
+    provide HomeProvider Home = `null!`;
     provide Window HostWindow = `null!`;
     provide bool SettingsOpen = false;
     provide bool IsCompact = false;
@@ -25,6 +26,7 @@ namespace UnoVibe.Pages.Main;
         Toasts = providers.Toasts;
         Sessions = providers.Sessions;
         Models = providers.Models;
+        Home = providers.Home;
     </setup>
     <Page SizeChanged+=`OnRootSizeChanged`>
         <MainContent />

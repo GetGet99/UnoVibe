@@ -8,6 +8,7 @@ class UnoVibeProviders : IDisposable
     public EventsProvider Events { get; }
     public ToastsProvider Toasts { get; }
     public ModelsProvider Models { get; }
+    public HomeProvider Home { get; }
     public Window HostWindow { get; }
     IDisposable[] Disposables => [Connection, Events, Toasts];
 
@@ -22,6 +23,7 @@ class UnoVibeProviders : IDisposable
         Events.Toasts = Toasts;
         Models = new(Connection.Client, Toasts);
         Sessions = new(Connection, Events, Toasts, Notifications, Models, dispatcher);
+        Home = new(Connection.Client, Events, Toasts, Sessions, Models, dispatcher);
     }
     public void Dispose()
     {

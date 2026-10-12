@@ -2,9 +2,12 @@ namespace UnoVibe.Pages.Chat;
 
 [QuickMarkup("""
     using UnoVibe.Controls;
+    using UnoVibe.Models;
+    using UnoVibe.States;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject SessionsStateProvider Sessions;
+    inject ChatMessagesState? ChatState;
     inject bool IsCompact;
     inject bool IsSidebarView;
     inject OpencodeClient Opencode;
@@ -82,11 +85,11 @@ namespace UnoVibe.Pages.Chat;
                         IsEnabled=`!IsSubagent` @Click+=`if (Sessions.ActiveSessionId is {} sessId) UIs.ForkAndSwitchSession(sessId)`>
                     <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=11 />
                 </Button>
-                <ChatCost />
+                <ChatCost Cost=`ChatState?.Cost ?? 0` Tokens=`ChatState?.Tokens ?? SessionTokens.Zero` ContextLimit=`ChatState?.ContextLimit ?? 0` />
             </StackPanel>
             if (`IsCompact`)
             {
-                <ChatCostInline />
+                <ChatCostInline Cost=`ChatState?.Cost ?? 0` Tokens=`ChatState?.Tokens ?? SessionTokens.Zero` ContextLimit=`ChatState?.ContextLimit ?? 0` />
             }
         </Grid>
     </root>

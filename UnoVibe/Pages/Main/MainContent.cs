@@ -2,10 +2,12 @@ namespace UnoVibe.Pages.Main;
 
 [QuickMarkup("""
     using UnoVibe.Pages.Chat;
+    using UnoVibe.Pages.Home;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject bool IsCompact;
     inject bool IsSidebarView;
+    inject HomeProvider Home;
     inject bool SettingsOpen;
     inject ToastsProvider Toasts;
     <setup>
@@ -17,7 +19,16 @@ namespace UnoVibe.Pages.Main;
             <ColumnDefinition Width=`IsSidebarView ? new GridLength(0) : new GridLength(1, GridUnitType.Star)` />
         </>>
             <SessionSidebar Visibility=`!IsCompact || IsSidebarView ? Visibility.Visible : Visibility.Collapsed` />
-            <ChatPage Grid.Column=1 Visibility=`!IsCompact || !IsSidebarView ? Visibility.Visible : Visibility.Collapsed` />
+            <Grid Grid.Column=1 Visibility=`!IsCompact || !IsSidebarView ? Visibility.Visible : Visibility.Collapsed`>
+                if (`Home.IsHomeView`)
+                {
+                    <HomePage />
+                }
+                else
+                {
+                    <ChatPage />
+                }
+            </Grid>
         </Grid>
         <Grid HorizontalAlignment=Stretch VerticalAlignment=Stretch Padding=`new Thickness(16, 12, 16, 0)`>
             if (`Toasts.CurrentToast`)

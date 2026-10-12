@@ -7,6 +7,7 @@ namespace UnoVibe.Pages.Main;
     using Microsoft.UI;
     required SessionHead Session;
     inject SessionsStateProvider Sessions;
+    inject HomeProvider Home;
     inject bool IsSidebarView;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -16,9 +17,10 @@ namespace UnoVibe.Pages.Main;
         Margin=`new Thickness(0, 4, 0, 0)`
         Padding=`new Thickness(8, 6, 8, 6)`
         HorizontalAlignment=Stretch HorizontalContentAlignment=Stretch
-        @Click+=`IsSidebarView = false; Sessions.ActiveSessionId = Session.Id`
+        @Click+=`Home.IsHomeView = false; IsSidebarView = false; Sessions.ActiveSessionId = Session.Id`
         Background=`Sessions.ActiveSessionId == Session.Id ? theme.ControlFill : transparent`
         ContextFlyout=<MenuFlyout Placement=BottomEdgeAlignedRight>
+        <MenuFlyoutItem Text=`Home.IsPinned(Session.Id) ? "Remove from Home" : "Add to Home"` @Click+=`Home.TogglePin(Session.Id)` />
         if (`Session.IsRead`) {
             <MenuFlyoutItem Text="Mark as unread" @Click+=`Session.IsRead = false` />
         } else {

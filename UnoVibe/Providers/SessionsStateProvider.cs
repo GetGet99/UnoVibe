@@ -415,6 +415,8 @@ partial class SessionsStateProvider
     string? GetBranch(string directory)
         => Branches.TryGetValue(directory, out var db) ? db.Value : null;
 
+    public string? BranchOf(string directory) => GetBranch(directory);
+
     public IEnumerable<SessionGroupModel> SessionSidebar =>
         directoriesWithoutSession.Select(x => new SessionGroupModel(x, GetBranch(x), [])).Concat(
             sessions

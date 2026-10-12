@@ -63,10 +63,8 @@ partial class ChatMessagesState : IDisposable
             Toasts.ShowError(error, "Could not load messages");
             return;
         }
-        foreach (var msg in messages)
+        foreach (var message in MessageCollectionHelper.ParseMessages(messages))
         {
-            var message = MessageJsonHelper.MessageFromJson(msg);
-            if (message is null) continue;
             _messagesById[message.Id] = message;
             AppendMessage(message);
         }
@@ -199,61 +197,29 @@ partial class ChatMessagesState : IDisposable
     void OnPartUpdated(string _, MessagePartUpdatedEvent e)
     {
         if (e.SessionId != SessionId.Id) return;
-        var part = e.Part;
-        if (!_messagesById.TryGetValue(part.MessageId, out var message)) return;
-
-        var existing = message.Parts.FirstOrDefault(p => p.Id == part.Id);
-        if (existing is null)
+        if (!_messagesById.TryGetValue(e.Part.MessageId, out var message)) return;
+        var outcome = MessageCollectionHelper.UpsertPart(message, e.Part, out var affected);
+        if (outcome == PartUpsert.SyntheticEmpty)
         {
-            if (part is StepStartPart or StepFinishPart) return;
-            var p = MessageJsonHelper.PartFromPart(part);
-            if (p.Type == "text" && p is TextPartItem text && text.Synthetic && message.Parts.Count == 0)
-            {
-                Messages.Remove(message);
-                return;
-            }
-            message.Parts.Add(p);
-            if (p is FilePartItem file)
-                AsyncHelper.RunAndReport(file.LoadImageAsync(),
-                    Toasts, "", "Load image"
-                );
+            Messages.Remove(message);
             return;
         }
-
-        if (existing is ToolCallPartItem existingTool && part is ToolPart toolPart)
-        {
-            MessageJsonHelper.ApplyToolPart(existingTool, toolPart);
-            return;
-        }
-
-        var updated = MessageJsonHelper.PartFromPart(part);
-        var idx = message.Parts.IndexOf(existing);
-        message.Parts[idx] = updated;
-        if (updated is FilePartItem fileUpdated)
-            AsyncHelper.RunAndReport(fileUpdated.LoadImageAsync(),
-                Toasts, "", "Load image"
-            );
+        if (affected is FilePartItem file)
+            AsyncHelper.RunAndReport(file.LoadImageAsync(), Toasts, "", "Load image");
     }
 
     void OnPartDelta(string _, MessagePartDeltaEvent e)
     {
         if (e.SessionId != SessionId.Id) return;
-        if (e.Field != "text" || e.Delta.Length == 0) return;
         if (!_messagesById.TryGetValue(e.MessageId, out var message)) return;
-        var part = message.Parts.FirstOrDefault(p => p.Id == e.PartId);
-        if (part is null) return;
-        if (part is TextPartItem textPart)
-            textPart.Text += e.Delta;
-        else if (part is ReasoningPartItem reasoningPart)
-            reasoningPart.Text += e.Delta;
+        MessageCollectionHelper.AppendDelta(message, e);
     }
 
     void OnPartRemoved(string _, MessagePartRemovedEvent e)
     {
         if (e.SessionId != SessionId.Id) return;
         if (!_messagesById.TryGetValue(e.MessageId, out var message)) return;
-        var part = message.Parts.FirstOrDefault(p => p.Id == e.PartId);
-        if (part is not null) message.Parts.Remove(part);
+        MessageCollectionHelper.RemovePart(message, e.PartId);
     }
 
     void OnMessageRemoved(string _, MessageRemovedEvent e)
@@ -404,21 +370,10 @@ partial class ChatMessagesState : IDisposable
     public async Task ReplyPermissionAsync(string requestId, string reply, string? message = null)
     {
         var directory = Sessions.Head(SessionId)?.Directory;
-        try
-        {
-            await Opencode.ReplyPermissionAsync(requestId, new() { Reply = reply, Message = message }, directory);
-            _permissions.RemoveAll(p => p.Id == requestId);
-            UpdateActivePermission();
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        if (await PendingRequestHelper.ReplyPermissionAsync(Opencode, Toasts, directory, requestId, reply, message))
         {
             _permissions.RemoveAll(p => p.Id == requestId);
             UpdateActivePermission();
-            Toasts.ShowWarning("The permission request was already handled.", "Approval dismissed");
-        }
-        catch (Exception ex)
-        {
-            Toasts.ShowError(ex.Message, "Approval reply failed");
         }
     }
 
@@ -427,22 +382,7 @@ partial class ChatMessagesState : IDisposable
         if (e.SessionId != SessionId.Id) return;
         if (e.Tool is null) return;
         if (!_messagesById.TryGetValue(e.Tool.MessageId, out var message)) return;
-        var part = message.Parts.OfType<ToolCallPartItem>().FirstOrDefault(p => p.CallId == e.Tool.CallId);
-        if (part is null) return;
-
-        part.QuestionRequestId = e.Id;
-        if (e.Questions is { Count: > 0 })
-        {
-            MessageJsonHelper.Refill(part.Questions, e.Questions.Select(q => new QuestionInfo
-            {
-                Question = q.Question,
-                Header = q.Header,
-                Options = q.Options.Select(o => new QuestionOption { Label = o.Label, Description = o.Description }).ToList(),
-                Multiple = q.Multiple ?? false,
-                Custom = q.Custom ?? false,
-            }));
-            MessageJsonHelper.PopulateQuestionForm(part, part.Questions);
-        }
+        MessageCollectionHelper.AttachLiveQuestion(message, e.Tool.CallId, e.Id, e.Questions);
     }
 
     void OnQuestionReplied(string _, QuestionRepliedEvent e)
@@ -457,20 +397,7 @@ partial class ChatMessagesState : IDisposable
         ClearQuestionState(e.RequestId);
     }
 
-    void ClearQuestionState(string requestId)
-    {
-        foreach (var message in Messages)
-        {
-            foreach (var part in message.Parts)
-            {
-                if (part is ToolCallPartItem tool && tool.QuestionRequestId == requestId)
-                {
-                    tool.QuestionRequestId = null;
-                    tool.QuestionForm.Clear();
-                }
-            }
-        }
-    }
+    void ClearQuestionState(string requestId) => MessageCollectionHelper.ClearQuestion(Messages, requestId);
 
     async Task SyncPendingQuestionsAsync(string directory)
     {
@@ -482,32 +409,9 @@ partial class ChatMessagesState : IDisposable
                 return;
             }
 
-            foreach (var question in questions)
-            {
-                if (question.SessionId != SessionId.Id) continue;
-                if (question.Tool is null) continue;
-                var messageId = question.Tool.MessageId;
-                var callId = question.Tool.CallId;
-                if (messageId.Length == 0 || callId.Length == 0) continue;
-                if (!_messagesById.TryGetValue(messageId, out var message)) continue;
-
-                var part = message.Parts.OfType<ToolCallPartItem>().FirstOrDefault(p => p.CallId == callId && p.ToolName == "question");
-                if (part is null || part.QuestionRequestId is { Length: > 0 }) continue;
-
-                part.QuestionRequestId = question.Id;
-                if (question.Questions is { Count: > 0 })
-                {
-                    MessageJsonHelper.Refill(part.Questions, question.Questions.Select(q => new QuestionInfo
-                    {
-                        Question = q.Question,
-                        Header = q.Header,
-                        Options = q.Options.Select(o => new QuestionOption { Label = o.Label, Description = o.Description }).ToList(),
-                        Multiple = q.Multiple,
-                        Custom = q.Custom,
-                    }));
-                    MessageJsonHelper.PopulateQuestionForm(part, part.Questions);
-                }
-            }
+            MessageCollectionHelper.AttachPendingQuestions(
+                id => _messagesById.TryGetValue(id, out var message) ? message : null,
+                SessionId.Id, questions);
         }
         catch (Exception ex)
         {
@@ -518,58 +422,21 @@ partial class ChatMessagesState : IDisposable
     public async Task ReplyQuestionAsync(string requestId, IReadOnlyList<IReadOnlyList<string>> answers)
     {
         var directory = Sessions.Head(SessionId)?.Directory;
-        try
-        {
-            await Opencode.ReplyQuestionAsync(requestId, new() { Answers = answers }, directory);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            Toasts.ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");
-        }
-        catch (Exception ex)
-        {
-            Toasts.ShowError(ex.Message, "Question reply failed");
-        }
+        await PendingRequestHelper.ReplyQuestionAsync(Opencode, Toasts, directory, requestId, answers);
     }
 
     public async Task RejectQuestionAsync(string requestId)
     {
         var directory = Sessions.Head(SessionId)?.Directory;
-        try
-        {
-            await Opencode.RejectQuestionAsync(requestId, directory);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            Toasts.ShowWarning("The question form was dismissed — the request is no longer pending.", "Question already handled");
-        }
-        catch (Exception ex)
-        {
-            Toasts.ShowError(ex.Message, "Question dismiss failed");
-        }
+        await PendingRequestHelper.RejectQuestionAsync(Opencode, Toasts, directory, requestId);
     }
 
     void UpdateSessionStats()
     {
-        var last = Messages.LastOrDefault(m => m.Role == "assistant" && m.TokensOutput > 0);
-        if (last is null)
-        {
-            Cost = 0;
-            Tokens = SessionTokens.Zero;
-            ContextLimit = 0;
-            return;
-        }
-
-        Cost = Messages.Where(m => m.Role == "assistant").Sum(m => m.Cost);
-        Tokens = SessionTokens.From(last);
-        ContextLimit = ResolveContextLimit(last);
-    }
-
-    long ResolveContextLimit(MessageItem message)
-    {
-        var model = Models.ModelOptions.FirstOrDefault(m => m.Id == message.ModelId
-            && (message.ProviderId.Length == 0 || m.ProviderId == message.ProviderId));
-        return model?.LimitContext ?? 0;
+        var (cost, tokens, last) = SessionUsageHelper.Summarize(Messages);
+        Cost = cost;
+        Tokens = tokens;
+        ContextLimit = SessionUsageHelper.ResolveContextLimit(Models.ModelOptions, last);
     }
 
     public async Task RevertToMessageAsync(MessageItem message)

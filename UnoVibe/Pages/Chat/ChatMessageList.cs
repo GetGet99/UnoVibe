@@ -14,8 +14,6 @@ namespace UnoVibe.Pages.Chat;
     inject ChatMessagesState? ChatState;
     inject `AsyncComputed<ChatMessagesState>` ChatStateAsync;
     ChatboxState Chatbox => `Sessions.ActiveChatbox`;
-    string PermissionStage = "choose";
-    string RejectText = "";
     public bool AutoContinueOn = `SettingsStore.AutoContinueOnThinking`;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -31,7 +29,7 @@ namespace UnoVibe.Pages.Chat;
                     foreach (var m in `ChatState?.Messages`; `m.Id`)
                     {
                         if (`(ChatState?.RevertMessageId ?? "").Length == 0 || StringComparer.Ordinal.Compare(m.Id, ChatState?.RevertMessageId ?? "") < 0`)
-                            <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`OnMessageForkRequested` />
+                            <MessageView Message=`m` RevertRequested+=`OnMessageRevertRequested` ForkRequested+=`OnMessageForkRequested` QuestionAnswered+=`OnQuestionAnswered` QuestionRejected+=`OnQuestionRejected` />
                     }
                     if (`ChatState?.RevertMessageId`)
                     {
@@ -65,32 +63,7 @@ namespace UnoVibe.Pages.Chat;
                         </StackPanel>
                     if (`ChatState?.ActivePermission`)
                     {
-                        <Border Background=`theme.CardBackground` CornerRadius=8 Padding=`new Thickness(12,  10, 12,  10)` Margin=`new Thickness(0, 8, 0, 0)`
-                                BorderBrush=`theme.SystemCaution` BorderThickness=`new Thickness(1)` MaxWidth=640 HorizontalAlignment=Left>
-                            <StackPanel Spacing=8>
-                                <StackPanel Spacing=2>
-                                    <TextBlock Text=`ChatState?.ActivePermission?.Title ?? ""` FontSize=13 FontWeight=`FontWeights.SemiBold` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                    if (`ChatState?.ActivePermission?.Body`)
-                                        <TextBlock Text=`ChatState?.ActivePermission?.Body ?? ""` FontSize=11 Foreground=`theme.SecondaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                    if (`ChatState?.ActivePermission?.PatternsText`)
-                                        <TextBlock Text=`ChatState?.ActivePermission?.PatternsText ?? ""` FontSize=10 Foreground=`theme.TertiaryText` TextWrapping=Wrap IsTextSelectionEnabled=true />
-                                </StackPanel>
-                                if (`PermissionStage == "reject"`)
-                                    <StackPanel Spacing=8>
-                                        <TextBox Text<=>`RejectText` PlaceholderText="Reason for rejection (optional)" AcceptsReturn=false MinHeight=36 />
-                                        <StackPanel Orientation=Horizontal Spacing=8>
-                                            <Button Content="Cancel" @Click+=`CancelPermission()` CornerRadius=6 />
-                                            <Button Content="Deny" @Click+=`await RejectPermissionAsync()` CornerRadius=6 />
-                                        </StackPanel>
-                                    </StackPanel>
-                                else
-                                    <StackPanel Orientation=Horizontal Spacing=8>
-                                        <Button Content="Allow once" @Click+=`await AllowPermissionOnceAsync()` CornerRadius=6 />
-                                        <Button Content="Always allow" @Click+=`await AllowPermissionAlwaysAsync()` CornerRadius=6 />
-                                        <Button Content="Deny…" @Click+=`StartReject()` CornerRadius=6 />
-                                    </StackPanel>
-                            </StackPanel>
-                        </Border>
+                        <PermissionBanner Request=`ChatState!.ActivePermission!` AllowOnceRequested+=`OnAllowOnce` AllowAlwaysRequested+=`OnAllowAlways` RejectRequested+=`OnRejectPermission` />
                     }
                 </StackPanel>
             </StickyScrollViewer>
@@ -132,8 +105,6 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
             newChat?.ActivePermissionProp.Watch(newReq =>
             {
                 if (newReq != ChatState?.ActivePermission) return;
-                PermissionStage = "choose";
-                RejectText = "";
                 _ = ScrollToPermissionAsync();
             });
         });
@@ -210,28 +181,33 @@ partial class ChatMessageList : IQuickMarkupComponent<Grid>
         return Task.CompletedTask;
     }
 
-    private async Task AllowPermissionOnceAsync()
+    private async Task OnAllowOnce(string requestId)
     {
-        var req = ChatState?.ActivePermission;
-        if (req is null) return;
-        await ChatState!.ReplyPermissionAsync(req.Id, "once");
+        if (ChatState is null) return;
+        await ChatState.ReplyPermissionAsync(requestId, "once");
     }
 
-    private async Task AllowPermissionAlwaysAsync()
+    private async Task OnAllowAlways(string requestId)
     {
-        var req = ChatState?.ActivePermission;
-        if (req is null) return;
-        await ChatState!.ReplyPermissionAsync(req.Id, "always");
+        if (ChatState is null) return;
+        await ChatState.ReplyPermissionAsync(requestId, "always");
     }
 
-    private void StartReject() => PermissionStage = "reject";
-
-    private async Task RejectPermissionAsync()
+    private async Task OnRejectPermission(string requestId, string? message)
     {
-        var req = ChatState?.ActivePermission;
-        if (req is null) return;
-        await ChatState!.ReplyPermissionAsync(req.Id, "reject", RejectText.Trim());
+        if (ChatState is null) return;
+        await ChatState.ReplyPermissionAsync(requestId, "reject", message);
     }
 
-    private void CancelPermission() => PermissionStage = "choose";
+    private async Task OnQuestionAnswered(string requestId, IReadOnlyList<IReadOnlyList<string>> answers)
+    {
+        if (ChatState is null) return;
+        await ChatState.ReplyQuestionAsync(requestId, answers);
+    }
+
+    private async Task OnQuestionRejected(string requestId)
+    {
+        if (ChatState is null) return;
+        await ChatState.RejectQuestionAsync(requestId);
+    }
 }

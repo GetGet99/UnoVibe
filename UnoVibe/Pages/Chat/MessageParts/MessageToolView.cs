@@ -1,3 +1,5 @@
+using UnoVibe.Controls.ToolViews;
+
 namespace UnoVibe.Pages.Chat.MessageParts;
 
 [QuickMarkup("""
@@ -29,7 +31,7 @@ namespace UnoVibe.Pages.Chat.MessageParts;
         else if (`Part.ToolName == "todowrite"`)
             <ToolViewTodoWrite Part=`Part` />
         else if (`Part.ToolName == "question"`)
-            <ToolViewQuestion Part=`Part` />
+            <ToolViewQuestion Part=`Part` AnswerSubmitted+=`OnAnswerSubmitted` RejectRequested+=`OnRejectRequested` />
         else if (`Part.ToolName == "task"`)
             <ToolViewTask Part=`Part` />
         else if (`Part.ToolName == "apply_patch"`)
@@ -38,4 +40,15 @@ namespace UnoVibe.Pages.Chat.MessageParts;
             <ToolViewGeneric Part=`Part` />
     </Border>
     """)]
-partial class MessageToolView : IQuickMarkupComponent;
+partial class MessageToolView : IQuickMarkupComponent
+{
+    public event ToolViewQuestion.AnswerHandler? AnswerSubmitted;
+
+    public event ToolViewQuestion.RejectHandler? RejectRequested;
+
+    private Task OnAnswerSubmitted(string requestId, IReadOnlyList<IReadOnlyList<string>> answers) =>
+        AnswerSubmitted?.Invoke(requestId, answers) ?? Task.CompletedTask;
+
+    private Task OnRejectRequested(string requestId) =>
+        RejectRequested?.Invoke(requestId) ?? Task.CompletedTask;
+}

@@ -4,6 +4,7 @@ namespace UnoVibe.Controls;
     using QuickMarkup.WinUI;
     using Microsoft.UI;
     inject SessionsStateProvider Sessions;
+    inject HomeProvider Home;
     inject ToastsProvider Toasts;
     inject bool IsSidebarView;
     required string Directory;
@@ -40,6 +41,7 @@ partial class FolderActions : IQuickMarkupComponent
 
     private void OnNewSession()
     {
+        Home.IsHomeView = false;
         IsSidebarView = false;
         Sessions.PrepareNewSession(Directory);
     }

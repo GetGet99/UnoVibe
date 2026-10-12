@@ -7,7 +7,7 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
     using Microsoft.UI.Xaml.Controls.Primitives;
-    private Model? SelectedModel => `Sessions.ActiveChatParams.Model`;
+    private Model? SelectedModel => `ChatParams.Model`;
     private string SelectedModelNameOrDefaultHint => `
         SelectedModel is not {} model
         ? "Select model"
@@ -16,7 +16,8 @@ namespace UnoVibe.Pages.Chat;
             : model.Formatted
         )`;
     public double FontSize = 12;
-    inject SessionsStateProvider Sessions;
+    required ChatParameters ChatParams;
+    required SessionHead? Head;
     inject OpencodeClient Opencode;
     inject ToastsProvider Toasts;
     inject ModelsProvider Models;
@@ -102,9 +103,9 @@ partial class ModelPicker : IQuickMarkupComponent<Grid>
 
     void OnModelSelected(ModelOption model)
     {
-        var charparams = Sessions.ActiveChatParams;
+        var charparams = ChatParams;
 
-        if (model == Sessions.Head(Sessions.ActiveSessionId)?.ChatParams.Model) return;
+        if (model == Head?.ChatParams.Model) return;
         charparams.Model = Model.From(model);
         if (!model.Variants.Contains(charparams.Variant))
             charparams.Variant = null;

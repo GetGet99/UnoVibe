@@ -2,11 +2,15 @@ namespace UnoVibe.Pages.Chat;
 
 [QuickMarkup("""
     using UnoVibe.Controls;
+    using UnoVibe.Controls.ToolViews;
     using QuickMarkup.WinUI;
     using Windows.UI.Text;
     required TextPartItem Part;
     MessageItem? Message;
     bool PlainMode = false;
+    bool ShowActions = true;
+    bool PreviewMode = false;
+    bool Expanded = false;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -17,8 +21,14 @@ namespace UnoVibe.Pages.Chat;
                     ? (theme.Accent is SolidColorBrush accent ? new SolidColorBrush(accent.Color) { Opacity = 0.3 } : theme.CardBackground)
                     : theme.CardBackground`
                 BorderBrush=`theme.CardStroke` BorderThickness=`new Thickness(1)`>
-            <MarkdownView Text=`Part.Text` PlainMode=`PlainMode` />
+            <MarkdownView Text=`PreviewMode && !Expanded ? ToolViewShared.CollapsePreview(Part.Text, 4, 600).Preview : Part.Text` PlainMode=`PlainMode` />
         </Border>
+        if (`PreviewMode && ToolViewShared.CollapsePreview(Part.Text, 4, 600).Overflow`)
+            <Button Background=`theme.LayerFill` BorderThickness=0 CornerRadius=4 Padding=`new Thickness(8, 2, 8, 2)` HorizontalAlignment=`Message?.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left` Click+=`(s, e) => Expanded = !Expanded`>
+                <TextBlock Text=`Expanded ? "Show less ▴" : "Show more ▾"` FontSize=11 Foreground=`theme.TertiaryText` />
+            </Button>
+        if (`ShowActions`)
+        {
         <StackPanel Orientation=Horizontal Spacing=4 HorizontalAlignment=`Message?.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left`>
             if (`Message?.Role == "user"`)
             {
@@ -66,6 +76,7 @@ namespace UnoVibe.Pages.Chat;
                 }
             }
         </StackPanel>
+        }
     </StackPanel>
     """)]
 partial class MessageTextPart : IQuickMarkupComponent

@@ -8,40 +8,42 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
+    required ChatboxState Chatbox;
+    required ChatParameters ChatParams;
+    required string SessionDirectory;
+    required SessionHead? Head;
     inject Window HostWindow;
     inject bool IsCompact;
-    inject ChatPage ChatP;
     inject bool SettingsOpen;
-    inject SessionsStateProvider Sessions;
     inject `UnoVibe.Integration.OpencodeClient` Opencode;
     inject ToastsProvider Toasts;
     inject UIServiceProvider UIs;
     inject ModelsProvider Models;
-    inject `AsyncComputed<ChatMessagesState>` ChatStateAsync;
     string SendMode = "";
     bool ShellMode = false;
     `IReadOnlyList<string>` SelectionVariants => `
-        Sessions.ActiveChatParams.Model is not {} model
+        ChatParams.Model is not {} model
         ? EmptyList
         :  (Models.ModelOptions.TryGetValue(model, out var modelOption)
             ? modelOption.Variants
             : EmptyList
         )`;
-    bool IsBusy => `Sessions.ActiveHead?.IsBusy ?? false`;
+    bool IsBusy => `Head?.IsBusy ?? false`;
     private bool IsEnabled = true;
-    ChatboxState Chatbox => `Sessions.ActiveChatbox`;
+    Thickness ComposerPadding = `new Thickness(0)`;
+    Thickness InputRowPadding => `new Thickness(0, 0, 0, IsCompact ? 12 : 16)`;
     ChatboxMessage Message => `Chatbox.Message`;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <Grid RowDefinitions=<>
+        <Grid Padding=`ComposerPadding` RowDefinitions=<>
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
         </>>
             if (`Message.Images.Count > 0`)
-                <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(16, 0, 16, 0)`
+                <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(0, 0, 0, 8)`
                     HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
                     <StackPanel Orientation=Horizontal>
                         foreach (var a in `Message.Images`)
@@ -61,7 +63,7 @@ namespace UnoVibe.Pages.Chat;
                         }
                     </StackPanel>
                 </ScrollViewer>
-            <Grid Grid.Row=1 ColumnSpacing=`IsCompact ? 6 : 8` Padding=`new Thickness(IsCompact ? 12 : 16, 8, IsCompact ? 12 : 16, IsCompact ? 12 : 16)` ColumnDefinitions=<>
+            <Grid Grid.Row=1 ColumnSpacing=`IsCompact ? 6 : 8` Padding=`InputRowPadding` ColumnDefinitions=<>
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
@@ -84,14 +86,14 @@ namespace UnoVibe.Pages.Chat;
                 </StackPanel>
             </Grid>
             if (`!ShellMode`)
-                <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 10)`>
+                <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(0)`>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
                         modeCombo = <ComboBox
                             ItemsSource=`Models.AgentOptions.ToArray()`
-                            SelectedItem=`Sessions.ActiveChatParams.Agent ?? Models.AgentOptions.FirstOrDefault()`
+                            SelectedItem=`ChatParams.Agent ?? Models.AgentOptions.FirstOrDefault()`
                             ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value) ?? "Build"` /> }
-                            SelectedItem+=>`x => Sessions.ActiveChatParams.Agent = x as string`
+                            SelectedItem+=>`x => ChatParams.Agent = x as string`
                             MinWidth=`IsCompact ? 76 : 90`
                             Height=28
                             FontSize=12
@@ -99,16 +101,16 @@ namespace UnoVibe.Pages.Chat;
                     </StackPanel>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Model" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
-                        modelPicker = <ModelPicker />
+                        modelPicker = <ModelPicker ChatParams=`ChatParams` Head=`Head` />
                     </StackPanel>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Variant" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
                         variantCombo = <ComboBox
                             ItemsSource=`SelectionVariants.Prepend(null)`
-                            SelectedItem=`Sessions.ActiveChatParams.Variant`
+                            SelectedItem=`ChatParams.Variant`
                             IsEnabled=`SelectionVariants.Count > 0`
                             ItemTemplate=template (string? value) { <TextBlock Text=`Capitalize(value) ?? "Default"` /> }
-                            SelectedItem+=>`x => Sessions.ActiveChatParams.Variant = x as string`
+                            SelectedItem+=>`x => ChatParams.Variant = x as string`
                             MinWidth=`IsCompact ? 76 : 90`
                             Height=28
                             FontSize=12
@@ -116,7 +118,7 @@ namespace UnoVibe.Pages.Chat;
                     </StackPanel>
                 </StackPanel>
             else
-                <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 10)`>
+                <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(0)`>
                     <TextBlock Text="! Shell mode"
                             FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center TextTrimming=`TextTrimming.CharacterEllipsis` />
                     <Button Content="Exit shell mode (Esc)" CornerRadius=6 Padding=`new Thickness(10, 3, 10, 3)` @Click+=`ExitShellMode()` />
@@ -126,6 +128,12 @@ namespace UnoVibe.Pages.Chat;
     """)]
 partial class ChatComposer : IQuickMarkupComponent<Grid>
 {
+    public event Action? Sent;
+    public event Func<Task>? UndoRequested;
+    public event Func<Task>? RedoRequested;
+    public event Action? NewSessionRequested;
+    public event Action? BeginRenameRequested;
+    public event Func<Task<ChatboxState>>? EnsureSessionRequested;
     static readonly IReadOnlyList<string> EmptyList = [];
     private DispatcherQueue? _dispatcher;
 
@@ -141,9 +149,9 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         suggestBox.Providers =
         [
             new BuiltInCommandSuggestionProvider(IsBuiltInAvailable),
-            new ServerCommandSuggestionProvider(() => Opencode, () => Sessions.ActiveSessionDirectory),
-            new ServerSkillSuggestionProvider(() => Opencode, () => Sessions.ActiveSessionDirectory),
-            new ServerFileSuggestionProvider(() => Opencode, () => Sessions.ActiveSessionDirectory),
+            new ServerCommandSuggestionProvider(() => Opencode, () => SessionDirectory),
+            new ServerSkillSuggestionProvider(() => Opencode, () => SessionDirectory),
+            new ServerFileSuggestionProvider(() => Opencode, () => SessionDirectory),
         ];
         suggestBox.CommandTriggered += (sender, item) => RunBuiltInCommandAsync(item.Action!);
 
@@ -279,7 +287,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
                 await ProviderConnectDialog.ShowAsync(Opencode, Toasts, Models, MarkupNode.XamlRoot!);
                 break;
             case "continue":
-                await EnsureActiveCurrentSession();
+                await EnsureSessionAndSyncAsync();
                 HandleSentStatus(await Chatbox.SendManualContinueAsync());
                 break;
             case "editor":
@@ -289,7 +297,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
                 LaunchFolder(FolderLauncherHelper.OpenInFileManager);
                 break;
             case "fork":
-                if (Sessions.ActiveSessionId is {} sessionId)
+                if (Chatbox.SessionId is {} sessionId)
                     UIs.ForkAndSwitchSession(sessionId);
                 else
                     Toasts.ShowWarning("No session to fork.", "/fork");
@@ -307,16 +315,24 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
                 modelPicker.Open();
                 break;
             case "new":
-                Sessions.PrepareNewSession(Sessions.ActiveSessionDirectory);
+                if (NewSessionRequested is null)
+                    Toasts.ShowWarning("Open the chat to start a new session.", "/new");
+                else
+                    NewSessionRequested();
                 break;
             case "redo":
-                await ChatP.RedoLastAsync();
+                if (RedoRequested is null)
+                    Toasts.ShowWarning("Open the session to redo the last message.", "/redo");
+                else
+                    await RedoRequested();
                 break;
             case "rename":
-                if (Sessions.ActiveSessionId is null)
+                if (Chatbox.SessionId is null)
                     Toasts.ShowWarning("There is no conversation to rename yet.", "/rename");
+                else if (BeginRenameRequested is null)
+                    Toasts.ShowWarning("Open the session to rename it.", "/rename");
                 else
-                    UIs.BeginRenameAndFocus();
+                    BeginRenameRequested();
                 break;
             case "setting":
                 SettingsOpen = true;
@@ -325,7 +341,10 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
                 LaunchFolder(FolderLauncherHelper.OpenInTerminal);
                 break;
             case "undo":
-                await ChatP.UndoLastAsync();
+                if (UndoRequested is null)
+                    Toasts.ShowWarning("Open the session to undo the last message.", "/undo");
+                else
+                    await UndoRequested();
                 break;
             case "variants":
                 if (SelectionVariants.Count is 0)
@@ -336,27 +355,15 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         }
     }
 
-    async Task EnsureActiveCurrentSession()
+    async Task EnsureSessionAndSyncAsync()
     {
-        var chatbox = Chatbox;
-        ChatMessagesState resolved;
-        if (chatbox.SessionId is not {} sess)
-        {
-            sess = (await Sessions.CreateFromPreparedSessionAsync()).Id;
-        }
-        resolved = await ChatStateAsync.AwaitResultAsync();
-        if (resolved?.SessionId != sess)
-            throw new InvalidOperationException($"Session id not the same {resolved?.SessionId ?? "null"} != {sess}");
-        if (chatbox != Chatbox)
-        {
-            Chatbox.Message = chatbox.Message;
-            chatbox.Message = new();
-        }
+        if (EnsureSessionRequested is null) return;
+        Chatbox = await EnsureSessionRequested();
     }
 
     private async Task<bool> InterruptSessionAsync()
     {
-        if (Sessions.ActiveHead is {} activeSession && activeSession.IsBusy)
+        if (Head is {} activeSession && activeSession.IsBusy)
         {
             await Opencode.AbortAsync(activeSession.Id);
             return true;
@@ -366,13 +373,13 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private async Task SendAsync(SendPromptMode? mode)
     {
-        await EnsureActiveCurrentSession();
+        await EnsureSessionAndSyncAsync();
         HandleSentStatus(await Chatbox.SendAsync(mode));
     }
 
     private async Task SendShellCommandAsync(string command)
     {
-        await EnsureActiveCurrentSession();
+        await EnsureSessionAndSyncAsync();
         HandleSentStatus(await Chatbox.SendShellAsync(command));
     }
     void HandleSentStatus(ChatboxSentStatus sentStatus)
@@ -381,7 +388,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         {
             case ChatboxSentStatus.Sent:
             case ChatboxSentStatus.Queued:
-                UIs.ScrollChatToBottom();
+                Sent?.Invoke();
                 return;
             case ChatboxSentStatus.Error:
             case ChatboxSentStatus.Empty:
@@ -405,7 +412,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private void LaunchFolder(Func<string, string?> open)
     {
-        var error = open(Sessions.ActiveSessionDirectory);
+        var error = open(SessionDirectory);
         if (error is null) return;
         Toasts.Show(new ToastItem
         {

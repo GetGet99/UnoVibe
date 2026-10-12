@@ -4,12 +4,12 @@ namespace UnoVibe.Pages.Chat;
     using QuickMarkup.WinUI;
     using UnoVibe.States;
     inject SessionsStateProvider Sessions;
+    inject bool IsCompact;
     inject ToastsProvider Toasts;
     inject OpencodeClient Opencode;
     inject UIServiceProvider UIs;
     inject EventsProvider Events;
     inject ModelsProvider Models;
-    provide ChatPage ChatP = `this`;
     provide ChatMessagesState? ChatState;
     ChatMessagesState? ChatStateGetter => async `GetSessionAsync()`;
     provide `AsyncComputed<ChatMessagesState>` ChatStateAsync = `ChatStateGetterAsync`;
@@ -30,7 +30,13 @@ namespace UnoVibe.Pages.Chat;
                 chatMessageList = <ChatMessageList />
             </Grid>
             <Grid Grid.Row=3>
-                composer = <ChatComposer />
+                composer = <ChatComposer Chatbox=`Sessions.ActiveChatbox` ChatParams=`Sessions.ActiveChatParams`
+                    SessionDirectory=`Sessions.ActiveSessionDirectory` Head=`Sessions.ActiveHead`
+                    ComposerPadding=`new Thickness(IsCompact ? 12 : 16, 0, IsCompact ? 12 : 16, 10)`
+                    Sent+=`() => UIs.ScrollChatToBottom()` UndoRequested+=`() => UndoLastAsync()` RedoRequested+=`() => RedoLastAsync()`
+                    NewSessionRequested+=`() => Sessions.PrepareNewSession(Sessions.ActiveSessionDirectory)`
+                    BeginRenameRequested+=`() => UIs.BeginRenameAndFocus()`
+                    EnsureSessionRequested+=`() => EnsureActiveChatboxAsync()` />
             </Grid>
         </Grid>
     </root>
@@ -77,6 +83,29 @@ partial class ChatPage : Page
     {
         await Task.Delay(ms).ConfigureAwait(continueOnCapturedContext: false);
         GC.Collect();
+    }
+
+    public async Task<ChatboxState> EnsureActiveChatboxAsync()
+    {
+        var chatbox = Sessions.ActiveChatbox;
+        SessionId sess;
+        if (chatbox.SessionId is not {} existing)
+        {
+            sess = (await Sessions.CreateFromPreparedSessionAsync()).Id;
+        }
+        else
+        {
+            sess = existing;
+        }
+        var resolved = await ChatStateGetterAsync.AwaitResultAsync();
+        if (resolved?.SessionId != sess)
+            throw new InvalidOperationException($"Session id not the same {resolved?.SessionId ?? "null"} != {sess}");
+        if (!ReferenceEquals(chatbox, Sessions.ActiveChatbox))
+        {
+            Sessions.ActiveChatbox.Message = chatbox.Message;
+            chatbox.Message = new();
+        }
+        return Sessions.ActiveChatbox;
     }
 
     public async Task UndoLastAsync()

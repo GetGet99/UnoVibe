@@ -2,10 +2,8 @@ namespace UnoVibe.Controls.ToolViews;
 
 [QuickMarkup("""
     using UnoVibe.Controls.ToolViews;
-    using UnoVibe.States;
     using QuickMarkup.WinUI;
     required ToolCallPartItem Part;
-    inject ChatMessagesState? ChatState;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
@@ -46,6 +44,14 @@ namespace UnoVibe.Controls.ToolViews;
     """)]
 partial class ToolViewQuestion : IQuickMarkupComponent
 {
+    public delegate Task AnswerHandler(string requestId, IReadOnlyList<IReadOnlyList<string>> answers);
+
+    public event AnswerHandler? AnswerSubmitted;
+
+    public delegate Task RejectHandler(string requestId);
+
+    public event RejectHandler? RejectRequested;
+
     private async Task SubmitAnswersAsync()
     {
         var answers = new List<List<string>>();
@@ -62,14 +68,14 @@ partial class ToolViewQuestion : IQuickMarkupComponent
         }
 
         if (string.IsNullOrEmpty(Part.QuestionRequestId) || answers.Count == 0) return;
-        if (ChatState is not null)
-            await ChatState.ReplyQuestionAsync(Part.QuestionRequestId, answers);
+        if (AnswerSubmitted is { } handler)
+            await handler(Part.QuestionRequestId, answers);
     }
 
     private async Task RejectAsync()
     {
         if (string.IsNullOrEmpty(Part.QuestionRequestId)) return;
-        if (ChatState is not null)
-            await ChatState.RejectQuestionAsync(Part.QuestionRequestId);
+        if (RejectRequested is { } handler)
+            await handler(Part.QuestionRequestId);
     }
 }
