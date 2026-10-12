@@ -19,6 +19,8 @@ sealed class OpencodeServeProcess : IDisposable
 
     public bool IsRunning => _process is { HasExited: false };
 
+    public const string InstallGuideUrl = "https://github.com/anomalyco/opencode#installation";
+
     public static int FindFreePort()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -45,10 +47,14 @@ sealed class OpencodeServeProcess : IDisposable
 
     public async Task<string> StartAsync(string workingDirectory, CancellationToken ct = default)
     {
+        var executable = OpencodeExecutable;
+        if (string.IsNullOrWhiteSpace(executable))
+            return $"opencode CLI not found. Install it from {InstallGuideUrl} and relaunch UnoVibe.";
+
         var port = FindFreePort();
         var startInfo = new ProcessStartInfo
         {
-            FileName = OpencodeExecutable,
+            FileName = executable,
             Arguments = $"serve --port {port}",
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
@@ -60,10 +66,18 @@ sealed class OpencodeServeProcess : IDisposable
         startInfo.Environment[OpencodeHelper.UsernameEnvVar] = "opencode";
 
         _process = new Process { StartInfo = startInfo };
-        if (!_process.Start())
+        try
+        {
+            if (!_process.Start())
+            {
+                BaseUrl = "";
+                return "Failed to start opencode process.";
+            }
+        }
+        catch (Exception ex)
         {
             BaseUrl = "";
-            return "Failed to start opencode process.";
+            return $"Failed to start opencode: {ex.Message}";
         }
 
         BaseUrl = $"http://127.0.0.1:{port}";
@@ -131,31 +145,63 @@ sealed class OpencodeServeProcess : IDisposable
     static string? FindExecutable(string name)
     {
         var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrEmpty(path))
-            return null;
-
-        foreach (var directory in path.Split(Path.PathSeparator))
+        if (!string.IsNullOrEmpty(path))
         {
-            if (string.IsNullOrWhiteSpace(directory))
-                continue;
-
-            var candidate = Path.Combine(directory, name);
-
-            if (OperatingSystem.IsWindows())
+            foreach (var directory in path.Split(Path.PathSeparator))
             {
-                if (!Path.HasExtension(candidate))
-                {
-                    var exe = candidate + ".exe";
-                    if (File.Exists(exe))
-                        return Path.GetFullPath(exe);
-                }
+                if (CheckCandidate(directory, name) is {} found)
+                    return found;
             }
+        }
 
-            if (File.Exists(candidate))
-                return Path.GetFullPath(candidate);
+        foreach (var directory in FallbackDirectories())
+        {
+            if (CheckCandidate(directory, name) is {} found)
+                return found;
         }
 
         return null;
+    }
+
+    static string? CheckCandidate(string directory, string name)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+            return null;
+
+        var candidate = Path.Combine(directory, name);
+
+        if (OperatingSystem.IsWindows())
+        {
+            if (!Path.HasExtension(candidate))
+            {
+                var exe = candidate + ".exe";
+                if (File.Exists(exe))
+                    return Path.GetFullPath(exe);
+            }
+        }
+
+        if (File.Exists(candidate))
+            return Path.GetFullPath(candidate);
+
+        return null;
+    }
+
+    static IEnumerable<string> FallbackDirectories()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(home))
+        {
+            yield return Path.Combine(home, ".opencode", "bin");
+            yield return Path.Combine(home, ".local", "bin");
+            yield return Path.Combine(home, "bin");
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            yield return "/usr/local/bin";
+            yield return "/usr/bin";
+            yield return "/opt/opencode/bin";
+        }
     }
 
     static Lazy<Task<OpencodeExecutableStatus>> executableStatus => field ??= new(GetExecutableStatusPrivate);
@@ -163,30 +209,41 @@ sealed class OpencodeServeProcess : IDisposable
     public static Version RequiredOpencodeVersion => field ??= Version.Parse("1.18.0");
     static async Task<OpencodeExecutableStatus> GetExecutableStatusPrivate()
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = OpencodeExecutable,
-            Arguments = $"--version",
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
-        var process = Process.Start(startInfo);
-        if (process is null)
+        var executable = OpencodeExecutable;
+        if (string.IsNullOrWhiteSpace(executable))
             return OpencodeExecutableStatus.NotAvaliable;
-        await process.WaitForExitAsync();
-        if (process.ExitCode is not 0)
-            return OpencodeExecutableStatus.NotAvaliable;
-        var version = await process.StandardOutput.ReadToEndAsync();
-        if (Version.TryParse(version, out var v))
+
+        try
         {
-            if (v >= RequiredOpencodeVersion)
-                return OpencodeExecutableStatus.Avaliable;
-            else
-                return OpencodeExecutableStatus.MayNeedUpgrade;
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = executable,
+                Arguments = $"--version",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            var process = Process.Start(startInfo);
+            if (process is null)
+                return OpencodeExecutableStatus.NotAvaliable;
+            await process.WaitForExitAsync();
+            if (process.ExitCode is not 0)
+                return OpencodeExecutableStatus.NotAvaliable;
+            var version = await process.StandardOutput.ReadToEndAsync();
+            if (Version.TryParse(version, out var v))
+            {
+                if (v >= RequiredOpencodeVersion)
+                    return OpencodeExecutableStatus.Avaliable;
+                else
+                    return OpencodeExecutableStatus.MayNeedUpgrade;
+            }
+            return OpencodeExecutableStatus.NotAvaliable;
         }
-        return OpencodeExecutableStatus.NotAvaliable;
+        catch (Exception)
+        {
+            return OpencodeExecutableStatus.NotAvaliable;
+        }
     } 
 }
 
