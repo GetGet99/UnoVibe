@@ -62,6 +62,8 @@ partial class HomeProvider
 
     public void Unpin(SessionId id)
     {
+        if (Sessions.Head(id) is {} head)
+            head.IsRead = true;
         cards.Remove(id);
     }
 
@@ -74,6 +76,8 @@ partial class HomeProvider
     public void OpenSession(SessionId id)
     {
         IsHomeView = false;
+        if (Sessions.Head(id) is {} head)
+            head.IsRead = true;
         Sessions.ActiveSessionId = id;
     }
 

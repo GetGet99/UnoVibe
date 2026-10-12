@@ -28,6 +28,8 @@ partial class SessionsStateProvider
     readonly ReactiveKeyedSet<string, Keyed<string?>> Branches = new(x => x.Directory);
     readonly HashSet<string> pendingDirectories = new(StringComparer.Ordinal);
 
+    public Func<bool> IsHomeViewNow { get; set; } = () => false;
+
     public SessionHead? Head(SessionId? sessId) => sessId is null ? null : sessions.TryGetValue(sessId, out var sessHead) ? sessHead : null;
     public string ResolveAgent(string? preferred) => preferred ?? Models.AgentOptions.FirstOrDefault() ?? "build";
     public ChatboxState? Chatbox(SessionId? sessId) => sessId is null ? null : chatboxes.TryGetValue(sessId, out var chatboxModel) ? chatboxModel : null;
@@ -77,7 +79,8 @@ partial class SessionsStateProvider
         FetchInitialSessions();
         ActiveHeadComp.Watch(x =>
         {
-            x?.IsRead = true;
+            if (!IsHomeViewNow())
+                x?.IsRead = true;
         });
     }
     void RegisterEvents()
@@ -220,7 +223,7 @@ partial class SessionsStateProvider
                     {
                         Dispatcher.RunOrEnqueue(() =>
                         {
-                            if (ActiveSessionId != sessId)
+                            if (ActiveSessionId != sessId || IsHomeViewNow())
                                 head.IsRead = false;
                             head.IsBusy = false;
                         });
@@ -285,7 +288,7 @@ partial class SessionsStateProvider
         if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
         if (!head.PendingPermissionIds.Add(e.Id)) return;
         MarkAncestorsPendingPermission(head, e.Id);
-        if (head.Id != ActiveSessionId)
+        if (head.Id != ActiveSessionId || IsHomeViewNow())
             head.IsRead = false;
         var request = PermissionRequestItem.From(e);
         Notifications.NotifyPermission(head, request.Title, request.Body, IsActiveOrDescendant(head.Id));
@@ -305,7 +308,7 @@ partial class SessionsStateProvider
         if (!sessions.TryGetValue(new(e.SessionId), out var head)) return;
         if (!head.PendingQuestionIds.Add(e.Id)) return;
         MarkAncestorsPendingQuestion(head, e.Id);
-        if (head.Id != ActiveSessionId)
+        if (head.Id != ActiveSessionId || IsHomeViewNow())
             head.IsRead = false;
         var first = e.Questions.FirstOrDefault()?.Question ?? "";
         Notifications.NotifyQuestion(head, first, head.Id == ActiveSessionId);
@@ -335,7 +338,7 @@ partial class SessionsStateProvider
         {
             if (!sessions.TryGetValue(current, out var parent)) break;
             parent.PendingPermissionIds.Add(requestId);
-            if (parent.Id != ActiveSessionId)
+            if (parent.Id != ActiveSessionId || IsHomeViewNow())
                 parent.IsRead = false;
             current = parent.ParentId;
         }
@@ -361,7 +364,7 @@ partial class SessionsStateProvider
         {
             if (!sessions.TryGetValue(current, out var parent)) break;
             parent.PendingQuestionIds.Add(requestId);
-            if (parent.Id != ActiveSessionId)
+            if (parent.Id != ActiveSessionId || IsHomeViewNow())
                 parent.IsRead = false;
             current = parent.ParentId;
         }

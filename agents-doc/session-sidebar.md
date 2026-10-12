@@ -33,3 +33,10 @@ The sidebar bottom status border has a **Connection details** button opening a f
 current connection's **directory**, **URL** and **password**, each as a selectable line plus
 a copy button. The password is **masked by default** (or "None" when the server has no password).
 The values are the effective connection values (password resolved with env-var fallback).
+
+## Home read semantics
+
+While the Home view is shown, a finished turn stays unread (tick visible) even when it is
+the active session — Home drafts set `ActiveSessionId` without leaving Home.
+A Home session turns read only by a user send from its composer or by removing it
+from Home (Unpin). Opening it (sidebar or Home "Open session") still marks it read.

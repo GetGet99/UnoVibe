@@ -34,6 +34,7 @@ namespace UnoVibe.Pages.Main;
                         HorizontalAlignment=Stretch HorizontalContentAlignment=Stretch
                         @Click+=`Home.GoHome(); IsSidebarView = false`
                         Background=`Home.IsHomeView ? theme.ControlFill : transparent`
+                        Background=`Home.IsHomeView ? theme.ControlStroke : transparent`
                         ToolTipService.ToolTip="Pinned chats">
                         <Grid ColumnDefinitions=<>
                             <ColumnDefinition Width=Auto />

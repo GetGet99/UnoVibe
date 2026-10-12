@@ -102,7 +102,10 @@ partial class ChatboxState
         Debug.Assert(!message.IsEmpty);
         EnsureSession();
         if (isUserSend)
+        {
             Head.TouchOrder();
+            Head.IsRead = true;
+        }
         if (ParseSlashCommand(message.Text) is { } cmd && await IsKnownCommandAsync(cmd.Name))
         {
             SendCommandNow(cmd.Name, cmd.Arguments, message);
@@ -148,6 +151,7 @@ partial class ChatboxState
         if (SessionId is null) throw new InvalidOperationException("Cannot send message when it is not registered to a session id");
         Head!.IsBusy = true;
         Head.TouchOrder();
+        Head.IsRead = true;
         ShowContinue = false;
         var images = message.Images.ToList();
 
@@ -210,6 +214,7 @@ partial class ChatboxState
         {
             Head.IsBusy = true;
             Head.TouchOrder();
+            Head.IsRead = true;
             ShowContinue = false;
 
             ChatParameters chatParams = Head.ChatParams;

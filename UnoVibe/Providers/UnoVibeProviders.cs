@@ -24,6 +24,7 @@ class UnoVibeProviders : IDisposable
         Models = new(Connection.Client, Toasts);
         Sessions = new(Connection, Events, Toasts, Notifications, Models, dispatcher);
         Home = new(Connection.Client, Events, Toasts, Sessions, Models, dispatcher);
+        Sessions.IsHomeViewNow = () => Home.IsHomeView;
     }
     public void Dispose()
     {
