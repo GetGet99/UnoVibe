@@ -21,7 +21,7 @@ namespace UnoVibe.Pages.Chat;
                             Foreground=`theme.SecondaryText` IsTextSelectionEnabled=true
                             HorizontalAlignment=`Message.Role == "user" ? HorizontalAlignment.Right : HorizontalAlignment.Left` />
             <StackPanel Spacing=6>
-                foreach (var p in `Message.Parts`)
+                foreach (var p in `Message.Parts`; `p.Id`)
                 {
                     if (`VisiblePartIds is null || VisiblePartIds.Contains(p.Id)`)
                         <MessagePartView Part=`p` Message=`Message` PreviewMode=`PreviewMode` OnPartRevertRequested+=`OnPartRevertRequested` OnPartForkRequested+=`OnPartForkRequested` OnQuestionAnswered+=`OnQuestionAnswered` OnQuestionRejected+=`OnQuestionRejected` />

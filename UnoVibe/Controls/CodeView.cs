@@ -38,9 +38,9 @@ partial class CodeView : IQuickMarkupComponent<UIElement>
             return;
         }
 
-        var (visible, overflow, lineCount) = ShowAll
-            ? (content, false, 0)
-            : Collapse(content);
+        var (collapsed, overflow, collapsedLines) = Collapse(content);
+        var visible = ShowAll ? content : collapsed;
+        var lineCount = ShowAll ? 0 : collapsedLines;
 
         host.Children.Clear();
 
@@ -58,8 +58,9 @@ partial class CodeView : IQuickMarkupComponent<UIElement>
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
         };
-        FillInlines(text, visible, lineCount, overflow);
-        text.ActualThemeChanged += (_, _) => FillInlines(text, visible, lineCount, overflow);
+        FillInlines(text, visible, lineCount, !ShowAll && overflow);
+        var showEllipsis = !ShowAll && overflow;
+        text.ActualThemeChanged += (_, _) => FillInlines(text, visible, lineCount, showEllipsis);
         box.Child = text;
         host.Children.Add(box);
 

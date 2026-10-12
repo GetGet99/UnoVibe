@@ -39,9 +39,8 @@ partial class DiffView : IQuickMarkupComponent<UIElement>
             return;
         }
 
-        var (content, overflow) = ShowAll
-            ? (diff, false)
-            : ToolViewShared.CollapsePreview(diff, DiffMaxLines, DiffMaxChars);
+        var (collapsed, overflow) = ToolViewShared.CollapsePreview(diff, DiffMaxLines, DiffMaxChars);
+        var content = ShowAll ? diff : collapsed;
 
         host.Children.Clear();
         var box = new Border
@@ -59,7 +58,7 @@ partial class DiffView : IQuickMarkupComponent<UIElement>
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
         };
-        BuildLines(text.Inlines, content, overflow);
+        BuildLines(text.Inlines, content, !ShowAll && overflow);
         box.Child = text;
         host.Children.Add(box);
 
