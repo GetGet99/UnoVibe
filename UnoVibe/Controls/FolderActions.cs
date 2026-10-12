@@ -11,23 +11,15 @@ namespace UnoVibe.Controls;
     bool ShowFileManager = false;
     bool ShowNewSession = true;
     <StackPanel Orientation=Horizontal Spacing=4>
-        <Button Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open folder in editor" @Click+=`OnOpenInEditor()`>
-            <AppSymbolIcon Symbol=`Symbol.Code` FontSize=11 />
-        </Button>
+        <SmallButtonIcon Symbol=`Symbol.Code` Tooltip="Open folder in editor" @Click+=`OnOpenInEditor()` />
         if (`ShowFileManager`)
         {
-            <Button Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open folder in file manager" @Click+=`OnOpenInFileManager()`>
-                <AppSymbolIcon Symbol=OpenLocal FontSize=11 />
-            </Button>
+            <SmallButtonIcon Symbol=OpenLocal Tooltip="Open folder in file manager" @Click+=`OnOpenInFileManager()` />
         }
-        <Button Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open folder in terminal" @Click+=`OnOpenInTerminal()`>
-            <AppSymbolIcon Symbol=`Symbol.Terminal` FontSize=11 />
-        </Button>
+        <SmallButtonIcon Symbol=`Symbol.Terminal` Tooltip="Open folder in terminal" @Click+=`OnOpenInTerminal()` />
         if (`ShowNewSession`)
         {
-            <Button Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New session" @Click+=`OnNewSession()`>
-                <AppSymbolIcon Symbol=Add FontSize=11 />
-            </Button>
+            <SmallButtonIcon Symbol=Add Tooltip="New session" @Click+=`OnNewSession()` />
         }
     </StackPanel>
     """)]

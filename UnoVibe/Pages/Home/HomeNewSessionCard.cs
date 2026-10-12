@@ -29,9 +29,7 @@ namespace UnoVibe.Pages.Home;
                     <TextBlock Text="Pick a folder, then send your first message." FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                 </StackPanel>
                 <StackPanel Grid.Column=2 Orientation=Horizontal Spacing=4 VerticalAlignment=Top>
-                    <Button Padding=`new Thickness(6, 4, 6, 4)` @Click+=`Home.CancelCreating()` ToolTipService.ToolTip="Discard and close">
-                        <AppSymbolIcon Symbol=Cancel FontSize=11 />
-                    </Button>
+                    <SmallButtonIcon Symbol=Cancel Tooltip="Discard and close" @Click+=`Home.CancelCreating()` />
                 </StackPanel>
             </Grid>
             <StackPanel Orientation=Horizontal Spacing=8 VerticalAlignment=Center>

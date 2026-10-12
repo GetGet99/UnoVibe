@@ -80,11 +80,8 @@ namespace UnoVibe.Pages.Chat;
             </StackPanel>
             <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=4 VerticalAlignment=Center>
                 <FolderActions Directory=`Sessions.ActiveSessionDirectory` ShowFileManager=true ShowNewSession=false />
-                <Button Padding=`new Thickness(6, 4, 6, 4)` VerticalAlignment=Center
-                        ToolTipService.ToolTip="Fork full session"
-                        IsEnabled=`!IsSubagent` @Click+=`if (Sessions.ActiveSessionId is {} sessId) UIs.ForkAndSwitchSession(sessId)`>
-                    <AppSymbolIcon Symbol=`Symbol.PrivateCall` FontSize=11 />
-                </Button>
+                <SmallButtonIcon Symbol=`Symbol.PrivateCall` Tooltip="Fork full session" VerticalAlignment=Center
+                        IsEnabled=`!IsSubagent` @Click+=`if (Sessions.ActiveSessionId is {} sessId) UIs.ForkAndSwitchSession(sessId)` />
                 <ChatCost Cost=`ChatState?.Cost ?? 0` Tokens=`ChatState?.Tokens ?? SessionTokens.Zero` ContextLimit=`ChatState?.ContextLimit ?? 0` />
             </StackPanel>
             if (`IsCompact`)

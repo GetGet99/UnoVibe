@@ -23,9 +23,9 @@ namespace UnoVibe.Pages.Main;
             </>>
                 <TextBlock Text="Directory" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                 <TextBlock Grid.Column=1 Text=`Connection.ServerDirectory` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Connection.ServerDirectory` />
-                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` ToolTipService.ToolTip="Copy directory" @Click+=`CopyToClipboard("Directory", Connection.ServerDirectory)`>
-                    <AppSymbolIcon Symbol=Copy FontSize=11 />
-                </Button>
+                <Border Grid.Column=2>
+                    <SmallButtonIcon Symbol=Copy Tooltip="Copy directory" @Click+=`CopyToClipboard("Directory", Connection.ServerDirectory)` />
+                </Border>
             </Grid>
             <Grid ColumnSpacing=8 ColumnDefinitions=<>
                 <ColumnDefinition Width=Auto />
@@ -34,9 +34,9 @@ namespace UnoVibe.Pages.Main;
             </>>
                 <TextBlock Text="Server" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                 <TextBlock Grid.Column=1 Text=`Connection.BaseUrl` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`Connection.BaseUrl` />
-                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` ToolTipService.ToolTip="Copy URL" @Click+=`CopyToClipboard("URL", Connection.BaseUrl)`>
-                    <AppSymbolIcon Symbol=Copy FontSize=11 />
-                </Button>
+                <Border Grid.Column=2>
+                    <SmallButtonIcon Symbol=Copy Tooltip="Copy URL" @Click+=`CopyToClipboard("URL", Connection.BaseUrl)` />
+                </Border>
             </Grid>
             <Grid ColumnSpacing=8 ColumnDefinitions=<>
                 <ColumnDefinition Width=Auto />
@@ -46,12 +46,12 @@ namespace UnoVibe.Pages.Main;
             </>>
                 <TextBlock Text="Password" FontSize=12 Foreground=`theme.SecondaryText` VerticalAlignment=Center />
                 <TextBlock Grid.Column=1 Text=`ShowPassword ? Connection.Password : MaskPassword(Connection.Password)` FontSize=12 IsTextSelectionEnabled=true TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center ToolTipService.ToolTip=`ShowPassword ? Connection.Password : "Hidden — click the eye to reveal"` />
-                <Button Grid.Column=2 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`!string.IsNullOrEmpty(Connection.Password) ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip=`ShowPassword ? "Hide password" : "Show password"` @Click+=`ShowPassword = !ShowPassword`>
-                    <AppSymbolIcon Symbol=View FontSize=11 />
-                </Button>
-                <Button Grid.Column=3 Padding=`new Thickness(6, 3, 6, 3)` Visibility=`!string.IsNullOrEmpty(Connection.Password) ? Visibility.Visible : Visibility.Collapsed` ToolTipService.ToolTip="Copy password" @Click+=`CopyToClipboard("Password", Connection.Password)`>
-                    <AppSymbolIcon Symbol=Copy FontSize=11 />
-                </Button>
+                <Border Grid.Column=2>
+                    <SmallButtonIcon Symbol=View Tooltip=`ShowPassword ? "Hide password" : "Show password"` Visibility=`!string.IsNullOrEmpty(Connection.Password) ? Visibility.Visible : Visibility.Collapsed` @Click+=`ShowPassword = !ShowPassword` />
+                </Border>
+                <Border Grid.Column=3>
+                    <SmallButtonIcon Symbol=Copy Tooltip="Copy password" Visibility=`!string.IsNullOrEmpty(Connection.Password) ? Visibility.Visible : Visibility.Collapsed` @Click+=`CopyToClipboard("Password", Connection.Password)` />
+                </Border>
             </Grid>
         </StackPanel>
     </Flyout>

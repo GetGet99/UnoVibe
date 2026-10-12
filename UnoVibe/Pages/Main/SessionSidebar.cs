@@ -61,23 +61,14 @@ namespace UnoVibe.Pages.Main;
                 <Grid ColumnDefinitions=<>
                     <ColumnDefinition />
                     <ColumnDefinition Width=Auto />
-                    <ColumnDefinition Width=Auto />
-                    <ColumnDefinition Width=Auto />
-                    <ColumnDefinition Width=Auto />
                 </>>
                     <TextBlock Text=`Connection.ConnectionStatus` FontSize=11 Foreground=`theme.SecondaryText` TextTrimming=`TextTrimming.CharacterEllipsis` VerticalAlignment=Center />
-                    <Button Grid.Column=1 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Open Folder" @Click+=`OpenFolderAndStartSessionAsync()`>
-                        <AppSymbolIcon Symbol=Folder FontSize=11 />
-                    </Button>
-                    <Button Grid.Column=2 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="New window" @Click+=`App.CreateWindow()`>
-                        <AppSymbolIcon Symbol=NewWindow FontSize=11 />
-                    </Button>
-                    <Button Grid.Column=3 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Settings" @Click+=`SettingsOpen = true`>
-                        <AppSymbolIcon Symbol=Setting FontSize=11 />
-                    </Button>
-                    <Button Grid.Column=4 Margin=`new Thickness(8, 0, 0, 0)` Padding=`new Thickness(6, 4, 6, 4)` ToolTipService.ToolTip="Connection details" Flyout=<ConnectionFlyout />>
-                        <AppSymbolIcon Symbol=More FontSize=11 />
-                    </Button>
+                    <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Center>
+                        <SmallButtonIcon Symbol=Folder Tooltip="Open Folder" @Click+=`OpenFolderAndStartSessionAsync()` />
+                        <SmallButtonIcon Symbol=NewWindow Tooltip="New window" @Click+=`App.CreateWindow()` />
+                        <SmallButtonIcon Symbol=Setting Tooltip="Settings" @Click+=`SettingsOpen = true` />
+                        <SmallButtonIcon Symbol=More Tooltip="Connection details" Flyout=<ConnectionFlyout /> />
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>

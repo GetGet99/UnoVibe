@@ -55,16 +55,12 @@ namespace UnoVibe.Pages.Home;
                     <ChatCostInline Cost=`Card.Cost` Tokens=`Card.Tokens` ContextLimit=`Card.ContextLimit` />
                 </StackPanel>
                 <StackPanel Grid.Column=2 Orientation=Horizontal Spacing=4 VerticalAlignment=Top>
-                    <Button Padding=`new Thickness(6, 4, 6, 4)` @Click+=`OpenSession()` ToolTipService.ToolTip="Open session">
-                        <AppSymbolIcon Symbol=View FontSize=11 />
-                    </Button>
+                    <SmallButtonIcon Symbol=View Tooltip="Open session" @Click+=`OpenSession()` />
                     if (`Head is not null`)
                     {
                         <FolderActions Directory=`Head!.Directory` ShowNewSession=false />
                     }
-                    <Button Padding=`new Thickness(6, 4, 6, 4)` @Click+=`Home.Unpin(Card.SessionId)` ToolTipService.ToolTip="Remove from Home">
-                        <AppSymbolIcon Symbol=Accept FontSize=11 />
-                    </Button>
+                    <SmallButtonIcon Symbol=Accept Tooltip="Remove from Home" @Click+=`Home.Unpin(Card.SessionId)` />
                 </StackPanel>
             </Grid>
             if (`Card.IsLoading`)
