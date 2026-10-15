@@ -17,6 +17,7 @@ namespace UnoVibe.Pages.Home;
     string TitleText => `Head?.Title ?? "Session"`;
     string TimeLabel => `Head?.TimeLabel ?? ""`;
     bool IsBusy => `Head?.IsBusy ?? false`;
+    bool IsExpanded => `Home.ActiveCardId?.Equals(Card.SessionId) ?? false`;
     SessionState CardState => `Head?.State ?? SessionState.None`;
     <setup>
         var theme = ThemeBrushes.Global;
@@ -60,9 +61,12 @@ namespace UnoVibe.Pages.Home;
                     {
                         <FolderActions Directory=`Head!.Directory` ShowNewSession=false />
                     }
+                    <SmallButtonIcon Symbol=`IsExpanded ? Symbol.ChevronUp : Symbol.ChevronDown` Tooltip=`IsExpanded ? "Collapse" : "Expand"` @Click+=`Home.ToggleExpanded(Card.SessionId)` />
                     <SmallButtonIcon Symbol=Accept Tooltip="Remove from Home" @Click+=`Home.Unpin(Card.SessionId)` />
                 </StackPanel>
             </Grid>
+            if (`IsExpanded`)
+            {
             if (`Card.IsLoading`)
             {
                 <ProgressRing Width=20 Height=20 IsActive=true HorizontalAlignment=Left />
@@ -86,6 +90,7 @@ namespace UnoVibe.Pages.Home;
             {
                 <ChatComposer Chatbox=`Sessions.EnsureChatbox(Card.SessionId)` ChatParams=`Head!.ChatParams`
                     SessionDirectory=`Head!.Directory` Head=`Head` />
+            }
             }
         </StackPanel>
     </Border>

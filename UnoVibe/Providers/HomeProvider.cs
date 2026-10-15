@@ -9,6 +9,7 @@ namespace UnoVibe.Providers;
     bool IsCreatingSession = false;
     string? DraftDirectory = null;
     `IEnumerable<string>` DraftDirectoryOptions => `OrderedDirectories()`;
+    SessionId? ActiveCardId = null;
     """)]
 partial class HomeProvider
 {
@@ -57,7 +58,16 @@ partial class HomeProvider
             oldest = CardsOrdered.LastOrDefault();
         }
         cards.Add(new HomeCardSnapshot(id));
+        if (ActiveCardId is null)
+            ActiveCardId = id;
         AsyncHelper.RunAndReport(RefreshPreviewAsync(id), Toasts, "Could not load preview", "Home");
+    }
+
+    public bool IsExpanded(SessionId id) => ActiveCardId?.Equals(id) ?? false;
+
+    public void ToggleExpanded(SessionId id)
+    {
+        ActiveCardId = IsExpanded(id) ? null : id;
     }
 
     public void Unpin(SessionId id)
@@ -65,6 +75,8 @@ partial class HomeProvider
         if (Sessions.Head(id) is {} head)
             head.IsRead = true;
         cards.Remove(id);
+        if (ActiveCardId?.Equals(id) ?? false)
+            ActiveCardId = null;
     }
 
     public void TogglePin(SessionId id)
@@ -338,7 +350,13 @@ partial class HomeProvider
 
     void OnSessionUpdated(string _, SessionCrudEvent e) => RefreshCard(e.SessionId);
 
-    void OnSessionDeleted(string _, SessionCrudEvent e) => cards.Remove(new(e.SessionId));
+    void OnSessionDeleted(string _, SessionCrudEvent e)
+    {
+        var id = new SessionId(e.SessionId);
+        cards.Remove(id);
+        if (ActiveCardId?.Equals(id) ?? false)
+            ActiveCardId = null;
+    }
 
     void OnSessionStatus(string _, SessionStatusEvent e)
     {
