@@ -4,7 +4,7 @@ using UnoVibe.Pages.Test;
 
 namespace UnoVibe;
 
-partial class App : Application
+public partial class App : Application
 {
     public App()
     {
@@ -14,7 +14,7 @@ partial class App : Application
 #endif
     }
 
-    public static List<WindowController> Windows { get; } = new();
+    internal static List<WindowController> Windows { get; } = new();
 
     protected Window? MainWindow { get; private set; }
 
@@ -26,7 +26,7 @@ partial class App : Application
         MainWindow = CreateWindow().Window;
     }
 
-    public static WindowController CreateWindow()
+    internal static WindowController CreateWindow()
     {
         var controller = new WindowController();
         Windows.Add(controller);

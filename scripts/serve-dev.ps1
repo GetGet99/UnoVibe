@@ -4,6 +4,7 @@
     Start the dev `opencode serve` on http://localhost:4196 if it isn't already running.
 .DESCRIPTION
     See AGENTS.md "How to Build & Run".
+#>
 
 $ErrorActionPreference = 'Stop'
 
