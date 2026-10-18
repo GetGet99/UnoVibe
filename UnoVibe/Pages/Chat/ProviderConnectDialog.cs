@@ -36,7 +36,7 @@ namespace UnoVibe.Pages.Chat;
     </setup>
     <root>
         <ContentDialog MinWidth=480 CloseButtonText="Close" Title=`Title.Length > 0 ? Title : "Connect a provider"`>
-            <Grid Padding=`new Thickness(8, 0, 8, 0)` RowDefinitions=<>
+            <Grid RowDefinitions=<>
                 <RowDefinition Height=Auto />
                 <RowDefinition Height=Auto />
                 <RowDefinition Height=Auto />
