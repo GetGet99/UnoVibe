@@ -57,6 +57,7 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
             App.Current.Resources["DefaultFlyoutPresenter"]
 #endif
             ,
+            TargetType = typeof(FlyoutPresenter),
             Setters =
             {
                 new Setter { Property = Control.PaddingProperty, Value = new Thickness() },

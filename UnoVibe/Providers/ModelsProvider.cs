@@ -23,7 +23,7 @@ class ModelsProvider
         {
             if (!(await Opencode.GetAgentsAsync(ct)).TryGetValue(out var agents, out var error))
             {
-                Toasts.ShowError(error, "Could not load agent modes");
+                Toasts.ShowError(error, "Could not load agents and models");
                 return;
             }
             AgentOptions.Clear();

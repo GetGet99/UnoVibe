@@ -1,5 +1,7 @@
+#if WASDK || DESKTOP_LINUX || DESKTOP_MACOS
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
+#endif
 
 namespace UnoVibe.Helpers;
 

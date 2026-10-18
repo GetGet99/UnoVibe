@@ -35,7 +35,7 @@ namespace UnoVibe.Pages.Chat;
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <ContentDialog Width=480 CloseButtonText="Close" Title=`Title.Length > 0 ? Title : "Connect a provider"`>
+        <ContentDialog MinWidth=480 CloseButtonText="Close" Title=`Title.Length > 0 ? Title : "Connect a provider"`>
             <Grid Padding=`new Thickness(8, 0, 8, 0)` RowDefinitions=<>
                 <RowDefinition Height=Auto />
                 <RowDefinition Height=Auto />
