@@ -57,6 +57,8 @@ public sealed partial class OpencodeClient : IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
+            if (ct.IsCancellationRequested)
+                throw;
             return Result<T>.Failure(ApiError.Other(ex.Message));
         }
     }
@@ -77,6 +79,8 @@ public sealed partial class OpencodeClient : IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
+            if (ct.IsCancellationRequested)
+                throw;
             return Result<TOut>.Failure(ApiError.Other(ex.Message));
         }
     }

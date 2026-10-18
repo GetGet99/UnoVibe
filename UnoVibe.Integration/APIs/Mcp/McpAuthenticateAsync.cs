@@ -34,6 +34,8 @@ partial class OpencodeClient
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (ct.IsCancellationRequested)
+                throw;
             return Result<McpStatusInfo>.Failure(ApiError.Other(ex.Message));
         }
     }
