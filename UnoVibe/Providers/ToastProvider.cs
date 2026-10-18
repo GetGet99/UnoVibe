@@ -84,6 +84,8 @@ partial class ToastsProvider : IDisposable
 
     public void Dispose()
     {
+        Event.UnregisterTuiToastShow(null, ApplyToastShow);
+        ReactiveScheduler.UnhandledExceptionForCurrentThread -= OnUnhandledMarkupException;
         _toastCts?.Cancel();
         _toastCts = null;
         GC.SuppressFinalize(this);

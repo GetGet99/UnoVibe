@@ -160,6 +160,9 @@ class EventsProvider : IDisposable
         => UnregisterDelegate(directory, EventTypes.QuestionReplied, handler);
     public void UnregisterQuestionRejected(string? directory, Action<string, QuestionRejectedEvent> handler)
         => UnregisterDelegate(directory, EventTypes.QuestionRejected, handler);
+    public void UnregisterTuiToastShow(string? directory, Action<string, TuiToastShowEvent> handler)
+        => UnregisterDelegate(directory, EventTypes.McpToolsChanged, handler);
+
 
     Action<string, JsonElement> MakeHandler<T>(Action<string, T> handler, JsonTypeInfo<T> typeInfo)
     {
