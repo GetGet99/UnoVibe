@@ -8,6 +8,7 @@
     Any arguments given to this script are forwarded to the app (a folder path or
     an http(s) server URL, plus optional --password). Example:
     scripts/run-no-serve.ps1 http://localhost:4196
+#>
 
 $ErrorActionPreference = 'Stop'
 
