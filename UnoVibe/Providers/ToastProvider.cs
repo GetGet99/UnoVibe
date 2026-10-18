@@ -14,6 +14,11 @@ partial class ToastsProvider : IDisposable
         this.Event = Event;
         this.dispatcher = dispatcher;
         Event.RegisterTuiToastShow(null, ApplyToastShow);
+        ReactiveScheduler.UnhandledExceptionForCurrentThread += (_, e) =>
+        {
+            ShowError($"{e.Exception.GetType().Name}: {e.Exception.Message}", "Unhandled Markup Exception");
+            e.Handled = true;
+        };
     }
 
     private void ApplyToastShow(string _, TuiToastShowEvent e)
