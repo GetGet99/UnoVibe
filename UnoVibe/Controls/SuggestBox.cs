@@ -103,15 +103,11 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         set => SetDraftText(value);
     }
 
+    public bool IsFocused => input?.FocusState != FocusState.Unfocused;
+
     public void Clear() => SetDraftText("");
 
     public void ClearAfterSubmit() => _ = SetTextWithEnterSuppressionAsync("");
-
-    public void RestoreDraft(string newText, out string oldText)
-    {
-        oldText = Text;
-        SetDraftText(newText);
-    }
 
     private void SetDraftText(string newText)
     {

@@ -4,6 +4,7 @@ namespace UnoVibe.Models;
 
 [QuickRefs("""
     string Text = "";
+    bool ShellMode = false;
     """)]
 partial class ChatboxMessage
 {

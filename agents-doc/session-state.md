@@ -28,12 +28,24 @@ The **send-mode setting** decides what a send does while a turn is running:
 - **Send immediately**: interrupt the running turn first, then send. When idle it sends like
   "On next tool call". (UnoVibe-only; the TUI/web have no interrupt+send flow.)
 
+## Composer draft and shell-mode persistence
+
+The composer input is not bound two-way (binding per-keystroke re-renders was too slow); the
+`ChatboxMessage` (`Text`, `Images`, `ShellMode`) is the per-session draft and mode store instead.
+Each keystroke writes `Text` back into that object, so the draft survives the composer
+unmounting — Home card collapse/expand, Home↔Chat, and the draft→session handoff. The only
+message→textbox sync (a `Chatbox.Message` change) is **one-way and skipped while the textbox is
+focused**, so an unfocused composer picks up a switch/undo/fork restore without disturbing active
+typing. Programmatic textbox writes flow back through the same store, so it never goes stale.
+
 ## Shell mode ("!" prefix)
 
-Typing `!` as the entire composer input flips the composer into **shell mode**. Submit fires
-`POST /session/{id}/shell` on a dedicated no-timeout client; the endpoint blocks until the
-command exits and all progress arrives over SSE. The session goes busy for the duration, so Stop
-aborts the command.
+Typing `!` as the entire composer input flips the composer into **shell mode**. Shell mode is
+one-shot: submit (or Esc) exits it back to normal typing, then fires `POST /session/{id}/shell` on
+a dedicated no-timeout client. The endpoint blocks until the command exits and all progress
+arrives over SSE. The session goes busy for the duration, so Stop aborts the command. `ShellMode`
+lives on `ChatboxMessage`, so entering `!` and navigating away keeps shell mode for that chatbox
+until submit; replacing the message (send/fork/undo) resets it to off.
 
 ## Turn-stop handling: Continue button + auto-continue
 

@@ -20,7 +20,6 @@ namespace UnoVibe.Pages.Chat;
     inject UIServiceProvider UIs;
     inject ModelsProvider Models;
     string SendMode = "";
-    bool ShellMode = false;
     `IReadOnlyList<string>` SelectionVariants => `
         ChatParams.Model is not {} model
         ? EmptyList
@@ -67,10 +66,10 @@ namespace UnoVibe.Pages.Chat;
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
-                suggestBox = <SuggestBox PlaceholderText=`ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`IsEnabled`
+                suggestBox = <SuggestBox PlaceholderText=`Message.ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`IsEnabled`
                     TextChanged+=`OnInputTextChanged` PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
-                    if (`!ShellMode`)
+                    if (`!Message.ShellMode`)
                         <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`IsEnabled`
                                 @Click+=`OnPickImages()`>
                             <SymbolIcon Symbol=Camera VerticalAlignment=Center />
@@ -85,7 +84,7 @@ namespace UnoVibe.Pages.Chat;
                                        SendRequested+=`OnSendWithMode` />
                 </StackPanel>
             </Grid>
-            if (`!ShellMode`)
+            if (`!Message.ShellMode`)
                 <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(0)`>
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
@@ -155,20 +154,19 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         ];
         suggestBox.CommandTriggered += (sender, item) => RunBuiltInCommandAsync(item.Action!);
 
+        suggestBox.Text = Message.Text;
+        if (Message.ShellMode) SetSuggestionPrefixes("");
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
         WatchMessage();
     }
 
     void WatchMessage()
     {
-        var message = Message;
         MessageComp.Watch(newMessage =>
         {
-            suggestBox.RestoreDraft(newMessage.Text, out var oldText);
-            message.Text = oldText;
-            message = newMessage;
+            if (!suggestBox.IsFocused)
+                suggestBox.Text = newMessage.Text;
         });
-
     }
 
     private void OnSettingsChanged()
@@ -178,7 +176,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private async void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (ShellMode && e.Key == Windows.System.VirtualKey.Escape && !e.Handled)
+        if (Message.ShellMode && e.Key == Windows.System.VirtualKey.Escape && !e.Handled)
         {
             e.Handled = true;
             ExitShellMode();
@@ -214,13 +212,14 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private void OnInputTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (!ShellMode && suggestBox.Text == "!")
+        Message.Text = suggestBox.Text;
+        if (!Message.ShellMode && suggestBox.Text == "!")
             EnterShellMode();
     }
 
     private void EnterShellMode()
     {
-        ShellMode = true;
+        Message.ShellMode = true;
         suggestBox.Clear();
         SetSuggestionPrefixes("");
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
@@ -228,8 +227,8 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private void ExitShellMode()
     {
-        if (!ShellMode) return;
-        ShellMode = false;
+        if (!Message.ShellMode) return;
+        Message.ShellMode = false;
         suggestBox.ClearAfterSubmit();
         SetSuggestionPrefixes("/@");
         suggestBox.MarkupNode.Focus(FocusState.Programmatic);
@@ -252,26 +251,24 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private async Task OnSubmitRequested(SuggestBox sender, string text)
     {
-        if (ShellMode)
+        if (Message.ShellMode)
         {
             await SubmitShellAsync();
             return;
         }
         if (await TryRunBuiltInTextAsync(text)) return;
-        Message.Text = text;
         await SendAsync(null);
         sender.ClearAfterSubmit();
     }
 
     private async Task OnSendWithMode(SendPromptMode mode)
     {
-        if (ShellMode)
+        if (Message.ShellMode)
         {
             await SubmitShellAsync();
             return;
         }
         if (await TryRunBuiltInTextAsync(suggestBox.Text)) return;
-        Message.Text = suggestBox.Text;
         await SendAsync(mode);
         suggestBox.ClearAfterSubmit();
     }
@@ -426,10 +423,4 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
     private static string? Capitalize(string? value) =>
         string.IsNullOrEmpty(value) ? null : char.ToUpper(value[0]) + value[1..];
-
-    public void SetChatText(string txt)
-    {
-        if (ShellMode) ExitShellMode();
-        suggestBox.Text = txt;
-    }
 }
