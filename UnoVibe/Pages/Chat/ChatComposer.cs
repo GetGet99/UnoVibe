@@ -186,7 +186,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         }
 
         if (e.Key == Windows.System.VirtualKey.V &&
-            InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            InputKeyboardSource.GetCModifierKeyStateForCurrentThread()
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) &&
             !InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
@@ -200,6 +200,8 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             {
 #if WASDK
                 suggestBox.PasteFromClipboard();
+#else
+                // .Handled in Uno Platform does not override paste event request.
 #endif
             }
         }
