@@ -198,7 +198,8 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
     private UIElement RenderList(ListBlock list)
     {
         int index = int.TryParse(list.OrderedStart, out var start) ? start : 1;
-        var stack = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 0, 4) };
+        double left = list.Parent is ListItemBlock ? 20 : 0;
+        var stack = new StackPanel { Spacing = 2, Margin = new Thickness(left, 0, 0, 4) };
         foreach (var item in list)
         {
             if (item is not ListItemBlock li) continue;
@@ -231,7 +232,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
-            Margin = new Thickness(20, 0, 0, 0),
+            Margin = new Thickness(10, 0, 0, 0),
             Inlines = { new Run { Text = marker, Foreground = _theme.SecondaryText } },
         };
         BuildInlines(p.Inline, tb.Inlines, default);
