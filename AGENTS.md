@@ -148,6 +148,8 @@ This replaces runtime `OperatingSystem.IsWindows()/IsMacOS()/IsLinux()` dispatch
 `net10.0-desktop` build's OS still comes from `DESKTOP_*` where Skia/WinUI behavior differs; pure
 OS behaviors that are identical on WinAppSDK use the broader `WINDOWS` guard instead.
 
+Avoid dynamic `OperatingSystem.IsWindows()/IsMacOS()/IsLinux()` guard and instead use the compile time constants.
+
 ## Windows Build (WinUI) Conventions
 
 The Windows **WinUI** target is supported and should be kept compilable, so follow these

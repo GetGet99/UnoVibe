@@ -170,15 +170,14 @@ sealed class OpencodeServeProcess : IDisposable
 
         var candidate = Path.Combine(directory, name);
 
-        if (OperatingSystem.IsWindows())
+#if WINDOWS
+        if (!Path.HasExtension(candidate))
         {
-            if (!Path.HasExtension(candidate))
-            {
-                var exe = candidate + ".exe";
-                if (File.Exists(exe))
-                    return Path.GetFullPath(exe);
-            }
+            var exe = candidate + ".exe";
+            if (File.Exists(exe))
+                return Path.GetFullPath(exe);
         }
+#endif
 
         if (File.Exists(candidate))
             return Path.GetFullPath(candidate);
@@ -196,12 +195,11 @@ sealed class OpencodeServeProcess : IDisposable
             yield return Path.Combine(home, "bin");
         }
 
-        if (!OperatingSystem.IsWindows())
-        {
-            yield return "/usr/local/bin";
-            yield return "/usr/bin";
-            yield return "/opt/opencode/bin";
-        }
+#if WINDOWS
+        yield return "/usr/local/bin";
+        yield return "/usr/bin";
+        yield return "/opt/opencode/bin";
+#endif
     }
 
     static Lazy<Task<OpencodeExecutableStatus>> executableStatus => field ??= new(GetExecutableStatusPrivate);
