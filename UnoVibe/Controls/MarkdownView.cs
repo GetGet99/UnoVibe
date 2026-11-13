@@ -145,7 +145,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
 
     private UIElement FlowTextBlock(IReadOnlyList<MarkdigBlock> flowBlocks)
     {
-        var tb = new TextBlock
+        var rtb = new RichTextBlock
         {
             FontSize = 13.5,
             Foreground = _theme.PrimaryText,
@@ -153,21 +153,31 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
             IsTextSelectionEnabled = true,
             Margin = new Thickness(0, 0, 0, 2),
         };
+        var state = new InlineBuildState();
+        var style = new InlineStyle(InRichTextBlock: true, State: state);
         for (int i = 0; i < flowBlocks.Count; i++)
         {
+            var paragraph = new Paragraph();
             switch (flowBlocks[i])
             {
                 case HeadingBlock h:
-                    double size = h.Level switch { 1 => 22, 2 => 19, 3 => 17, 4 => 15, 5 => 14, _ => 13.5 };
-                    BuildInlines(h.Inline, tb.Inlines, new InlineStyle(FontSize: size, SemiBold: true));
+                    paragraph.FontSize = h.Level switch { 1 => 22, 2 => 19, 3 => 17, 4 => 15, 5 => 14, _ => 13.5 };
+                    paragraph.FontWeight = FontWeights.SemiBold;
+                    BuildInlines(h.Inline, paragraph.Inlines, style);
                     break;
                 case ParagraphBlock p:
-                    BuildInlines(p.Inline, tb.Inlines, default);
+                    BuildInlines(p.Inline, paragraph.Inlines, style);
                     break;
             }
-            if (i < flowBlocks.Count - 1) tb.Inlines.Add(new LineBreak());
+            if (i < flowBlocks.Count - 1)
+            {
+                paragraph.Margin = new Thickness(0, 0, 0, 6);
+                state.FlatOffset += 2;
+            }
+            rtb.Blocks.Add(paragraph);
         }
-        return tb;
+        ApplyCodeHighlighters(rtb, state);
+        return rtb;
     }
 
     private UIElement RenderCode(CodeBlock code)
@@ -199,19 +209,37 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
     {
         int index = int.TryParse(list.OrderedStart, out var start) ? start : 1;
         double left = list.Parent is ListItemBlock ? 20 : 0;
-        var stack = new StackPanel { Spacing = 2, Margin = new Thickness(left, 0, 0, 4) };
+        var grid = new Grid { Margin = new Thickness(left, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        int row = 0;
         foreach (var item in list)
         {
             if (item is not ListItemBlock li) continue;
-            var marker = list.IsOrdered ? $"{index}. " : "•  ";
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var marker = list.IsOrdered ? $"{index}." : "•";
             index++;
+
+            var bullet = new TextBlock
+            {
+                Text = marker,
+                FontSize = 13.5,
+                Foreground = _theme.SecondaryText,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            Grid.SetRow(bullet, row);
+            Grid.SetColumn(bullet, 0);
+            grid.Children.Add(bullet);
 
             var content = new StackPanel { Spacing = 4 };
             foreach (var child in li)
             {
                 content.Children.Add(child switch
                 {
-                    ParagraphBlock pb => BuildListItemParagraph(pb, marker),
+                    ParagraphBlock pb => BuildListItemParagraph(pb),
                     CodeBlock c => RenderCode(c),
                     QuoteBlock q => RenderQuote(q),
                     ListBlock nested => RenderList(nested),
@@ -219,24 +247,29 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                     _ => null,
                 });
             }
-            stack.Children.Add(content);
+            Grid.SetRow(content, row);
+            Grid.SetColumn(content, 1);
+            grid.Children.Add(content);
+            row++;
         }
-        return stack;
+        return grid;
     }
 
-    private UIElement BuildListItemParagraph(ParagraphBlock p, string marker)
+    private UIElement BuildListItemParagraph(ParagraphBlock p)
     {
-        var tb = new TextBlock
+        var rtb = new RichTextBlock
         {
             FontSize = 13.5,
             Foreground = _theme.PrimaryText,
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
-            Margin = new Thickness(10, 0, 0, 0),
-            Inlines = { new Run { Text = marker, Foreground = _theme.SecondaryText } },
         };
-        BuildInlines(p.Inline, tb.Inlines, default);
-        return tb;
+        var state = new InlineBuildState();
+        var paragraph = new Paragraph();
+        BuildInlines(p.Inline, paragraph.Inlines, new InlineStyle(InRichTextBlock: true, State: state));
+        rtb.Blocks.Add(paragraph);
+        ApplyCodeHighlighters(rtb, state);
+        return rtb;
     }
 
     private UIElement RenderQuote(QuoteBlock quote)
@@ -318,7 +351,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 for (int cc = col; cc < col + span && cc < columnCount; cc++)
                     occupied[r].Add(cc);
 
-                var tb = new TextBlock
+                var rtb = new RichTextBlock
                 {
                     FontSize = 12.5,
                     Foreground = _theme.PrimaryText,
@@ -326,24 +359,29 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                     IsTextSelectionEnabled = true,
                     FontWeight = row.IsHeader ? FontWeights.SemiBold : FontWeights.Normal,
                 };
-                bool firstBlock = true;
+                var cellState = new InlineBuildState();
+                var cellStyle = new InlineStyle(InRichTextBlock: true, State: cellState);
+                int cellBlock = 0;
                 foreach (var block in cell)
                 {
-                    if (!firstBlock) tb.Inlines.Add(new LineBreak());
-                    firstBlock = false;
+                    var cellParagraph = new Paragraph();
                     switch (block)
                     {
                         case ParagraphBlock p:
-                            BuildInlines(p.Inline, tb.Inlines, default);
+                            BuildInlines(p.Inline, cellParagraph.Inlines, cellStyle);
                             break;
                         case CodeBlock code:
-                            tb.Inlines.Add(new Run { Text = code.Lines.ToString(), FontFamily = CodeFontsHelper.Current });
+                            cellParagraph.Inlines.Add(new Run { Text = code.Lines.ToString(), FontFamily = CodeFontsHelper.Current });
                             break;
                     }
+                    if (cellBlock < cell.Count - 1) cellState.FlatOffset += 2;
+                    cellBlock++;
+                    rtb.Blocks.Add(cellParagraph);
                 }
+                ApplyCodeHighlighters(rtb, cellState);
 
                 var align = col < columnCount ? table.ColumnDefinitions[col].Alignment : null;
-                tb.HorizontalAlignment = align switch
+                rtb.HorizontalAlignment = align switch
                 {
                     TableColumnAlign.Center => HorizontalAlignment.Center,
                     TableColumnAlign.Right => HorizontalAlignment.Right,
@@ -360,7 +398,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                         top: 0,
                         right: col + span >= columnCount ? 0 : 1,
                         bottom: r + Math.Max(1, cell.RowSpan) >= table.Count ? 0 : 1),
-                    Child = tb,
+                    Child = rtb,
                 };
                 Grid.SetRow(cellBorder, r);
                 Grid.SetColumn(cellBorder, col);
@@ -422,7 +460,22 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
         IsTextSelectionEnabled = true,
     };
 
-    private readonly record struct InlineStyle(bool Bold = false, bool Italic = false, bool Code = false, bool Underline = false, double FontSize = 0, bool SemiBold = false);
+    private sealed class InlineBuildState
+    {
+        public int FlatOffset;
+        public readonly List<TextRange> CodeRanges = new();
+    }
+
+    private readonly record struct InlineStyle(
+        bool Bold = false,
+        bool Italic = false,
+        bool Code = false,
+        bool Underline = false,
+        double FontSize = 0,
+        bool SemiBold = false,
+        bool InHyperlink = false,
+        bool InRichTextBlock = false,
+        InlineBuildState? State = null);
 
     private void BuildInlines(ContainerInline? container, InlineCollection target, InlineStyle style)
     {
@@ -442,7 +495,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 break;
 
             case CodeInline code:
-                AddRun(target, code.Content.ToString(), style with { Code = true });
+                AddCodeRun(target, code.Content.ToString(), style);
                 break;
 
             case EmphasisInline em when em.DelimiterCount >= 2:
@@ -457,7 +510,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 if (link.Url is { Length: > 0 } && Uri.TryCreate(link.Url, UriKind.Absolute, out var uri))
                 {
                     var hyper = new Hyperlink { NavigateUri = uri };
-                    BuildInlines(link, hyper.Inlines, style);
+                    BuildInlines(link, hyper.Inlines, style with { InHyperlink = true });
                     target.Add(hyper);
                 }
                 else
@@ -473,6 +526,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
                 if (Uri.TryCreate(autoUrl, UriKind.Absolute, out var autoUri))
                 {
                     target.Add(new Hyperlink { NavigateUri = autoUri, Inlines = { new Run { Text = auto.Url } } });
+                    if (style.State is { } autoState) autoState.FlatOffset += auto.Url.Length;
                 }
                 else
                 {
@@ -482,6 +536,7 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
 
             case LineBreakInline:
                 target.Add(new LineBreak());
+                if (style.State is { } brState) brState.FlatOffset += 1;
                 break;
 
             case HtmlInline html:
@@ -511,6 +566,33 @@ partial class MarkdownView : IQuickMarkupComponent<UIElement>
             run.Foreground = AccentPaletteHelper.InlineCodeBrush(_theme) ?? _theme.SystemAttention;
         }
         target.Add(run);
+        if (style.State is { } state) state.FlatOffset += text.Length;
+    }
+
+    private void AddCodeRun(InlineCollection target, string text, InlineStyle style)
+    {
+        if (text.Length == 0) return;
+        if (style.InHyperlink || !style.InRichTextBlock || style.State is not { } state)
+        {
+            AddRun(target, text, style with { Code = true });
+            return;
+        }
+
+        int start = state.FlatOffset;
+        AddRun(target, text, style with { Code = true });
+        state.CodeRanges.Add(new TextRange { StartIndex = start, Length = text.Length });
+    }
+
+    private void ApplyCodeHighlighters(RichTextBlock rtb, InlineBuildState state)
+    {
+        if (state.CodeRanges.Count == 0) return;
+        var highlighter = new TextHighlighter
+        {
+            Background = _theme.SystemNeutralBackground,
+            Foreground = AccentPaletteHelper.InlineCodeBrush(_theme) ?? _theme.SystemAttention,
+        };
+        foreach (var range in state.CodeRanges) highlighter.Ranges.Add(range);
+        rtb.TextHighlighters.Add(highlighter);
     }
 
     private static int BlockRawStart(string text, MarkdigBlock block) => LineStart(text, block.Line);
