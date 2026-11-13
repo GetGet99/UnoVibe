@@ -20,7 +20,6 @@
     <UnoIconForegroundFile>Assets/Icons/UnoVibe.png</UnoIconForegroundFile>
 
     <UnoFeatures>
-      SkiaRenderer;
       SpellChecking
     </UnoFeatures>
   </PropertyGroup>
