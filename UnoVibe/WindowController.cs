@@ -22,7 +22,8 @@ sealed class WindowController
     {
         Window.SetWindowIcon();
 #if DEBUG
-        Window.UseStudio();
+        // Only enable this if needing to use App MCP
+        // Window.UseStudio();
 #endif
         Window.Closed += OnClose;
     }
