@@ -199,23 +199,14 @@ partial class SuggestBox : IQuickMarkupComponent<Grid>
 
     private void OnInnerPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Tab)
+        if (e.Key == Windows.System.VirtualKey.Tab && SuggestionsOpen && _items.Count > 0)
         {
-            if (SuggestionsOpen && _items.Count > 0)
-            {
-                e.Handled = true;
-                if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
-                    CommitSuggestion(_items[SelectedIndex]);
-                else
-                    CloseSuggestions();
-                return;
-            }
-            if (!input.IsReadOnly && input.TextDocument is { } doc)
-            {
-                doc.Selection.TypeText("\t");
-                e.Handled = true;
-                return;
-            }
+            e.Handled = true;
+            if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
+                CommitSuggestion(_items[SelectedIndex]);
+            else
+                CloseSuggestions();
+            return;
         }
         PreviewKeyDown?.Invoke(this, e);
     }
