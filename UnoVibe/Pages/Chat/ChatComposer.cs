@@ -1,10 +1,12 @@
 using Microsoft.UI.Input;
 using UnoVibe.Controls;
+using UnoVibe.Models;
 using Uno.Extensions;
 namespace UnoVibe.Pages.Chat;
 
 [QuickMarkup("""
     using UnoVibe.Controls;
+    using UnoVibe.Models;
     using QuickMarkup.WinUI;
     using QuickMarkup.Infra.Collections;
     using Microsoft.UI;
@@ -41,33 +43,57 @@ namespace UnoVibe.Pages.Chat;
             <RowDefinition Height=Auto />
             <RowDefinition Height=Auto />
         </>>
-            if (`Message.Images.Count > 0`)
-                <ScrollViewer Grid.Row=0 MaxHeight=96 Padding=`new Thickness(0, 0, 0, 8)`
-                    HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
-                    <StackPanel Orientation=Horizontal>
-                        foreach (var a in `Message.Images`)
-                        {
-                            <Grid Margin=`new Thickness(0, 4, 8, 4)`>
-                                <Border Width=64 Height=64 CornerRadius=6 BorderBrush=`theme.CardStroke`
-                                        BorderThickness=`new Thickness(1)` Background=`theme.CardBackground`
-                                        VerticalAlignment=Top>
-                                    <Image Source=`a.Preview` Stretch=Uniform Margin=2 />
-                                </Border>
-                                <Button Width=18 Height=18 Padding=0 HorizontalAlignment=Right VerticalAlignment=Top
-                                        CornerRadius=9 Foreground=`theme.PrimaryText` FontSize=10
-                                        ToolTipService.ToolTip="Remove attachment" @Click+=`Message.Images.Remove(a)`>
-                                    <TextBlock Text="✕" FontSize=10 />
-                                </Button>
-                            </Grid>
-                        }
-                    </StackPanel>
-                </ScrollViewer>
+            if (`Message.Images.Count > 0 || Message.Files.Count > 0`)
+                <StackPanel Grid.Row=0 Spacing=6 Padding=`new Thickness(0, 0, 0, 8)`>
+                    if (`Message.Images.Count > 0`)
+                        <ScrollViewer MaxHeight=96 HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
+                            <StackPanel Orientation=Horizontal>
+                                foreach (var a in `Message.Images`)
+                                {
+                                    <Grid Margin=`new Thickness(0, 4, 8, 4)`>
+                                        <Border Width=64 Height=64 CornerRadius=6 BorderBrush=`theme.CardStroke`
+                                                BorderThickness=`new Thickness(1)` Background=`theme.CardBackground`
+                                                VerticalAlignment=Top>
+                                            <Image Source=`a.Preview` Stretch=Uniform Margin=2 />
+                                        </Border>
+                                        <Button Width=18 Height=18 Padding=0 HorizontalAlignment=Right VerticalAlignment=Top
+                                                CornerRadius=9 Foreground=`theme.PrimaryText` FontSize=10
+                                                ToolTipService.ToolTip="Remove attachment" @Click+=`Message.Images.Remove(a)`>
+                                            <TextBlock Text="✕" FontSize=10 />
+                                        </Button>
+                                    </Grid>
+                                }
+                            </StackPanel>
+                        </ScrollViewer>
+                    if (`Message.Files.Count > 0`)
+                        <ScrollViewer MaxHeight=96 HorizontalScrollBarVisibility=Auto VerticalScrollBarVisibility=Disabled>
+                            <StackPanel Orientation=Horizontal>
+                                foreach (var f in `Message.Files`; `f.Id`)
+                                {
+                                    <Border Margin=`new Thickness(0, 4, 8, 4)` Background=`theme.CardBackground`
+                                            BorderBrush=`theme.CardStroke` BorderThickness=`new Thickness(1)` CornerRadius=6
+                                            Padding=`new Thickness(10, 0, 6, 0)` Height=32>
+                                        <StackPanel Orientation=Horizontal Spacing=8 VerticalAlignment=Center>
+                                            <TextBlock Text=`f.FileName` FontSize=12 Foreground=`theme.PrimaryText`
+                                                    VerticalAlignment=Center MaxWidth=220 TextTrimming=`TextTrimming.CharacterEllipsis` />
+                                            <Button Width=18 Height=18 Padding=0 CornerRadius=9 Foreground=`theme.PrimaryText`
+                                                    FontSize=10 ToolTipService.ToolTip="Remove attachment"
+                                                    @Click+=`Message.Files.Remove(f)`>
+                                                <TextBlock Text="✕" FontSize=10 />
+                                            </Button>
+                                        </StackPanel>
+                                    </Border>
+                                }
+                            </StackPanel>
+                        </ScrollViewer>
+                </StackPanel>
             <Grid Grid.Row=1 ColumnSpacing=`IsCompact ? 6 : 8` Padding=`InputRowPadding` ColumnDefinitions=<>
                 <ColumnDefinition />
                 <ColumnDefinition Width=Auto />
             </>>
                 suggestBox = <SuggestBox PlaceholderText=`Message.ShellMode ? "Run a shell command… (e.g. git status)" : "Message OpenCode..."` IsEnabled=`IsEnabled`
-                    TextChanged+=`OnInputTextChanged` PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested` />
+                    TextChanged+=`OnInputTextChanged` PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested`
+                    FileCommitRequested+=`OnFileCommitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
                     if (`!Message.ShellMode`)
                         <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`IsEnabled`
@@ -156,7 +182,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
 
         suggestBox.Text = Message.Text;
         if (Message.ShellMode) SetSuggestionPrefixes("");
-        suggestBox.MarkupNode.Focus(FocusState.Programmatic);
+        suggestBox.FocusInput();
         WatchMessage();
     }
 
@@ -189,18 +215,11 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
             !InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
         {
-            e.Handled = true;
             var images = await ImageIOHelper.PasteImageFromClipboardAsync();
             if (images.Count > 0)
             {
+                e.Handled = true;
                 Message.Images.AddRange(images);
-            } else
-            {
-#if WASDK
-                suggestBox.PasteFromClipboard();
-#else
-                // .Handled in Uno Platform does not override paste event request.
-#endif
             }
         }
     }
@@ -210,7 +229,16 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         Message.Images.AddRange(images);
     }
 
-    private void OnInputTextChanged(object sender, TextChangedEventArgs e)
+    private async Task OnFileCommitRequested(SuggestBox sender, SuggestionItem item)
+    {
+        if (string.IsNullOrEmpty(item.Text)) return;
+        Message.Files.Add(new FileAttachment
+        {
+            Path = System.IO.Path.GetFullPath(System.IO.Path.Combine(SessionDirectory, item.Text)),
+        });
+    }
+
+    private void OnInputTextChanged(object sender, RoutedEventArgs e)
     {
         Message.Text = suggestBox.Text;
         if (!Message.ShellMode && suggestBox.Text == "!")
@@ -222,7 +250,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         Message.ShellMode = true;
         suggestBox.Clear();
         SetSuggestionPrefixes("");
-        suggestBox.MarkupNode.Focus(FocusState.Programmatic);
+        suggestBox.FocusInput();
     }
 
     private void ExitShellMode()
@@ -231,7 +259,7 @@ partial class ChatComposer : IQuickMarkupComponent<Grid>
         Message.ShellMode = false;
         suggestBox.ClearAfterSubmit();
         SetSuggestionPrefixes("/@");
-        suggestBox.MarkupNode.Focus(FocusState.Programmatic);
+        suggestBox.FocusInput();
     }
 
     private void SetSuggestionPrefixes(string prefixes)

@@ -1,31 +1,48 @@
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using System.Collections.ObjectModel;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Foundation;
 
 namespace UnoVibe.Controls;
 
 [QuickMarkup("""
     using QuickMarkup.WinUI;
     using Microsoft.UI;
-    using Microsoft.UI.Xaml.Controls.Primitives;
     int SelectedIndex = -1;
+    bool SuggestionsOpen = false;
+    double SuggestionHeight = 0;
     string Prefixes = "/@";
+    string PlaceholderText = "";
+    bool IsEnabled = true;
     <setup>
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        input = <TextBox TextWrapping=Wrap AcceptsReturn=true MinHeight=36 MaxHeight=120 PreviewKeyDown+=`OnPreviewKeyDown` TextChanged+=`OnTextChanged`
-            FlyoutBase.AttachedFlyout=suggestFlyout = <Flyout Placement=Top ShowMode=Transient Closed+=`OnSuggestFlyoutClosed`>
-            <Border Padding=4 MinWidth=320 MaxWidth=480
-                    GotFocus+=`OnSuggestionsGotFocus`>
+        <Grid RowDefinitions=<>
+            <RowDefinition Height=Auto />
+            <RowDefinition Height=`new GridLength(0)` />
+        </>>
+            input = <RichEditBox TextWrapping=Wrap AcceptsReturn=true MinHeight=36 MaxHeight=120
+                PlaceholderText=`PlaceholderText` IsEnabled=`IsEnabled`
+                PreviewKeyDown+=`OnInnerPreviewKeyDown` TextChanged+=`OnInnerTextChanged`
+                SelectionChanged+=`OnSelectionChanged` SelectionChanging+=`OnSelectionChanging` Paste+=`OnPaste`
+                ProcessKeyboardAccelerators+=`OnProcessKeyboardAccelerators` />
+            suggestionsContainer = <Border Grid.Row=1 Visibility=`SuggestionsOpen ? Visibility.Visible : Visibility.Collapsed`
+                VerticalAlignment=Top HorizontalAlignment=Stretch Canvas.ZIndex=10 Height=`SuggestionHeight`
+                Padding=4 MinWidth=320 MaxWidth=480 CornerRadius=8
+                Background=`theme.SolidBackground` BorderBrush=`theme.DividerStroke` BorderThickness=`new Thickness(1)`>
                 <ScrollViewer MaxHeight=280>
                     <StackPanel>
                         foreach (index; var item in `_items`; `item.Key`)
                         {
-                            <Button Padding=`new Thickness(10,  6, 10,  6)` HorizontalContentAlignment=Left
+                            <Button Padding=`new Thickness(10, 6, 10, 6)` HorizontalContentAlignment=Left
                                     Background=`index == SelectedIndex ? theme.SubtleFill : new SolidColorBrush(Colors.Transparent)`
                                     BorderThickness=0 CornerRadius=6
                                     @Click+=`await CommitSuggestionAsync(item)`
-                                    HorizontalAlignment=Stretch
-                            >
+                                    HorizontalAlignment=Stretch>
                                 <StackPanel Orientation=Horizontal Spacing=8>
                                     <Border Background=`KindBadgeBrush(item.Kind)` CornerRadius=3 Padding=`new Thickness(5, 1, 5, 2)` VerticalAlignment=Center>
                                         <TextBlock Text=`item.KindLabel` FontSize=10 Foreground=`AppTheme.TextOnAccent` FontWeight=`FontWeights.SemiBold` />
@@ -39,31 +56,15 @@ namespace UnoVibe.Controls;
                     </StackPanel>
                 </ScrollViewer>
             </Border>
-        </Flyout> />
+        </Grid>
     </root>
     """)]
-partial class SuggestBox : IQuickMarkupComponent<TextBox>
+partial class SuggestBox : IQuickMarkupComponent<Grid>
 {
     [QuickMarkupConstructor]
     private void Ctor()
     {
         Init();
-        suggestFlyout.FlyoutPresenterStyle = new()
-        {
-            BasedOn = (Style)
-#if WASDK
-            App.Current.Resources["DefaultFlyoutPresenterStyle"]
-#else
-            App.Current.Resources["DefaultFlyoutPresenter"]
-#endif
-            ,
-            TargetType = typeof(FlyoutPresenter),
-            Setters =
-            {
-                new Setter { Property = Control.PaddingProperty, Value = new Thickness() },
-                new Setter { Property = Control.CornerRadiusProperty, Value = new CornerRadius(8) }
-            }
-        };
     }
     public delegate Task SubmitHandler(SuggestBox sender, string text);
 
@@ -73,14 +74,23 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
 
     public event CommandTriggeredHandler? CommandTriggered;
 
+    public delegate Task FileCommitHandler(SuggestBox sender, SuggestionItem item);
+
+    public event FileCommitHandler? FileCommitRequested;
+
+    public event RoutedEventHandler? TextChanged;
+
+    public event KeyEventHandler? PreviewKeyDown;
+
     private readonly ObservableCollection<SuggestionItem> _items = new();
 
     private int _suggestSeq;
 
-    private bool _suppressArrowSelection;
-    private bool _blockStrayTextChange;
     private bool _programmaticTextChange;
-    private bool _inputGuardsAttached;
+
+    private int _caret;
+
+    private bool _suppressArrowSelection;
 
     private IReadOnlyList<ISuggestionProvider>? _providers;
     private SuggestionBoxController? _controller;
@@ -100,11 +110,13 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
 
     public string Text
     {
-        get => input?.Text ?? "";
+        get => GetPlainText();
         set => SetDraftText(value);
     }
 
     public bool IsFocused => input?.FocusState != FocusState.Unfocused;
+
+    public void FocusInput() => input?.Focus(FocusState.Programmatic);
 
     public void Clear() => SetDraftText("");
 
@@ -116,8 +128,7 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         _programmaticTextChange = true;
         try
         {
-            input.Text = newText;
-            input.SelectionStart = newText.Length;
+            SetPlainText(newText);
         }
         finally
         {
@@ -129,11 +140,10 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
     private async Task SetTextWithEnterSuppressionAsync(string newText)
     {
         if (input is null) return;
-        BlockStrayTextChange();
         _programmaticTextChange = true;
         try
         {
-            input.Text = newText;
+            SetPlainText(newText);
         }
         finally
         {
@@ -145,14 +155,108 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         if (input is not null) input.AcceptsReturn = true;
     }
 
-    private void OnTextChanged(object sender, TextChangedEventArgs e)
+    private string GetPlainText()
+    {
+        if (input?.TextDocument is { } doc)
+        {
+            doc.GetText(TextGetOptions.NoHidden, out var text);
+            return text ?? "";
+        }
+        return "";
+    }
+
+    private void SetPlainText(string value, int caret = -1)
+    {
+        if (input?.TextDocument is { } doc)
+        {
+            doc.SetText(TextSetOptions.None, value);
+            TrySetCaret(caret >= 0 ? caret : value.Length);
+        }
+    }
+
+    private void TrySetCaret(int index)
+    {
+        if (input?.TextDocument is not { } doc) return;
+        try
+        {
+#pragma warning disable Uno0001
+            doc.Selection.StartPosition = Math.Clamp(index, 0, GetPlainText().Length);
+#pragma warning restore Uno0001
+        }
+        catch
+        {
+        }
+    }
+
+    private void ReplaceSpan(int start, int end, string replacement)
+    {
+        var text = GetPlainText();
+        if (start < 0 || end < start || end > text.Length) return;
+        SetPlainText(text[..start] + replacement + text[end..], start + replacement.Length);
+    }
+
+    private int GetCaretIndex() => Math.Clamp(_caret, 0, GetPlainText().Length);
+
+    private void OnInnerPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Tab)
+        {
+            if (SuggestionsOpen && _items.Count > 0)
+            {
+                e.Handled = true;
+                if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
+                    CommitSuggestion(_items[SelectedIndex]);
+                else
+                    CloseSuggestions();
+                return;
+            }
+            if (!input.IsReadOnly && input.TextDocument is { } doc)
+            {
+                doc.Selection.TypeText("\t");
+                e.Handled = true;
+                return;
+            }
+        }
+        PreviewKeyDown?.Invoke(this, e);
+    }
+
+    private void OnInnerTextChanged(object sender, RoutedEventArgs e)
     {
         if (_programmaticTextChange)
         {
             CloseSuggestions();
             return;
         }
+        TextChanged?.Invoke(this, e);
         _ = UpdateSuggestionsAsync();
+    }
+
+    private void OnSelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (_programmaticTextChange || !SuggestionsOpen) return;
+        _ = UpdateSuggestionsAsync();
+    }
+
+    private void OnSelectionChanging(object sender, RichEditBoxSelectionChangingEventArgs e)
+    {
+        if (_suppressArrowSelection)
+        {
+            _suppressArrowSelection = false;
+            e.Cancel = true;
+            return;
+        }
+        _caret = e.SelectionStart;
+    }
+
+    private async void OnPaste(object sender, TextControlPasteEventArgs e)
+    {
+        e.Handled = true;
+        if (input is null) return;
+        var content = Clipboard.GetContent();
+        if (!content.Contains(StandardDataFormats.Text)) return;
+        var text = await content.GetTextAsync();
+        var caret = GetCaretIndex();
+        ReplaceSpan(caret, caret, text);
     }
 
     private async Task UpdateSuggestionsAsync()
@@ -161,8 +265,8 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         await Task.Delay(60);
         if (seq != _suggestSeq) return;
 
-        var text = input.Text;
-        var caret = input.SelectionStart;
+        var text = GetPlainText();
+        var caret = GetCaretIndex();
         if (Controller.TryGetQuery(text, caret, out var trigger, out var query, out var tokenStart))
         {
             IReadOnlyList<SuggestionItem> items;
@@ -175,7 +279,7 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
                 items = Array.Empty<SuggestionItem>();
             }
             if (seq != _suggestSeq) return;
-            ShowSuggestions(items);
+            ShowSuggestionPanel(items);
         }
         else
         {
@@ -183,9 +287,9 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         }
     }
 
-    private void ShowSuggestions(IReadOnlyList<SuggestionItem> items)
+    private void ShowSuggestionPanel(IReadOnlyList<SuggestionItem> items)
     {
-        if (items.Count == 0 || input is null || suggestFlyout is null)
+        if (items.Count == 0 || input is null || suggestionsContainer is null)
         {
             CloseSuggestions();
             return;
@@ -193,25 +297,34 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         _items.Clear();
         foreach (var item in items) _items.Add(item);
         SelectedIndex = 0;
-        if (!suggestFlyout.IsOpen) suggestFlyout.ShowAt(input);
+        SuggestionHeight = Math.Min(280, items.Count * 31 + 8);
+        var inputHeight = input.ActualHeight > 0 ? input.ActualHeight : 40;
+        suggestionsContainer.Margin = new Thickness(0, -(inputHeight + SuggestionHeight + 4), 0, 0);
+        SuggestionsOpen = true;
     }
 
     private void CloseSuggestions()
     {
-        if (suggestFlyout is { IsOpen: true }) suggestFlyout.Hide();
+        SuggestionsOpen = false;
         _items.Clear();
         SelectedIndex = -1;
     }
 
-    private void OnSuggestFlyoutClosed(object? sender, object e)
+    private void OnProcessKeyboardAccelerators(object sender, ProcessKeyboardAcceleratorEventArgs e)
     {
-        SelectedIndex = -1;
-        _items.Clear();
+        if (SuggestionsOpen && _items.Count > 0 && HandleSuggestionKey(e))
+            return;
+
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
+            return;
+        e.Handled = true;
+        if (SubmitRequested is { } handler)
+            _ = handler(this, GetPlainText());
     }
 
-    private void OnSuggestionsGotFocus(object sender, RoutedEventArgs e) => input?.Focus(FocusState.Programmatic);
-
-    private bool HandleSuggestionKey(KeyRoutedEventArgs e)
+    private bool HandleSuggestionKey(ProcessKeyboardAcceleratorEventArgs e)
     {
         switch (e.Key)
         {
@@ -232,15 +345,6 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
                     .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
                     return false;
                 e.Handled = true;
-                BlockStrayTextChange();
-                if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
-                    CommitSuggestion(_items[SelectedIndex]);
-                else
-                    CloseSuggestions();
-                return true;
-            case Windows.System.VirtualKey.Tab:
-                e.Handled = true;
-                BlockStrayTextChange();
                 if (SelectedIndex >= 0 && SelectedIndex < _items.Count)
                     CommitSuggestion(_items[SelectedIndex]);
                 else
@@ -270,21 +374,24 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
             return;
         }
 
-        var text = input.Text;
-        var caret = input.SelectionStart;
-        if (!Controller.TryGetQuery(text, caret, out _, out _, out var tokenStart)) return;
+        if (item.Kind == "file" && item.Detail != "directory")
+        {
+            var fileText = GetPlainText();
+            var fileCaret = GetCaretIndex();
+            if (fileText.Length > 0 && Controller.TryGetQuery(fileText, fileCaret, out _, out _, out var fileTokenStart))
+                ReplaceSpan(fileTokenStart, fileCaret, item.Insert);
+            CloseSuggestions();
+            input.Focus(FocusState.Programmatic);
+            if (FileCommitRequested is { } fileHandler)
+                _ = fileHandler(this, item);
+            return;
+        }
 
-        var newText = text.Remove(tokenStart, caret - tokenStart).Insert(tokenStart, item.Insert);
-        _programmaticTextChange = true;
-        try
-        {
-            input.Text = newText;
-            input.SelectionStart = tokenStart + item.Insert.Length;
-        }
-        finally
-        {
-            _programmaticTextChange = false;
-        }
+        var text = GetPlainText();
+        var caret = GetCaretIndex();
+        if (text.Length == 0 || !Controller.TryGetQuery(text, caret, out _, out _, out var tokenStart)) return;
+
+        ReplaceSpan(tokenStart, caret, item.Insert);
         CloseSuggestions();
         input.Focus(FocusState.Programmatic);
     }
@@ -297,52 +404,4 @@ partial class SuggestBox : IQuickMarkupComponent<TextBox>
         "builtin" => ThemeBrushes.Global.SecondaryText,
         _ => ThemeBrushes.Global.Accent,
     };
-
-    private void EnsureInputGuards()
-    {
-        if (_inputGuardsAttached || input is null) return;
-        _inputGuardsAttached = true;
-        input.SelectionChanging += OnSelectionChanging;
-        input.BeforeTextChanging += OnBeforeTextChanging;
-    }
-
-    private void OnSelectionChanging(TextBox sender, TextBoxSelectionChangingEventArgs e)
-    {
-        if (_suppressArrowSelection)
-        {
-            _suppressArrowSelection = false;
-            e.Cancel = true;
-        }
-    }
-
-    private void OnBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs e)
-    {
-        if (_blockStrayTextChange && !_programmaticTextChange)
-            e.Cancel = true;
-    }
-
-    private void BlockStrayTextChange()
-    {
-        _blockStrayTextChange = true;
-        _ = input?.DispatcherQueue?.TryEnqueue(() => _blockStrayTextChange = false);
-    }
-
-    private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        EnsureInputGuards();
-        if (suggestFlyout is { IsOpen: true } && _items.Count > 0 && HandleSuggestionKey(e))
-            return;
-
-        if (e.Key != Windows.System.VirtualKey.Enter) return;
-        if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-            return;
-        e.Handled = true;
-        BlockStrayTextChange();
-
-        var text = input.Text;
-        if (SubmitRequested is { } handler)
-            _ = handler(this, text);
-    }
-    public void PasteFromClipboard() => input.PasteFromClipboard();
 }

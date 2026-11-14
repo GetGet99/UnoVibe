@@ -21,6 +21,9 @@ sealed class WindowController
     public WindowController()
     {
         Window.SetWindowIcon();
+#if DEBUG
+        Window.UseStudio();
+#endif
         Window.Closed += OnClose;
     }
 

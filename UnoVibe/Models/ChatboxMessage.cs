@@ -10,7 +10,9 @@ partial class ChatboxMessage
 {
     public ReactiveList<ImageAttachment> Images { get; } = [];
 
-    public bool IsEmpty => string.IsNullOrWhiteSpace(Text) && Images.Count is 0;
+    public ReactiveList<FileAttachment> Files { get; } = [];
+
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Text) && Images.Count is 0 && Files.Count is 0;
 
     public static ChatboxMessage From(MessageItem message)
     {

@@ -32,8 +32,11 @@ static class MessageCollectionHelper
         if (existing is null)
         {
             var fresh = MessageJsonHelper.PartFromPart(serverPart);
-            if (fresh.Type == "text" && fresh is TextPartItem text && text.Synthetic && message.Parts.Count == 0)
-                return PartUpsert.SyntheticEmpty;
+            if (fresh.Type == "text" && fresh is TextPartItem text && text.Synthetic)
+            {
+                if (message.Parts.Count == 0) return PartUpsert.SyntheticEmpty;
+                return PartUpsert.IgnoredStep;
+            }
             message.Parts.Add(fresh);
             affected = fresh;
             return PartUpsert.Added;

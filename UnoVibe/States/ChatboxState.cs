@@ -118,7 +118,12 @@ partial class ChatboxState
         var model = chatParams.Model;
         await Opencode.SendPromptAsync(Head.Id, new()
         {
-            Parts = [ToPromptPart(message.Text), ..message.Images.Select(ToPromptPart)],
+            Parts =
+            [
+                ToPromptPart(message.Text),
+                ..message.Images.Select(ToPromptPart),
+                ..message.Files.Select(ToPromptPart),
+            ],
             Agent = chatParams.Agent,
             Model = model is null ? null : new()
             {
@@ -169,7 +174,9 @@ partial class ChatboxState
 
                     Command = name,
                     Arguments = arguments,
-                    Parts = images.Count is 0 ? null : [.. images.Select(ToPromptPart)],
+                    Parts = images.Count is 0 && message.Files.Count is 0
+                        ? null
+                        : [.. images.Select(ToPromptPart), .. message.Files.Select(ToPromptPart)],
                     Agent = agent,
                     Model = model?.Formatted,
                     Variant = variant
@@ -199,6 +206,17 @@ partial class ChatboxState
             Mime = image.Mime,
             Filename = image.FileName,
             Url = image.DataUrl,
+        };
+    }
+
+    private static PromptPart ToPromptPart(FileAttachment file)
+    {
+        return new PromptPart
+        {
+            Type = "file",
+            Mime = file.Mime,
+            Filename = file.FileName,
+            Url = file.Url,
         };
     }
 
