@@ -38,11 +38,7 @@ namespace UnoVibe.Pages.Chat;
         var theme = ThemeBrushes.Global;
     </setup>
     <root>
-        <Grid Padding=`ComposerPadding` RowDefinitions=<>
-            <RowDefinition Height=Auto />
-            <RowDefinition Height=Auto />
-            <RowDefinition Height=Auto />
-        </>>
+        <StackPanel Padding=`ComposerPadding`>
             if (`Message.Images.Count > 0 || Message.Files.Count > 0`)
                 <StackPanel Grid.Row=0 Spacing=6 Padding=`new Thickness(0, 0, 0, 8)`>
                     if (`Message.Images.Count > 0`)
@@ -95,23 +91,20 @@ namespace UnoVibe.Pages.Chat;
                     TextChanged+=`OnInputTextChanged` PreviewKeyDown+=`OnPreviewKeyDown` SubmitRequested+=`OnSubmitRequested`
                     FileCommitRequested+=`OnFileCommitRequested` />
                 <StackPanel Grid.Column=1 Orientation=Horizontal Spacing=8 VerticalAlignment=Bottom>
-                    if (`!Message.ShellMode`)
-                        <Button ToolTipService.ToolTip="Attach image" CornerRadius=6 IsEnabled=`IsEnabled`
-                                @Click+=`OnPickImages()`>
-                            <SymbolIcon Symbol=Camera VerticalAlignment=Center />
-                        </Button>
                     if (`Chatbox.PendingPromptsCount > 0`)
                         <Border Background=`theme.SystemCautionBackground` CornerRadius=6 Padding=`new Thickness(8, 4, 8, 4)` VerticalAlignment=Center>
                             <TextBlock Text=`$"⏳ {Chatbox.PendingPromptsCount} queued"` FontSize=11 Foreground=`theme.SystemCaution` VerticalAlignment=Center />
                         </Border>
-                    if (`IsBusy`)
-                        <Button Content="⏹ Stop" @Click+=`await InterruptSessionAsync()` CornerRadius=6 />
                     <SendMessageButton Mode=`SendMode` IsBusy=`IsBusy` Enabled=`IsEnabled`
                                        SendRequested+=`OnSendWithMode` />
                 </StackPanel>
             </Grid>
-            if (`!Message.ShellMode`)
-                <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(0)`>
+            <StackPanel Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=0>
+                if (`Message.ShellMode`) {
+                    <TextBlock Text="! Shell mode"
+                            FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center TextTrimming=`TextTrimming.CharacterEllipsis` />
+                    <Button Content="Exit shell mode (Esc)" CornerRadius=6 Padding=`new Thickness(10, 3, 10, 3)` @Click+=`ExitShellMode()` />
+                } else {
                     <StackPanel Orientation=Horizontal Spacing=6 VerticalAlignment=Center>
                         <TextBlock Text="Mode" FontSize=10 Foreground=`theme.SecondaryText` VerticalAlignment=Center Visibility=`IsCompact ? Visibility.Collapsed : Visibility.Visible` />
                         modeCombo = <ComboBox
@@ -141,17 +134,26 @@ namespace UnoVibe.Pages.Chat;
                             FontSize=12
                         />
                     </StackPanel>
-                </StackPanel>
-            else
-                <StackPanel Grid.Row=2 Orientation=Horizontal Spacing=`IsCompact ? 8 : 12` Padding=`new Thickness(0)`>
-                    <TextBlock Text="! Shell mode"
-                            FontSize=11 Foreground=`theme.SecondaryText` VerticalAlignment=Center TextTrimming=`TextTrimming.CharacterEllipsis` />
-                    <Button Content="Exit shell mode (Esc)" CornerRadius=6 Padding=`new Thickness(10, 3, 10, 3)` @Click+=`ExitShellMode()` />
-                </StackPanel>
-        </Grid>
+                    <Button
+                        Grid.Column=1
+                        ToolTipService.ToolTip="Attach image"
+                        Padding=`new Thickness(5, 0, 5, 0)`
+                        CornerRadius=4
+                        IsEnabled=`IsEnabled`
+                        Height=28
+                        FontSize=12
+                        @Click+=`OnPickImages()`
+                    >
+                        <SymbolIcon Symbol=Camera VerticalAlignment=Center />
+                    </Button>
+                }
+                if (`IsBusy`)
+                    <Button Content="⏹ Stop" @Click+=`await InterruptSessionAsync()` CornerRadius=6 />
+            </StackPanel>
+        </StackPanel>
     </root>
     """)]
-partial class ChatComposer : IQuickMarkupComponent<Grid>
+partial class ChatComposer : IQuickMarkupComponent<StackPanel>
 {
     public event Action? Sent;
     public event Func<Task>? UndoRequested;
